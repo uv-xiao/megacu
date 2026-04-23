@@ -4,9 +4,12 @@
 - `docs/todo/` contains future or partial work only.
 - `docs/in_progress/` contains active feature tasks and active design drafts
   only.
-- Record human instructions under `docs/in_progress/human_words/` during active
-  work. Preserve the user's wording, date, and context; promote only curated
-  decisions into rules, tasks, or design docs.
+- Record decision-bearing human instructions under
+  `docs/in_progress/human_words/` during active work. Preserve the user's
+  wording, date, and context; promote only curated decisions into rules, tasks,
+  or design docs. Skip low-signal coordination messages such as "continue",
+  "go on", acknowledgements, status pings, or thanks unless they contain a
+  concrete decision or new constraint.
 - `docs/notes/` contains document-reading and repository-reading reports.
 - Local reading inputs under `research/`, `.references/`, and `.repositories/`
   remain ignored and uncommitted.
@@ -26,4 +29,3 @@
   appropriate.
 - Do not leave stale duplicates across `docs/design/`, `docs/todo/`, and
   `docs/in_progress/`.
-

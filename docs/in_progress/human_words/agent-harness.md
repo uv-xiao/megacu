@@ -23,3 +23,44 @@
     `docs/in_progress/design/megacu_cpp_cuda_layer.md`
   - Agent interpretation: Start a design-first workflow for the C++/CUDA layer
     after committing the initial harness.
+
+- 2026-04-24 01:32 CST - Add GitHub workflow skills from IntelliC into Megacu
+  > You should look at ~/intellic to create the skills to work with github, including create-pr. $skill-creator
+  - Context: User requested repo-local GitHub workflow skills by adapting the
+    IntelliC harness patterns.
+  - Related: `.agents/skills/`, `.agents/templates/pr-body.md`
+  - Agent interpretation: Use IntelliC as the reference harness, but land the
+    resulting GitHub workflow skills inside Megacu's repo-local agent harness.
+
+- 2026-04-24 01:32 CST - Broaden the import and tune it for Megacu
+  > into megucu
+  > Import more and tuned.
+  - Context: User corrected the destination repo and rejected a minimal
+    create-pr/review-pr-only port.
+  - Related: `.agents/skills/create-pr/SKILL.md`,
+    `.agents/skills/review-pr/SKILL.md`,
+    `.agents/skills/clean-branches/SKILL.md`
+  - Agent interpretation: Import the broader GitHub workflow set and adapt the
+    workflow and guardrails to Megacu's docs lifecycle, reviewer profiles, and
+    verification expectations.
+
+- 2026-04-24 01:32 CST - Commit, push, and refresh PR description
+  > commit and push to the PRhttps://github.com/uv-xiao/megacu/pull/1, also, use the create-pr skills to re-edit the PR description.
+  - Context: User asked to publish the new GitHub workflow skills on the
+    existing branch PR and refresh the PR body through the repo-local workflow.
+  - Related: `.agents/skills/create-pr/SKILL.md`,
+    `.agents/templates/pr-body.md`,
+    `https://github.com/uv-xiao/megacu/pull/1`
+  - Agent interpretation: Commit only the new harness-skill slice, push it to
+    `story-level-design-pr`, and rewrite PR #1's description using Megacu's
+    PR-body template.
+
+- 2026-04-24 01:32 CST - Amend the PR commit to include the pending harness refinements
+  > These should also be commited (ammend) and pushed
+  - Context: User asked to include the remaining local harness-rule and
+    recording-skill edits in the existing PR branch via amend.
+  - Related: `.agents/rules/docs-and-knowledge.md`,
+    `.agents/rules/performance-and-cuda.md`,
+    `.agents/skills/record-human-instructions/SKILL.md`
+  - Agent interpretation: Amend the last pushed PR commit to include the
+    pending rule and skill refinements, then push the rewritten branch state.

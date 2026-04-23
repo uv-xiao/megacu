@@ -15,18 +15,23 @@ promote only curated decisions into rules, task files, or design docs.
 ## Workflow
 
 1. Find the repository root with `git rev-parse --show-toplevel` when available.
-2. Read `docs/in_progress/human_words/README.md` if present, then inspect
+2. Decide whether the message is worth recording. Record only instructions,
+   decisions, constraints, corrections, preferences, or rationale that could
+   affect future design, implementation, review, or verification.
+3. Skip low-signal coordination messages such as "continue", "go on", "ok",
+   "good", "yes", "do it", status pings, thanks, or acknowledgements unless
+   they also contain a concrete decision or new constraint.
+4. Read `docs/in_progress/human_words/README.md` if present, then inspect
    existing category files with `find docs/in_progress/human_words -maxdepth 1
    -type f | sort`.
-3. Choose the narrowest useful category. Prefer existing category names;
+5. Choose the narrowest useful category. Prefer existing category names;
    otherwise use clear names such as `Agent Harness`, `Megakernel Design`,
    `CUDA API`, `Scheduling`, `Verification`, or `Other`.
-4. Preserve the user's wording exactly or as close as the transcript allows. Put
+6. Preserve the user's wording exactly or as close as the transcript allows. Put
    any agent interpretation in a separate field.
-5. Record entries in chronological order inside the category file.
-6. Verify by rereading the changed file and checking that the category, date,
+7. Record entries in chronological order inside the category file.
+8. Verify by rereading the changed file and checking that the category, date,
    context, related docs, and exact wording are present.
 
 Documentation-only recording does not require automated tests. Use a focused
 reread, path check, or repo policy check when available.
-
