@@ -4,6 +4,11 @@
 
 - Primary: Megakernel Design
 
+## Historical Path Note
+
+Older `Related:` paths below may point at `docs/in_progress/` locations that
+were later promoted into `docs/design/`.
+
 ## Timeline
 
 - 2026-04-22 Asia/Shanghai - Multi-GPU from the beginning

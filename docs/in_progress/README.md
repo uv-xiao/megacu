@@ -13,5 +13,4 @@ Rules:
 
 ## Active Tasks
 
-- `docs/in_progress/megacu_cpp_cuda_layer.md` - true Megacu C++/CUDA layer
-  design.
+No active feature tasks are open right now.

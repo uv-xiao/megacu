@@ -3,8 +3,7 @@
 - Date: 2026-04-22 Asia/Shanghai
 - Purpose: inform Megacu's backend interface, multi-GPU model, and project
   organization before the first device-native design is accepted.
-- Related task: `docs/in_progress/megacu_cpp_cuda_layer.md`
-- Related design draft: `docs/in_progress/design/megacu_cpp_cuda_layer.md`
+- Related design: `docs/design/megacu_cpp_cuda_layer.md`
 
 ## Follow-up Design Correction
 

@@ -18,6 +18,9 @@ Use this when publishing a Megacu feature branch.
    - `docs/todo/` contains future or partial work only
    - `docs/in_progress/` contains active tasks and active design drafts only
    - `docs/notes/` contains any source-reading notes that affected the branch
+   - if the branch closes a design track, accepted design content has already
+     been merged into the current `docs/design/` structure and stable README
+     entry points are updated
 5. Write a PR body using `.agents/templates/pr-body.md`.
 6. Push the branch.
 7. Create or update the PR with GitHub tooling, carrying over the task,
@@ -29,6 +32,8 @@ Use this when publishing a Megacu feature branch.
 - Never publish from `main`.
 - Never publish with stale completed design drafts under
   `docs/in_progress/design/`.
+- Never ask for merge while accepted design content still lives only under
+  `docs/in_progress/`.
 - Never publish performance or zero-overhead claims without benchmark or source
   evidence.
 - Never include AI co-author lines.

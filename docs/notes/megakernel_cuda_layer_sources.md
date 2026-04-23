@@ -6,7 +6,7 @@ Positioning update, 2026-04-23: this note was written before the user clarified
 that Megacu should not be tightly bound to CUDA. Treat the C++/CUDA phrasing
 below as historical source-reading context. The active design position is a
 platform-neutral device-native core with CUDA/NVSHMEM as the first proof point;
-see `docs/in_progress/design/megacu_cpp_cuda_layer.md`.
+see `docs/design/megacu_cpp_cuda_layer.md`.
 
 This note summarizes two closely related systems, Mirage Persistent Kernel (MPK)
 and Event Tensor, then proposed the first Megacu direction: a thin C++/CUDA

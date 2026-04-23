@@ -1,7 +1,7 @@
 # Megacu Device-Native Layer Design
 
-This directory holds the active Megacu redesign in one flat, ordered set of
-files.
+This directory holds the accepted Megacu device-native design in one flat,
+ordered set of files.
 
 The public lifecycle is:
 
@@ -34,12 +34,8 @@ fill a generic environment bag.
 - `09-first-validation-slice.md`: first narrow proof slice under the new
   boundary.
 - `10-verification.md`: contracts, failure modes, and verification evidence.
-- `90-redesign-2026-04-24-cmake-build-and-direct-runtime.md`: redesign summary
-  note.
-- `91-redesign-protocol.md`: redesign protocol for later iterations.
 
-Files `00` through `10` are the canonical design. Files `90+` are supporting
-notes.
+Files `00` through `10` are the canonical accepted design.
 
 ## Source Context
 

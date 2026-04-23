@@ -4,8 +4,7 @@
 - Purpose: inform Megacu's redesign toward a thinner author-facing
   orchestration API and a clearer separation between core semantics and
   configuration-selected runtime behavior.
-- Related task: `docs/in_progress/megacu_cpp_cuda_layer.md`
-- Related design draft: `docs/in_progress/design/megacu_cpp_cuda_layer.md`
+- Related design: `docs/design/megacu_cpp_cuda_layer.md`
 
 ## Sources Read
 

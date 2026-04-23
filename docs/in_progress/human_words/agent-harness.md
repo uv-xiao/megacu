@@ -4,6 +4,11 @@
 
 - Primary: Agent Harness
 
+## Historical Path Note
+
+Older `Related:` paths below may point at `docs/in_progress/` locations that
+were later promoted into `docs/design/`.
+
 ## Timeline
 
 - 2026-04-21 Asia/Shanghai - Harness before Megacu design
@@ -64,3 +69,16 @@
     `.agents/skills/record-human-instructions/SKILL.md`
   - Agent interpretation: Amend the last pushed PR commit to include the
     pending rule and skill refinements, then push the rewritten branch state.
+
+- 2026-04-24 01:32 CST - Require design promotion before PR merge
+  > We should give a new agent rule (commited by amend), which requires that before PR merging, in_progress documents should be moved and merged into docs/design (not only move, but should be unifiedly merged, which might need re-organization of the docs/design; you also need to update README.md if necessary). And you should do as the rule suggests before the PR merging.
+  - Context: User corrected the workflow after PR #1 had already been merged
+    and then asked for the accepted design to be promoted directly on `main`.
+  - Related: `.agents/rules/development-flow.md`,
+    `.agents/skills/create-pr/SKILL.md`,
+    `docs/design/`,
+    `README.md`
+  - Agent interpretation: Add a normative pre-merge rule that accepted design
+    content must be unified into `docs/design/` with updated indexes and
+    README entry points, and apply that promotion directly on `main` for the
+    accepted Megacu design.

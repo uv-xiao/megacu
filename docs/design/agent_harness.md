@@ -3,9 +3,11 @@
 ## Goal
 
 Megacu starts with a repo-local human-agent collaboration harness before the
-true C++/CUDA megakernel design. The harness makes agent behavior explicit,
+true device-native megakernel design. The harness makes agent behavior explicit,
 keeps source readings separate from durable decisions, and requires verification
-evidence before completion or performance claims.
+evidence before completion or performance claims. It also includes repo-local
+GitHub workflow skills and a rule that accepted design content must be promoted
+out of `docs/in_progress/` before a PR is merged.
 
 ## Implemented Structure
 
@@ -33,6 +35,8 @@ docs/
 - `AGENTS.md` is the concise entrypoint for agents.
 - `.agents/rules/` contains durable project rules.
 - `.agents/skills/` contains repeatable workflows.
+- `.agents/skills/create-pr/`, `review-pr/`, and `clean-branches/` provide the
+  repo-local GitHub publication, review, and branch-cleanup workflows.
 - `.agents/agents/` contains read-only expert checklists unless the user asks
   for delegated subagent work.
 - `.agents/templates/` contains reusable task, design, PR, and review shapes.
@@ -56,15 +60,19 @@ docs/
 4. Substantial source readings are recorded under `docs/notes/`.
 5. Human wording that affects active work is preserved under
    `docs/in_progress/human_words/` before curated decisions are promoted.
-6. Completion and performance claims require fresh verification evidence.
+6. Before a PR is merged, accepted design content is promoted into a unified
+   `docs/design/` layout, design indexes are updated, and stale in-progress
+   design/task files are removed.
+7. Completion and performance claims require fresh verification evidence.
 
 ## Megacu-Specific Rules
 
 Performance-sensitive work follows `.agents/rules/performance-and-cuda.md`.
 The important project-specific distinction is that "zero overhead" never means
-"synchronization is free." It means the abstraction emits the CUDA operations an
-expert would intentionally write by hand, with explicit costs for atomics,
-queues, waits, polling, and remote signaling.
+"synchronization is free." It means the abstraction emits the platform-native
+operations an expert would intentionally write by hand, with explicit costs for
+atomics, queues, waits, polling, and remote signaling. CUDA remains the first
+platform and performance baseline.
 
 ## Verification
 
@@ -76,4 +84,3 @@ find .agents docs -maxdepth 3 -type f | sort
 git check-ignore research/papers/mpk-2512.22219.pdf
 git check-ignore research/repos/mirage-mpk/README.md
 ```
-

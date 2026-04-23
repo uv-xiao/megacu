@@ -7,3 +7,7 @@ Megacu docs use a lifecycle that separates active work from implemented design.
 - `docs/todo/`: future or partial work
 - `docs/design/`: implemented behavior only
 
+Accepted design starts at:
+
+- `docs/design/agent_harness.md`
+- `docs/design/megacu_cpp_cuda_layer.md`

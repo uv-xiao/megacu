@@ -4,8 +4,7 @@
 - Purpose: inform Megacu's requirement that the minimal device-native layer be
   friendly to high-level frameworks such as PyTorch, SGLang, vLLM-style serving
   stacks, and future compiler/runtime frontends.
-- Related task: `docs/in_progress/megacu_cpp_cuda_layer.md`
-- Related design draft: `docs/in_progress/design/megacu_cpp_cuda_layer.md`
+- Related design: `docs/design/megacu_cpp_cuda_layer.md`
 
 ## Sources Read
 

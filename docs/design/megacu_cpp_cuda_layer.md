@@ -1,15 +1,16 @@
 # Design: Megacu Device-Native Layer
 
-This is the stable entry point for the active Megacu design.
+This is the stable entry point for the accepted Megacu device-native layer
+design.
 
 The detailed design lives under `megacu_device_native_layer/` as one flat,
 ordered chapter set. Start at
-`docs/in_progress/design/megacu_device_native_layer/00-overview.md` and read
+`docs/design/megacu_device_native_layer/00-overview.md` and read
 forward numerically.
 
-## Active Direction
+## Accepted Direction
 
-Megacu is being redesigned around this public lifecycle:
+Megacu uses this public lifecycle:
 
 1. authored orchestrate program
 2. CMake target
@@ -40,8 +41,6 @@ That means:
 - `megacu_device_native_layer/08-examples.md`
 - `megacu_device_native_layer/09-first-validation-slice.md`
 - `megacu_device_native_layer/10-verification.md`
-- `megacu_device_native_layer/90-redesign-2026-04-24-cmake-build-and-direct-runtime.md`
-- `megacu_device_native_layer/91-redesign-protocol.md`
 
 ## Language Split
 
@@ -67,10 +66,9 @@ packaging outside the runtime process.
 - PTO Runtime / simpler orchestration-surface reading:
   `docs/notes/orchestration_surface_sources.md`
 
-## Current Review Focus
+## Accepted Boundaries
 
-The redesign is removing public surface and pushing strategy choices out of the
-runtime API:
+The accepted design keeps strategy choices out of the runtime API:
 
 - no public task-trait authoring model;
 - no runtime-selected profile/configuration object;

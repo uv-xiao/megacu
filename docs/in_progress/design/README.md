@@ -9,10 +9,4 @@ multiple files.
 
 ## Active Workstreams
 
-- `megacu_cpp_cuda_layer.md`: stable entry point for the Megacu device-native
-  layer design.
-- `megacu_device_native_layer/`: ordered chapter set for the active Megacu
-  redesign. Read `00-overview.md` first, then continue numerically.
-
-The numbered chapter files are the canonical design. Files in the `90+` range
-are redesign notes and process records.
+No active design workstreams are open right now.
