@@ -2,10 +2,17 @@
 
 Date: 2026-04-21
 
+Positioning update, 2026-04-23: this note was written before the user clarified
+that Megacu should not be tightly bound to CUDA. Treat the C++/CUDA phrasing
+below as historical source-reading context. The active design position is a
+platform-neutral device-native core with CUDA/NVSHMEM as the first proof point;
+see `docs/in_progress/design/megacu_cpp_cuda_layer.md`.
+
 This note summarizes two closely related systems, Mirage Persistent Kernel (MPK)
-and Event Tensor, then proposes a Megacu direction: a thin C++/CUDA layer for
-writing megakernels with CUDA-native performance and no abstraction tax on the
-hot path.
+and Event Tensor, then proposed the first Megacu direction: a thin C++/CUDA
+layer for writing megakernels with CUDA-native performance and no abstraction
+tax on the hot path. That performance goal remains, but the core API boundary is
+now device-native and platform-neutral rather than CUDA-only.
 
 ## Downloaded Material
 
@@ -45,12 +52,12 @@ compact way to describe many fine-grained dependencies, including dynamic shapes
 and data-dependent fan-in/fan-out such as MoE routing.
 
 For Megacu, the opportunity is different: do not build a large automatic ML
-compiler first. Build the thinnest C++/CUDA layer that lets expert CUDA
-programmers express MPK/Event-Tensor-style task graphs directly in CUDA syntax,
-with templates, inline device functions, explicit event counters, and no generic
-runtime when the schedule is static. The sell point should be: "write a
-megakernel like CUDA, keep CUDA performance, pay only for the synchronization you
-explicitly ask for."
+compiler first. Build the thinnest device-native layer that lets expert kernel
+programmers express MPK/Event-Tensor-style task graphs while preserving
+platform-native syntax and performance. CUDA is the first and most important
+proof point, but not the core abstraction boundary. The sell point should be:
+"write a megakernel close to the native platform, keep native performance, pay
+only for the synchronization you explicitly ask for."
 
 ## MPK Notes
 
@@ -332,28 +339,31 @@ From the paper:
 
 | Axis | MPK | Event Tensor | Megacu Opportunity |
 | --- | --- | --- | --- |
-| Primary artifact | Public compiler/runtime repo | Paper and arXiv source | New C++/CUDA library |
-| Main abstraction | SM task/event graph | Tensor-shaped event IR | CUDA-native task/event DSL |
-| User level | PyTorch/Python model backend | Compiler IR/TVM DSL | C++/CUDA expert API |
+| Primary artifact | Public compiler/runtime repo | Paper and arXiv source | New device-native library |
+| Main abstraction | SM task/event graph | Tensor-shaped event IR | Platform-native task/event layer |
+| User level | PyTorch/Python model backend | Compiler IR/TVM DSL | Expert native-kernel API |
 | Scheduler | In-kernel workers/schedulers, hybrid AOT/JIT | Static and dynamic compiler transforms | Static-first, dynamic opt-in |
 | Dynamism | Serving-specific runtime logic, graph variants | Symbolic event tensors plus data-dependent event maps | Bounded symbolic shapes, explicit runtime maps |
 | Runtime cost | Worker queues, scheduler queues, atomics, descriptor loads | Minimal for static, queue overhead for dynamic | Zero-cost static wrappers, explicit-cost dynamic runtime |
-| Sell point | Automatic LLM megakernel backend | Dynamic megakernel compiler abstraction | "Megakernels as close to CUDA as possible" |
+| Sell point | Automatic LLM megakernel backend | Dynamic megakernel compiler abstraction | "Megakernels as close to the native platform as possible" |
 
 ## Proposed Megacu Design
 
 ### Product Positioning
 
 Megacu should not try to beat MPK or Event Tensor by being a bigger compiler.
-The sharper position is:
+The original CUDA-first position was:
 
 > Megacu is a zero-overhead C++/CUDA layer for building persistent megakernels.
 > Users write normal CUDA/CuTe/CUTLASS/NVSHMEM device code. Megacu only supplies
 > typed task descriptors, event tensors, static schedules, and optional GPU-side
 > scheduling primitives.
 
-The target user is an expert CUDA programmer who does not want Python graph
-capture, a heavy compiler IR, or hidden scheduling decisions.
+The updated position keeps the zero-overhead and expert-user thesis, but changes
+the product boundary: Megacu is a platform-neutral device-native composition
+layer, with CUDA/NVSHMEM as the first platform/backend pair and performance
+baseline. The target user is an expert native-kernel programmer who does not
+want Python graph capture, a heavy compiler IR, or hidden scheduling decisions.
 
 ### Design Principles
 
@@ -589,4 +599,3 @@ Event Tensor idea + MPK runtime lessons + CUDA-native API + static-first policy
 The product should feel like a small CUDA extension library, not a model
 compiler. If an expert can look at the generated kernel and say "I would have
 written basically this by hand", the design is on track.
-
