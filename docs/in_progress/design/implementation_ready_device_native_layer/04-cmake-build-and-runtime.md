@@ -49,6 +49,23 @@ targets should link implementation code from `src/dispatcher/`,
 `src/scheduler/`, `src/lowering/`, `src/platform/cuda/`, and
 `src/backends/nvshmem/`.
 
+Concrete first implementation:
+
+- `megacu_components_cuda_nvshmem_static_dispatcher`: object or static library
+  built from `src/dispatcher/tiled_compute_comm_dispatch.*`.
+- `megacu_components_cuda_nvshmem_static_scheduler`: object or static library
+  built from `src/scheduler/static_persistent.*`.
+- `megacu_components_cuda_nvshmem_static_lowering`: object or static library
+  built from `src/lowering/persistent_stitch.*`.
+- `megacu_components_cuda_nvshmem_static_cuda`: object or static library built
+  from `src/platform/cuda/*`.
+- `megacu_components_cuda_nvshmem_static_nvshmem`: object or static library
+  built from `src/backends/nvshmem/*`.
+- `cuda_nvshmem_static`: interface target linking the five component artifacts.
+
+The exact target names may be normalized by CMake, but build output must expose
+the same decomposition so tests can prove component reuse.
+
 ## Orchestrate-Program Targets
 
 An authored orchestrate program should become a normal CMake target that reuses
@@ -105,6 +122,23 @@ materialize target metadata during the native build. The exact mechanism is an
 implementation detail, but it must stay inside the native build graph and must
 not emit new C++/CUDA source as the normal lowering mechanism.
 
+For the first implementation, choose the materializer executable path because it
+is easiest to test:
+
+1. CMake compiles a tiny host executable
+   `megacu_materialize_cuda_nvshmem_gemm_allreduce`.
+2. That executable links the user descriptor source and Megacu host lowering
+   libraries.
+3. At build time, it calls
+   `megacu::detail::materialize_program<gemm_allreduce_program>()`.
+4. It writes:
+   - `cuda_nvshmem_gemm_allreduce.megacu.json` for inspection tests;
+   - `cuda_nvshmem_gemm_allreduce.megacu.bin` for compact runtime metadata.
+5. The orchestrate target embeds or links the binary metadata as data.
+
+This is metadata generation, not source generation. The materializer must not
+write `.cc`, `.cu`, `.cuh`, `.ptx`, or `.cubin` files for the program.
+
 Initial CMake API shape:
 
 ```cmake
@@ -132,6 +166,15 @@ Required properties:
 - the build can write inspection metadata for selected linked implementations
   and materialized target metadata.
 
+The first implementation should fail CMake configure or build if:
+
+- an `OPS` key in CMake has no matching op tag in `program_ir`;
+- a program op has no implementation symbol in `OPS`;
+- a resource slot in the program has no matching parameter in the declared
+  orchestrate ABI;
+- the selected backend cannot provide a required event scope or primitive;
+- a dispatcher or scheduler cannot consume the program's domain shape.
+
 ## Resolution Pipeline
 
 The design has three resolution stages:
@@ -152,6 +195,28 @@ The design has three resolution stages:
 
 Labels never drive runtime lookup. They appear in diagnostics, metadata dumps,
 and verification output.
+
+Concrete metadata pipeline:
+
+```text
+program_builder
+  -> program_ir
+  -> dispatch_plan
+  -> schedule_plan
+  -> kernel_plan + backend_plan
+  -> target_metadata(.json/.bin)
+  -> compiled orchestrate target
+```
+
+Owner by stage:
+
+- `program_ir`: `include/megacu/detail/program_ir.h` and
+  `src/program/program_builder.cc`;
+- `dispatch_plan`: `src/dispatcher/tiled_compute_comm_dispatch.*`;
+- `schedule_plan`: `src/scheduler/static_persistent.*`;
+- `kernel_plan`: `src/lowering/persistent_stitch.*`;
+- `backend_plan`: `src/backends/nvshmem/lowering.*`;
+- metadata writer/reader: `src/target/metadata.*`.
 
 ## Parameterized Orchestrate Necessity
 

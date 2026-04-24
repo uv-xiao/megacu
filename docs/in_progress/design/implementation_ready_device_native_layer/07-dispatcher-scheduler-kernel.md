@@ -47,6 +47,47 @@ First dispatcher contract:
 - no ownership of execution order
 - no public authoring API beyond optional placement hints
 
+First dispatcher output shape, planned path
+`include/megacu/detail/dispatch_plan.h`:
+
+```cpp
+namespace megacu::detail {
+enum class placement_role : std::uint8_t { compute, comm };
+
+struct domain_tile_2d {
+  std::uint32_t m;
+  std::uint32_t n;
+};
+
+struct dispatch_entry {
+  domain_tile_2d tile;
+  placement_role role;
+  std::uint16_t participant_slot;
+  std::uint16_t logical_rank;
+  std::uint16_t worker_index;
+};
+
+struct participant_entry {
+  domain_tile_2d tile;
+  std::uint16_t participant_slot;
+  std::uint16_t logical_rank;
+  std::uint16_t backend_peer;
+};
+
+struct dispatch_plan {
+  std::span<const dispatch_entry> work;
+  std::span<const participant_entry> participants;
+};
+}
+```
+
+For GEMM+AllReduce, lowering may keep this plan compact by storing ranges
+instead of one entry per tile. The observable plan must still answer two
+questions without string lookup:
+
+- which compute or communication worker owns this logical output tile;
+- which backend peer corresponds to each rank participant for this tile.
+
 For the first static CUDA/NVSHMEM GEMM+AllReduce example, the dispatcher can
 implement a fixed compute/communication policy:
 
@@ -89,6 +130,37 @@ First scheduler contract:
 - no runtime scheduler selection
 - static persistent scheduling is the first implemented strategy
 
+First scheduler output shape, planned path
+`include/megacu/detail/schedule_plan.h`:
+
+```cpp
+namespace megacu::detail {
+enum class schedule_action : std::uint8_t {
+  launch_gemm_tile_produce,
+  launch_allreduce_tile_consume
+};
+
+struct schedule_entry {
+  std::uint32_t order;
+  std::uint32_t dispatch_entry_index;
+  schedule_action action;
+  std::uint16_t required_event_slot;
+  std::uint16_t released_event_slot;
+};
+
+struct schedule_plan {
+  std::uint16_t num_compute_workers;
+  std::uint16_t num_comm_workers;
+  std::span<const schedule_entry> entries;
+};
+}
+```
+
+For the first static persistent scheduler, `entries` may describe deterministic
+loops rather than every tile instance. It must still be inspectable: tests
+should be able to see that GEMM tile production releases `partial_ready_event`
+and AllReduce tile consumption acquires it.
+
 ## Kernel Lowering
 
 Kernel lowering also splits into reusable compiled logic plus orchestrate-target
@@ -117,6 +189,37 @@ First kernel-lowering contract:
 - owns stitching and launch payload construction
 - does not invent public fragment-op APIs
 - does not emit new C++/CUDA source in the normal path
+
+First kernel-lowering output shape, planned path
+`include/megacu/detail/kernel_plan.h`:
+
+```cpp
+namespace megacu::detail {
+struct kernel_symbol {
+  std::string_view op_name;
+  void const *host_stub;
+};
+
+struct cuda_launch_shape {
+  dim3 grid;
+  dim3 block;
+  std::uint32_t dynamic_smem_bytes;
+  bool cooperative;
+};
+
+struct kernel_plan {
+  std::span<const kernel_symbol> symbols;
+  cuda_launch_shape launch;
+  bool stitched_persistent;
+};
+}
+```
+
+The first persistent lowering may launch one stitched persistent entrypoint
+implemented by Megacu and call linked op bodies through a small op table. It may
+also temporarily use separate launches while the persistent engine is being
+built. In both cases, the normal path links existing C++/CUDA symbols and
+metadata; it does not emit a new program-specific `.cu` file.
 
 ## Fine-Grained Compute/Communication Overlap
 
@@ -182,6 +285,34 @@ __device__ void wait(
 signal addresses directly unless they intentionally bypass Megacu for a
 handwritten baseline.
 
+First backend plan shape, planned path
+`include/megacu/detail/backend_plan.h`:
+
+```cpp
+namespace megacu::detail {
+struct event_layout_entry {
+  std::uint16_t event_slot;
+  std::uint16_t domain_rank;
+  std::uint32_t byte_offset;
+  memory_scope scope;
+};
+
+struct nvshmem_backend_plan {
+  std::span<const event_layout_entry> events;
+  bool requires_symmetric_partial_buffer;
+  bool may_use_multimem_reduce;
+};
+}
+```
+
+Runtime validation for this plan must check:
+
+- `team.size()` matches the rank-domain extent used by target lowering;
+- `events.bytes` is large enough for every `event_layout_entry`;
+- `workspace.partial` is symmetric or otherwise acceptable to the selected
+  NVSHMEM primitive;
+- multimem-specific paths are only enabled when the backend reports support.
+
 ## Kernel Context Contract
 
 Lowered kernels receive a platform-specific context. For CUDA first:
@@ -191,6 +322,11 @@ namespace megacu::cuda {
 struct kernel_context {
   template <class DomainTag>
   __device__ domain_point<DomainTag> domain_point() const;
+
+  __device__ logical_rank local_rank() const;
+
+  template <class DomainTag>
+  __device__ team_view<DomainTag> team() const;
 
   template <class ParticipantTag, class DomainPoint>
   __device__ backend_peer peer(DomainPoint point) const;
@@ -207,6 +343,16 @@ The context is target-specific. It may be a compact pointer to materialized
 metadata, inline constants, or registers populated by linked lowering
 implementations. Its observable contract is typed lookup by tag, not string
 lookup by name.
+
+For the first implementation, `kernel_context` should be a trivially copyable
+CUDA device struct containing only:
+
+- pointer to target metadata in device-accessible memory;
+- current dispatch entry index or packed tile coordinate;
+- local rank and team size;
+- backend plan pointer.
+
+Anything larger must be justified by a concrete kernel lookup requirement.
 
 ## Internal Records
 

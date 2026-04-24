@@ -480,3 +480,18 @@ were later promoted into `docs/design/`.
     GEMM+AllReduce fusion target that exercises real compute/communication
     overlap, then add an MPK-style serving-layer example grounded in MPK's
     CUDA-provided operator families.
+
+- 2026-04-24 Asia/Shanghai - Design still not concrete enough
+  > I don't think the design is concrete enough to guide implementation. We need to refine things further.
+  - Context: User reviewed the GEMM+AllReduce and MPK example update and found
+    that the design still lacked enough implementation detail.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/00-overview.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: Implementation-ready design must include concrete
+    records, owner paths, slot binding, materialization flow, function-body
+    shape, and metadata checks, not only concept explanations and examples.

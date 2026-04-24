@@ -18,6 +18,20 @@ The key rule is that CMake owns the offline build graph. Runtime C++ should run
 the compiled orchestrate program directly, not load a module by string and not
 fill a generic environment bag.
 
+## Implementation-Ready Bar
+
+A chapter is implementation-ready only when it names:
+
+- the public API surface, if any;
+- the internal records an implementation must build;
+- the owner file or module for those records;
+- the runtime path that consumes them;
+- at least one verification check that can fail if the implementation drifts.
+
+Concept explanations alone are not enough for this draft. If a term appears in
+an example, the implementation chapters must say who materializes it, where it
+lives, and how it is checked.
+
 ## Reading Order
 
 - `00-overview.md`: entry point and reading order.

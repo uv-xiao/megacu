@@ -38,6 +38,11 @@
 - CMake/build tests that produce one orchestrate target from those components
 - build evidence that `PROGRAM gemm_allreduce_program` metadata is produced by
   the native C++ build path, not by Python or runtime parsing
+- inspection evidence that `program_ir` contains the expected extents, domains,
+  participants, resources, events, and submissions for GEMM+AllReduce
+- inspection evidence that `dispatch_plan`, `schedule_plan`, `kernel_plan`, and
+  `backend_plan` are materialized with the ownership described in
+  `07-dispatcher-scheduler-kernel.md`
 - design or compile evidence that each public concept in
   `03-program.md` is required by either scheduling, lowering, backend
   resolution, or runtime parameterization
@@ -56,6 +61,30 @@
   only calls the compiled orchestration
 - two-rank GEMM+AllReduce correctness tests for the first target where hardware
   is available
+
+## Concrete Metadata Checks
+
+The first metadata JSON must be checked for these facts:
+
+- two runtime problem extents for output tiles: `m_tiles_extent` and
+  `n_tiles_extent`;
+- one backend-derived rank extent for `rank_domain`;
+- one `output_tile_domain` over the two matrix tile extents;
+- one `rank_domain` over the backend team-size extent;
+- two virtual participants: `compute_lane` and `reduce_lane`;
+- one workspace resource slot and one event-storage resource slot;
+- one `partial_ready_event` over `(output_tile_domain, rank_domain)`;
+- one `gemm_tile_produce` submission over `output_tile_domain` that releases
+  `partial_ready_event`;
+- one `allreduce_tile_consume` submission over `output_tile_domain` that
+  acquires all rank instances of `partial_ready_event`;
+- a dispatch plan with compute and communication placements;
+- a schedule plan where GEMM production precedes AllReduce consumption through
+  the event dependency, not a full-kernel implicit barrier;
+- a backend plan that names event storage size, event offsets, team size, and
+  whether multimem reduce is enabled.
+
+Any missing item means the design has not become implementation-ready.
 
 ## Example-To-Evidence Mapping
 

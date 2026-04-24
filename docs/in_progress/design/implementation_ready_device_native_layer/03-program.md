@@ -33,12 +33,13 @@ generic runtime-loaded module.
 - **Kernel context**: the lowered device-side context passed to operators so a
   kernel can resolve its current domain point, virtual peers, event endpoints,
   workspace slices, and backend primitives without string lookup.
-- **Extent**: the runtime size of a domain. In the first example, the
-  `tiles` parameter says how many tile domain points exist for this call.
+- **Extent**: the runtime size of a domain. In the first example, `problem.M`,
+  `problem.N`, and the tile shape determine the output-tile extents for the
+  current call.
 - **Resource slot**: a typed program-declared input to the compiled target.
-  `workspace_slot` and `event_storage_slot` are not allocation ids; they are
-  internal binding points that the compiled orchestrate function fills from its
-  typed parameters.
+  `gemm_ar_workspace_slot` and `event_storage_slot` are not allocation ids; they
+  are internal binding points that the compiled orchestrate function fills from
+  its typed parameters.
 
 Names are labels. They are useful for diagnostics and materialized metadata, but
 they are not runtime lookup keys. The implementation must use typed tags and
@@ -96,6 +97,99 @@ The first public headers should be:
   resource/submit builders, and extent tags.
 - `include/megacu/views.h`: typed resource views.
 - `include/megacu/backends/nvshmem.h`: first backend runtime and device views.
+
+## Builder Output
+
+The first implementation should make `program_builder` collect one concrete
+host-side record tree. This record tree is internal, but it must be simple
+enough that an implementer can write it directly.
+
+Planned internal path: `include/megacu/detail/program_ir.h`.
+
+```cpp
+namespace megacu::detail {
+using slot_index = std::uint16_t;
+
+enum class extent_source : std::uint8_t {
+  runtime_problem_field,
+  backend_team_size,
+  constant
+};
+
+struct extent_decl {
+  slot_index slot;
+  std::string_view label;
+  extent_source source;
+  std::string_view source_name;
+};
+
+struct domain_decl {
+  slot_index slot;
+  std::string_view label;
+  std::span<const slot_index> extent_slots;
+};
+
+struct participant_decl {
+  slot_index slot;
+  std::string_view label;
+};
+
+struct resource_decl {
+  slot_index slot;
+  std::string_view label;
+  std::type_index view_type;
+};
+
+struct event_decl {
+  slot_index slot;
+  std::string_view label;
+  std::span<const slot_index> domain_slots;
+  slot_index from_participant;
+  slot_index to_participant;
+  slot_index storage_resource;
+  memory_scope scope;
+};
+
+enum class event_use_kind : std::uint8_t { acquire_one, acquire_all, release };
+
+struct event_use {
+  slot_index event_slot;
+  event_use_kind kind;
+  slot_index over_domain_slot;
+};
+
+struct arg_binding {
+  std::string_view name;
+  slot_index resource_slot;
+  std::string_view member_name;
+};
+
+struct submission_decl {
+  slot_index op_slot;
+  std::string_view op_name;
+  slot_index work_domain_slot;
+  slot_index participant_slot;
+  std::span<const arg_binding> args;
+  std::span<const event_use> events;
+};
+
+struct program_ir {
+  std::span<const extent_decl> extents;
+  std::span<const domain_decl> domains;
+  std::span<const participant_decl> participants;
+  std::span<const resource_decl> resources;
+  std::span<const event_decl> events;
+  std::span<const submission_decl> submissions;
+};
+}
+```
+
+Slots are assigned in descriptor traversal order and are stable inside one
+orchestrate target. They are not stable across targets and must not appear in
+the public API.
+
+The first implementation can use owning `std::vector` storage behind the spans.
+The important contract is the field set above, not the container choice.
 
 ## First Implementation Shape
 

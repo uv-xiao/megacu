@@ -49,6 +49,87 @@ in `03-program.md` and `08-examples.md`. The important properties are:
 - explicit typed arguments in the function signature;
 - explicit typed tags for domains, participants, events, and ops.
 
+## First ABI Types
+
+The first example should define these concrete view types under
+`examples/cuda_nvshmem_gemm_allreduce/` and move reusable pieces into public
+headers only after the implementation proves the shape:
+
+```cpp
+struct gemm_ar_problem {
+  std::int32_t m;
+  std::int32_t n;
+  std::int32_t k;
+  std::int32_t lda;
+  std::int32_t ldb;
+  std::int32_t ldp;
+  std::int32_t ldc;
+  std::int32_t tile_m;
+  std::int32_t tile_n;
+  std::int32_t tile_k;
+  megacu::dtype dtype;
+};
+
+struct gemm_ar_workspace {
+  megacu::tensor_view a;
+  megacu::tensor_view b;
+  megacu::tensor_view partial;
+  megacu::tensor_view c;
+  megacu::span<std::byte> scratch;
+};
+```
+
+The first `tensor_view` only needs:
+
+```cpp
+namespace megacu {
+struct tensor_view {
+  void *data;
+  std::int64_t bytes;
+  dtype type;
+};
+}
+```
+
+Shape and stride live in `gemm_ar_problem` for this target. A general tensor
+shape system is not required for the first implementation.
+
+## Function Body Shape
+
+The orchestrate function is ordinary C++ in the target. It may be handwritten in
+`examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_orchestrate.cc`:
+
+```cpp
+void cuda_nvshmem_gemm_allreduce_orchestrate(
+    gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
+    megacu::nvshmem_team_view team,
+    gemm_ar_problem problem) {
+  auto *metadata = megacu::detail::target_metadata_for<
+      gemm_allreduce_program,
+      cuda_nvshmem_static_components>();
+
+  megacu::detail::runtime_slots slots;
+  slots.set<gemm_ar_workspace_slot>(workspace);
+  slots.set<event_storage_slot>(events);
+  slots.set_backend(team);
+  slots.set_extent<m_tiles_extent>(ceil_div(problem.m, problem.tile_m));
+  slots.set_extent<n_tiles_extent>(ceil_div(problem.n, problem.tile_n));
+  slots.set_problem(problem);
+
+  megacu::detail::run_static_persistent(metadata, slots);
+}
+```
+
+This skeleton is normative for implementation intent, not an exact API freeze.
+The invariants are:
+
+- the function receives all runtime values through typed parameters;
+- it fills slots by typed tags;
+- it computes dynamic extents from `problem`;
+- it calls one linked execution entrypoint;
+- it does not choose strategy, parse names, compile, or load plugins.
+
 ## Why This Is Better
 
 A generic runtime loader weakens the zero-overhead story because it:

@@ -91,14 +91,22 @@ strategy.
   - `include/megacu/program.h`
   - `include/megacu/views.h`
   - `include/megacu/backends/nvshmem.h`
+- Internal metadata headers:
+  - `include/megacu/detail/program_ir.h`
+  - `include/megacu/detail/dispatch_plan.h`
+  - `include/megacu/detail/schedule_plan.h`
+  - `include/megacu/detail/kernel_plan.h`
+  - `include/megacu/detail/backend_plan.h`
 - Build rules:
   - `cmake/MegacuTargets.cmake`
 - Internal implementation:
+  - `src/program/`
   - `src/dispatcher/`
   - `src/scheduler/`
   - `src/lowering/`
   - `src/platform/cuda/`
   - `src/backends/nvshmem/`
+  - `src/target/`
 - Proof:
   - `examples/cuda_nvshmem_gemm_allreduce/`
   - `tests/build/`
@@ -128,6 +136,36 @@ Ready-to-implement criteria:
 - `run` has no path to build logic or runtime strategy selection;
 - the GEMM+AllReduce example has a handwritten CUDA/NVSHMEM baseline or source
   inspection target for comparing the linked execution path.
+
+## Implementation Milestones
+
+The implementation should land in this order:
+
+1. Public builder compile-only surface:
+   `program_builder`, tags, domains, participants, resources, events, and
+   submissions compile for `gemm_allreduce_program`.
+2. Host materializer:
+   `materialize_program<gemm_allreduce_program>()` produces `program_ir` and a
+   JSON dump with extents, domains, participants, resources, events, and
+   submissions.
+3. CMake target plumbing:
+   `megacu_add_components(...)` and `megacu_add_orchestrate_target(...)` build
+   component targets and run the materializer without generating C++/CUDA.
+4. Dispatcher/scheduler/backend metadata:
+   the materializer output includes dispatch, schedule, kernel, and backend
+   plans for the static CUDA/NVSHMEM target.
+5. Direct ABI smoke test:
+   deployment code can call
+   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem)`
+   without constructing an executor or runtime environment.
+6. Runtime CUDA/NVSHMEM proof:
+   where hardware exists, run a small two-rank GEMM+AllReduce correctness test;
+   otherwise, record the skip reason and keep compile/metadata evidence.
+
+Each milestone should have a small test or inspection artifact before moving to
+the next one. The first implementation should not start with the MPK-style
+decode example; that example is the second validation target once the primitive
+records and direct ABI are working.
 
 ## Second Validation Example
 
