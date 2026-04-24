@@ -578,3 +578,17 @@ were later promoted into `docs/design/`.
     A CUDA `__global__` launchable kernel is a valid op implementation without a
     separate device-callable body; a callable body is only required when a
     stitched lowering needs to call the op from within another kernel.
+
+- 2026-04-24 Asia/Shanghai - Keep Megacu thinner than related systems
+  > I looked through the design, and felt that the design is kind of heavy: there are lots of plans, records, views, ... I'm not sure if each is necessary, you should do another alignment to make sure our megacu layer is kept thin. Actually, I think mpk, triton-dist, megakittens are all quite thin. We should be thiner rather than heavier, even we have multi-platform/backend quirements.
+  - Context: User reviewed the implementation-ready draft after API and
+    metadata contracts were made concrete and found the design presentation
+    still too heavy.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`
+  - Agent interpretation: Keep the public Megacu layer thinner than related
+    systems. Plans, records, and views must be minimized; implementation plans
+    should be private target-metadata sections rather than extra public
+    abstractions. Multi-platform/backend support should come from narrow
+    component adapters and build-time selection, not from a broad public
+    lifecycle or taxonomy.

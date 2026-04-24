@@ -2,6 +2,11 @@
 
 This chapter separates three things that were previously too entangled.
 
+The separation is an implementation ownership boundary, not a new public layer
+stack. Dispatcher, scheduler, kernel-lowering, and backend outputs are
+component-owned sections of one target metadata blob. They must not become
+public plan objects or runtime lifecycle handles.
+
 ## Dispatcher
 
 The dispatcher has two build-graph parts:
@@ -47,8 +52,8 @@ First dispatcher contract:
 - no ownership of execution order
 - no public authoring API beyond optional placement hints
 
-First dispatcher output shape, planned path
-`include/megacu/detail/dispatch_plan.h`:
+First dispatcher section shape, planned path
+`include/megacu/detail/target_metadata.h`:
 
 ```cpp
 namespace megacu::detail {
@@ -74,15 +79,15 @@ struct participant_entry {
   std::uint16_t backend_peer;
 };
 
-struct dispatch_plan {
+struct dispatch_section {
   std::span<const dispatch_entry> work;
   std::span<const participant_entry> participants;
 };
 }
 ```
 
-For GEMM+AllReduce, lowering may keep this plan compact by storing ranges
-instead of one entry per tile. The observable plan must still answer two
+For GEMM+AllReduce, lowering may keep this section compact by storing ranges
+instead of one entry per tile. The observable section must still answer two
 questions without string lookup:
 
 - which compute or communication worker owns this logical output tile;
@@ -130,8 +135,8 @@ First scheduler contract:
 - no runtime scheduler selection
 - static persistent scheduling is the first implemented strategy
 
-First scheduler output shape, planned path
-`include/megacu/detail/schedule_plan.h`:
+First scheduler section shape, planned path
+`include/megacu/detail/target_metadata.h`:
 
 ```cpp
 namespace megacu::detail {
@@ -183,7 +188,7 @@ struct cuda_residency_envelope {
   bool requires_cooperative_launch;
 };
 
-struct schedule_plan {
+struct schedule_section {
   progress_model progress;
   std::uint16_t num_compute_workers;
   std::uint16_t num_comm_workers;
@@ -212,10 +217,10 @@ must distinguish two cases:
   resident together.
 
 The scheduler owns this distinction. It must materialize a progress model in
-`schedule_plan`, and kernel lowering must reject a target that uses a blocking
-wait without a valid progress guard.
+the schedule section, and kernel lowering must reject a target that uses a
+blocking wait without a valid progress guard.
 
-For `progress_model::co_resident_persistent`, the schedule plan must prove:
+For `progress_model::co_resident_persistent`, the schedule section must prove:
 
 - every blocking acquire has a producer role and consumer role in the same
   `residency_group`;
@@ -268,8 +273,8 @@ First kernel-lowering contract:
 - does not invent public fragment-op APIs
 - does not emit new C++/CUDA source in the normal path
 
-First kernel-lowering output shape, planned path
-`include/megacu/detail/kernel_plan.h`:
+First kernel-lowering section shape, planned path
+`include/megacu/detail/target_metadata.h`:
 
 ```cpp
 namespace megacu::detail {
@@ -287,7 +292,7 @@ struct cuda_launch_shape {
   bool cooperative;
 };
 
-struct kernel_plan {
+struct kernel_section {
   std::span<const kernel_symbol> symbols;
   cuda_launch_shape launch;
   bool stitched_persistent;
@@ -377,8 +382,8 @@ __device__ void wait(
 signal addresses directly unless they intentionally bypass Megacu for a
 handwritten baseline.
 
-First backend plan shape, planned path
-`include/megacu/detail/backend_plan.h`:
+First backend section shape, planned path
+`include/megacu/detail/target_metadata.h`:
 
 ```cpp
 namespace megacu::detail {
@@ -389,7 +394,7 @@ struct event_layout_entry {
   megacu::memory_scope scope;
 };
 
-struct nvshmem_backend_plan {
+struct nvshmem_backend_section {
   std::span<const event_layout_entry> events;
   bool requires_symmetric_partial_buffer;
   bool may_use_multimem_reduce;
@@ -397,7 +402,7 @@ struct nvshmem_backend_plan {
 }
 ```
 
-Runtime validation for this plan must check:
+Runtime validation for this section must check:
 
 - `team.team_n_pes` matches the rank-domain extent used by target lowering;
 - `launch.device_ordinal` matches the CUDA device selected before NVSHMEM
@@ -462,16 +467,17 @@ CUDA device struct containing only:
 - pointer to target metadata in device-accessible memory;
 - current dispatch entry index or packed tile coordinate;
 - local rank and team size;
-- backend plan pointer.
+- backend metadata-section pointer or offset.
 
 Anything larger must be justified by a concrete kernel lookup requirement.
 
-## Internal Records
+## Internal Metadata Sections
 
-The orchestrate target lowering may create internal records, but those records
-are not public authoring APIs.
+The orchestrate target lowering may create internal records while materializing
+one target metadata blob, but those records are not public authoring APIs and
+are not runtime objects.
 
-Minimum internal records for the first slice:
+Minimum internal metadata sections for the first slice:
 
 - op table: named op symbol, implementation symbol, domain reference
 - resource table: typed view slots used by lowered code
@@ -482,7 +488,7 @@ Minimum internal records for the first slice:
 - kernel payload: named kernel entrypoints and stitched execution metadata
 - backend payload: NVSHMEM handles and signal/wait metadata needed by kernels
 
-Each record must have one owner:
+Each section must have one owner:
 
 - public program builders collect semantic facts;
 - dispatcher owns placement;
@@ -490,7 +496,7 @@ Each record must have one owner:
 - lowering owns kernel stitching and launch payloads;
 - platform/backend adapters own native handles and primitive calls.
 
-No record should duplicate a concept already owned by another layer.
+No section should duplicate a concept already owned by another component.
 
 ## Implementation Architecture
 

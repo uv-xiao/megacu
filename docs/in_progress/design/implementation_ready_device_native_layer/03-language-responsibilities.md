@@ -67,6 +67,7 @@ It should not:
 
 - expose CMake/build steps
 - expose strategy selection
+- expose dispatcher, scheduler, lowering, platform, or backend plan objects
 - expose packaging concerns that belong to the offline build path
 - initialize or finalize NVSHMEM inside the compiled orchestrate target
 
@@ -95,6 +96,6 @@ For the first implementation, the cleanest split is:
     rank/world state, exchanges the NVSHMEM UID, owns symmetric allocation
     wrappers, and calls the compiled C++ target through an extension binding
   - no framework types in `program_ir`, dispatcher, scheduler, kernel, or
-    backend-plan records
+    backend metadata-section records
   - no Python dependency in public program headers, materializers, metadata,
     lowering, backend adapters, or compiled target ABI

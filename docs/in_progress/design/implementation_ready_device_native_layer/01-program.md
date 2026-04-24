@@ -370,21 +370,22 @@ Resources are typed handles representing input, output, inout, and
 scratch/storage bindings. The program should not force users to think in raw
 resource ids.
 
-Example shapes:
+The first implementation should not introduce a generic public view taxonomy.
+Only the shared views needed by the first target belong in public headers:
+plain tensor views, symmetric tensor/buffer views, and event storage. Workload
+workspace types such as `gemm_ar_workspace` are ordinary target-specific C++
+structs owned by examples or applications.
 
-- `workspace_view`
-- `event_storage_view`
-- `routing_replay_view`
-- `k_cache_view`
+Future views such as routing replay or KV-cache views stay target-owned until a
+second independent target proves they need a shared public type.
 
-Build-time lowering may map them to flat resource indices inside target
-internals.
+Build-time lowering may map resource fields to flat resource indices inside
+target internals, but those indices are not public API.
 
 Initial API shape:
 
 ```cpp
 namespace megacu {
-struct workspace_view;
 enum class status_code : std::uint8_t {
   ok,
   invalid_argument,
@@ -429,8 +430,8 @@ Resource views are explicit C++ arguments to the orchestrate function. There is
 no generic resource map, no string lookup, and no public resource id plumbing in
 normal examples.
 
-`workspace_view` is not magic global memory. It is a typed view over caller-
-provided storage:
+`gemm_ar_workspace` is not magic global memory. It is a target-specific typed
+view over caller-provided storage:
 
 ```cpp
 struct gemm_ar_workspace {

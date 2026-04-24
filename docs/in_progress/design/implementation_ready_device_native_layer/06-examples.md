@@ -252,7 +252,7 @@ CMake file does not contain ad hoc rank mapping rules such as
 
 `SCHEDULER_MODE` selects a reusable scheduler mode for one target. It is not a
 runtime choice. The overlap mode must emit a co-residency guard in
-`schedule_plan`; if it cannot, the build fails.
+the schedule metadata section; if it cannot, the build fails.
 
 `LAUNCH` names a launchable kernel entrypoint. `CALLABLE` is only listed for the
 overlap target because the selected `persistent_stitch` lowering may need
@@ -288,7 +288,7 @@ this sequence:
    through the linked NVSHMEM/multimem or load-reduce-store primitive, and write
    the final output tile.
 
-The overlap sequence is valid only because the schedule plan contains a
+The overlap sequence is valid only because the schedule metadata contains a
 co-residency guard. A blocking communication worker must never depend on a GEMM
 worker that might be a non-resident CUDA block waiting behind it.
 

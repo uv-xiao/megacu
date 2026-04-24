@@ -24,6 +24,32 @@ A chapter is implementation-ready only when it names:
 Concept explanations alone are not enough for this draft. Keep term definitions
 only when they are necessary to understand an implementation contract.
 
+## Thinness Rule
+
+This draft must keep Megacu thinner than MPK, Triton-Distributed, and
+MegaKittens-style systems at the user-facing layer. The first implementation
+public surface is limited to:
+
+- `program_builder` and small helpers for domains, participants, resources,
+  events, and submissions;
+- typed runtime views needed by the compiled target;
+- `megacu_add_components(...)` and `megacu_add_orchestrate_target(...)`;
+- the compiled orchestrate function that applications call directly.
+
+Dispatcher, scheduler, kernel-lowering, platform, backend, and metadata
+records are private implementation details for one target. They should be
+stored as component-owned sections inside one linked target metadata blob, not
+as public APIs, runtime lifecycle objects, or user-visible layers.
+
+Any new public view, plan, record, lifecycle term, or backend taxonomy must pass
+one of these tests:
+
+- it is required by the first GEMM+AllReduce implementation slice;
+- it is required by the second MPK-style validation target without duplicating
+  an existing concept;
+- two independent targets need the same public surface and cannot keep it
+  target-specific.
+
 ## Reading Order
 
 - `00-overview.md`: entry point and reading order.

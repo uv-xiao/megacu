@@ -247,22 +247,30 @@ Concrete metadata pipeline:
 ```text
 program_builder
   -> program_ir
-  -> dispatch_plan
-  -> schedule_plan
-  -> kernel_plan + backend_plan
+  -> target metadata model
+       program section
+       dispatch section
+       schedule section
+       kernel section
+       backend section
   -> target_metadata(.json/.bin)
   -> linked metadata object
   -> compiled orchestrate target
 ```
 
-Owner by stage:
+These sections are not public plan APIs. They are private materializer outputs
+inside one target metadata model. Component names may still appear in internal
+C++ record names while the first implementation is being built, but runtime
+C++ consumes the linked metadata blob and does not see standalone plan objects.
+
+Owner by section:
 
 - `program_ir`: `include/megacu/detail/program_ir.h` and
   `src/program/program_builder.cc`;
-- `dispatch_plan`: `src/dispatcher/tiled_compute_comm_dispatch.*`;
-- `schedule_plan`: `src/scheduler/static_persistent.*`;
-- `kernel_plan`: `src/lowering/persistent_stitch.*`;
-- `backend_plan`: `src/backends/nvshmem/lowering.*`;
+- dispatch section: `src/dispatcher/tiled_compute_comm_dispatch.*`;
+- schedule section: `src/scheduler/static_persistent.*`;
+- kernel section: `src/lowering/persistent_stitch.*`;
+- backend section: `src/backends/nvshmem/lowering.*`;
 - `launch/runtime views`: `include/megacu/platform/cuda.h`,
   `include/megacu/backends/nvshmem.h`, and
   `docs/in_progress/design/implementation_ready_device_native_layer/09-distributed-launch-and-framework-integration.md`;

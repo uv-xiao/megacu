@@ -3,6 +3,34 @@
 This chapter records implementation guardrails that cut across the component
 chapters. They are not new public concepts.
 
+## Thinness Budget
+
+The first implementation must keep Megacu thin by treating most concrete
+machinery as private target metadata, not public abstraction.
+
+Allowed public surface:
+
+- builder helpers for orchestrate-program authoring;
+- typed runtime views required by the compiled target ABI;
+- two CMake functions for component and target construction;
+- the compiled orchestrate function.
+
+Not allowed in public headers for the first slice:
+
+- dispatcher, scheduler, kernel-lowering, platform, backend, or metadata plan
+  classes;
+- a generic resource/view taxonomy beyond tensor, symmetric buffer/tensor, and
+  event storage views;
+- runtime strategy-selection objects;
+- backend capability taxonomies that are not consumed by a concrete linked
+  backend.
+
+Multi-platform/backend requirements should be handled by narrow component
+adapters, build-time selection, and component-owned metadata sections. They
+should not expand the authoring or runtime API unless the GEMM+AllReduce proof
+or the MPK-style second target cannot be implemented without that public
+surface.
+
 ## Component Dependency Rules
 
 The first implementation should keep these dependency boundaries:
@@ -16,7 +44,7 @@ src/dispatcher           -> detail records
 src/scheduler            -> detail records
 src/platform/cuda        -> public CUDA views + detail launch records
 src/backends/nvshmem     -> public NVSHMEM views + detail backend records
-src/lowering             -> detail records + selected component plans
+src/lowering             -> detail records + selected metadata sections
 src/target               -> linked metadata + runtime validation + run entry
 examples and tests       -> public APIs + compiled targets
 ```
@@ -30,7 +58,8 @@ Rules:
   are not public authoring APIs;
 - dispatcher code must not include scheduler implementation headers;
 - scheduler code must not include backend implementation headers;
-- lowering code may consume dispatcher, scheduler, platform, and backend plans;
+- lowering code may consume dispatcher, scheduler, platform, and backend
+  metadata sections;
 - platform/backend adapters may provide validation and primitive bindings, but
   they must not choose dispatcher or scheduler policy;
 - examples and integrations depend on the built target, never on private
@@ -38,7 +67,7 @@ Rules:
 
 ## Metadata Representations
 
-Megacu needs two metadata representations.
+Megacu needs two representations of one target metadata model.
 
 ### Build-Time Records
 
@@ -46,13 +75,17 @@ Build-time records are host-only C++ objects used by the materializer. They may
 use ergonomic C++ storage such as `std::vector`, `std::span`, `std::string_view`,
 and type traits as long as their lifetimes are owned by the materializer.
 
-Examples:
+Examples of private materializer outputs:
 
 - `program_ir`
-- `dispatch_plan`
-- `schedule_plan`
-- `kernel_plan`
-- `backend_plan`
+- dispatch section records
+- schedule section records
+- kernel section records
+- backend section records
+
+These names may exist under `include/megacu/detail/` or `src/*` while the
+implementation is being built. They are not public APIs and are not runtime
+objects.
 
 ### Runtime Metadata Blob
 

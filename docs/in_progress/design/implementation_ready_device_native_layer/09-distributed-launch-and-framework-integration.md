@@ -278,7 +278,7 @@ For the first GEMM+AllReduce target:
 
 The backend plan must name which resource slots require symmetric allocation and
 which backend/session identity each slot must match. The runtime target must
-reject ordinary local CUDA views when the selected backend plan requires
+reject ordinary local CUDA views when the selected backend metadata requires
 symmetric NVSHMEM-accessible storage.
 
 ## Runtime Validation
@@ -288,7 +288,8 @@ Before `run_static_persistent(...)`, the compiled target must validate:
 - `launch.device_ordinal == team.cuda_device_ordinal`;
 - `team.team_n_pes` matches the target `TEAM_SIZE` envelope;
 - `team.team_my_pe` is in `[0, team.team_n_pes)`;
-- `events.buffer.bytes` is at least the backend-plan event-storage requirement;
+- `events.buffer.bytes` is at least the backend metadata event-storage
+  requirement;
 - `events.buffer.backend == team.backend`;
 - `events.buffer.session == team.session`;
 - every workspace field required to be symmetric is represented by a symmetric

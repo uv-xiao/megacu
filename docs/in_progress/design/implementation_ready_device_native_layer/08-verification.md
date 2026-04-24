@@ -11,6 +11,10 @@
 - Named kernels may use backend primitives inside the kernel body.
 - Fine-grained overlap must remain possible without introducing a public
   fragment taxonomy.
+- Plans, records, and views stay private or target-specific unless a concrete
+  implementation slice proves they need to be public.
+- Multi-platform/backend support is expressed through build-selected components
+  and metadata sections, not through a broad public runtime taxonomy.
 
 ## Failure Modes
 
@@ -42,6 +46,12 @@
 - Unsafe overlap: a communication task performs a blocking wait while the
   producer task is not guaranteed to be co-resident and making progress. This can
   deadlock even if the logical event graph is correct.
+- Heavy public layer: dispatcher, scheduler, kernel-lowering, backend, or
+  metadata plan objects appear in public headers. This violates the thin-layer
+  rule.
+- Premature view taxonomy: public headers add workload-specific resource views
+  before two targets prove the same view is shared. This overfits the first
+  examples and makes Megacu heavier than the systems it should complement.
 
 ## Verification Requirements
 
@@ -53,9 +63,15 @@
   C++ build path, not by Python or runtime parsing
 - inspection evidence that `program_ir` contains the expected extents, domains,
   participants, resources, events, and submissions for GEMM+AllReduce
-- inspection evidence that `dispatch_plan`, `schedule_plan`, `kernel_plan`, and
-  `backend_plan` are materialized with the ownership described in
+- inspection evidence that dispatch, schedule, kernel, and backend metadata
+  sections are materialized with the ownership described in
   `05-dispatcher-scheduler-kernel.md`
+- public-header inspection proving dispatcher, scheduler, kernel-lowering,
+  platform, backend, and metadata plan classes are not exposed as public APIs
+- public-header inspection proving resource views are limited to the first-slice
+  shared set unless a target-specific workspace type owns the extra fields
+- metadata inspection proving the runtime consumes one linked target metadata
+  blob with component-owned sections, not standalone runtime plan objects
 - design or compile evidence that each public concept in
   `01-program.md` is required by either scheduling, lowering, backend
   resolution, or runtime parameterization
@@ -122,8 +138,8 @@ The first metadata JSON must be checked for these facts:
   `partial_ready_event`;
 - one `allreduce_tile_consume` submission over `output_tile_domain` that
   acquires all rank instances of `partial_ready_event`;
-- a dispatch plan with compute and communication placements;
-- a schedule plan where GEMM production precedes AllReduce consumption through
+- a dispatch section with compute and communication placements;
+- a schedule section where GEMM production precedes AllReduce consumption through
   the event dependency, not a full-kernel implicit barrier;
 - for the phased target: `progress_model::phased`;
 - for the overlap target: `progress_model::co_resident_persistent` with one
@@ -135,10 +151,10 @@ The first metadata JSON must be checked for these facts:
   `blocking_device_wait` acquire is covered by the overlap guard;
 - schedule entries include phase, residency group, participant role, and wait
   mode fields;
-- the overlap `schedule_plan` includes a `cuda_residency_envelope` with
+- the overlap schedule section includes a `cuda_residency_envelope` with
   persistent grid blocks, threads per block, minimum SM count, blocks per SM,
   and cooperative-launch requirement;
-- a backend plan that names event storage size, event offsets, team size, and
+- a backend section that names event storage size, event offsets, team size, and
   whether multimem reduce is enabled;
 - a platform launch slot for `megacu::cuda::launch_view`;
 - metadata header fields for magic, metadata ABI version, target id, component
@@ -188,6 +204,10 @@ Any missing item means the design has not become implementation-ready.
 - Implementation architecture guardrails in `10-implementation-architecture.md`:
   metadata ABI tests, dependency-boundary inspection, status ABI tests, and
   linked-op-symbol inspection.
+- Thinness rule in `00-overview.md`:
+  public-header inspection and CMake/API smoke tests proving first-slice code
+  uses only builder helpers, typed runtime views, two CMake functions, and the
+  compiled orchestrate function.
 
 ## Ready-To-Promote Criteria
 

@@ -84,6 +84,10 @@ The example must compile without public task descriptors, raw resource ids,
 runtime scheduler objects, string-based module loading, string-based event
 lookup, or generated per-program CUDA source.
 
+It must also compile without public dispatcher, scheduler, kernel, or backend
+plan classes. Those are private metadata sections owned by the selected target
+components.
+
 ## Runtime Path
 
 The runtime proof should look like:
@@ -112,10 +116,7 @@ strategy.
   - `include/megacu/launch/mpi_nvshmem.h`
 - Internal metadata headers:
   - `include/megacu/detail/program_ir.h`
-  - `include/megacu/detail/dispatch_plan.h`
-  - `include/megacu/detail/schedule_plan.h`
-  - `include/megacu/detail/kernel_plan.h`
-  - `include/megacu/detail/backend_plan.h`
+  - `include/megacu/detail/target_metadata.h`
 - Build rules:
   - `cmake/MegacuTargets.cmake`
 - Internal implementation:
@@ -178,7 +179,11 @@ Ready-to-implement criteria:
 
 - the public API proof above can be written using only the planned headers;
 - the CMake proof can be written using only the two planned CMake functions;
-- each materialized/lowered record has a single owner from
+- no public header exposes dispatcher, scheduler, kernel-lowering, platform, or
+  backend plan classes;
+- any public view is either required by the GEMM+AllReduce target ABI or remains
+  target-specific;
+- each materialized/lowered metadata section has a single owner from
   `05-dispatcher-scheduler-kernel.md`;
 - `run` has no path to build logic or runtime strategy selection;
 - the GEMM+AllReduce example has a handwritten CUDA/NVSHMEM baseline or source
@@ -202,7 +207,7 @@ The implementation should land in this order:
    component targets and run the materializer without generating C++/CUDA.
 4. Dispatcher/scheduler/backend metadata:
    the materializer output includes dispatch, schedule, kernel, and backend
-   plans for the phased and overlap CUDA/NVSHMEM targets.
+   sections for the phased and overlap CUDA/NVSHMEM targets.
 5. Linked metadata object:
    CMake embeds each `.megacu.bin` as linked data, and runtime metadata
    validation rejects malformed magic, version, size, checksum, or missing table
@@ -227,9 +232,11 @@ The implementation should land in this order:
    Python to Megacu core.
 
 Each milestone should have a small test or inspection artifact before moving to
-the next one. The first implementation should not start with the MPK-style
-decode example; that example is the second validation target once the primitive
-records and direct ABI are working.
+the next one. New public headers are not allowed between milestones unless the
+milestone fails without them and the failure is recorded as evidence. The first
+implementation should not start with the MPK-style decode example; that example
+is the second validation target once the metadata sections and direct ABI are
+working.
 
 ## Second Validation Example
 
