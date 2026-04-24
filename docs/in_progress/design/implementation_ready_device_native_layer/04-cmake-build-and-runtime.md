@@ -119,6 +119,43 @@ The design has three resolution stages:
 Labels never drive runtime lookup. They appear in diagnostics, metadata dumps,
 and verification output.
 
+## Runtime Binding Necessity
+
+`exec.bind<slot>(value)` and `megacu::extent<tag>(value)` are the runtime
+boundary between a pre-lowered target and per-call values.
+
+They are necessary because the build graph can know the structure of the
+program, but it cannot know every runtime pointer, buffer size, team handle, or
+tile count. The compiled target therefore has typed holes:
+
+- resource slots for values such as workspace and event storage;
+- extent slots for dynamic domain sizes such as `tiles`;
+- backend handle slots, supplied through `executor<Program>{team}` or explicit
+  backend resources.
+
+The design uses typed binding instead of alternatives:
+
+| Alternative | Why not primary |
+| --- | --- |
+| Generic `runtime_env` bag | Reintroduces stringly lookup and hides required resources from the C++ signature. |
+| Positional argument array | Compact but brittle; generated metadata and user code can disagree silently. |
+| Rebuild for every shape | Defeats repeated-run use cases and makes dynamic tile/token counts expensive. |
+| Let kernels receive all raw pointers/handles manually | Pushes lowering details into every kernel and prevents scheduler/backend inspection. |
+| Megacu-owned allocator/event pool | Makes Megacu responsible for allocation policy and framework integration decisions. |
+
+Typed binding is intentionally narrow. It does not select strategy and does not
+build anything. It only fills slots that were declared in the program descriptor
+and lowered into the compiled target.
+
+For `cuda_nvshmem_event_copy`:
+
+- `exec.bind<workspace_slot>(workspace)` fills the payload/scratch storage slot;
+- `exec.bind<event_storage_slot>(events)` fills the synchronization storage
+  slot used by `ready_event`;
+- `exec.run(megacu::extent<tiles_extent>(tiles))` fills the runtime domain
+  size, causing exactly `tiles` logical tile points to run under the already
+  chosen dispatcher/scheduler/lowering/backend.
+
 ## Runtime Surface
 
 The normal runtime path should look like ordinary linked C++ code.

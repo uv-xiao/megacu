@@ -405,3 +405,15 @@ were later promoted into `docs/design/`.
     logical domain, `workspace` as caller-owned payload/scratch storage,
     `events` as caller-owned synchronization storage, `exec.bind` as typed slot
     binding, and `megacu::extent` as typed runtime extent binding.
+
+- 2026-04-24 Asia/Shanghai - Require necessity analysis
+  > are these concepts and binding behavior necessary? Give rationale or necessity analysis.
+  - Context: User asked whether the newly clarified concepts and runtime
+    binding behavior are justified or removable.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: Add explicit necessity analysis for each public
+    concept and compare typed runtime binding against generic env bags,
+    positional arguments, rebuild-per-shape, raw kernel plumbing, and
+    Megacu-owned allocation.

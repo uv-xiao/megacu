@@ -46,6 +46,35 @@ they are not runtime lookup keys. The implementation must use typed tags and
 lowered metadata for event, domain, operator, and virtual-participant
 resolution.
 
+## Necessity Analysis
+
+The design should keep only concepts that are required to run native kernels
+with explicit coordination while preserving a thin runtime path.
+
+| Concept | Why it is needed | If removed |
+| --- | --- | --- |
+| Operator | Connects an orchestrate submission to a native kernel implementation. | The scheduler would have no typed unit of executable work, or users would pass raw function/descriptors everywhere. |
+| Task/submission | States that one operator runs over one workset with arguments and dependencies. | Event dependencies and resource usage would have to be encoded inside kernels or hidden descriptors, making scheduling opaque. |
+| Domain | Names the logical workset before CUDA/rank mapping is chosen. | The API would expose CUDA block ids, ranks, lanes, or packed coordinates directly, tying the core to one backend strategy. |
+| Extent | Supplies the runtime size of a domain without rebuilding the target. | Every new tile/token count would either require rebuilding or require a generic runtime graph builder. |
+| Domain point | Gives kernels and metadata a way to talk about one logical work item. | Kernel code could not ask "which tile am I executing?" without backend-specific ids. |
+| Resource slot | Gives the compiled target typed runtime inputs. | The runtime would need a generic `runtime_env`, positional argument convention, or string lookup. |
+| Workspace | Groups caller-owned payload/scratch storage without making Megacu an allocator. | Users would either pass many unrelated buffers into every API or Megacu would need to own allocation policy. |
+| Event storage | Separates synchronization storage from payload workspace. | Backend event state would be hidden inside payload buffers or allocated by Megacu, weakening explicit resource ownership. |
+| Event | Represents a logical wait/signal dependency between tasks. | Communication ordering would live only in kernel code, so the scheduler/lowering could not inspect or validate it. |
+| Virtual participant | Names logical communication endpoints before backend rank/lane resolution. | The public program would expose raw ranks/workers, or kernels would hard-code backend placement. |
+| Kernel context | Carries lowered domain, participant, event, resource, and backend metadata to device code. | Kernels would need raw backend handles, string lookup, or handwritten per-target glue parameters. |
+
+The removable parts are labels such as `"tile"`, `"ready"`, `"producer"`, and
+`"workspace"`. They are not semantic requirements; they exist for diagnostics
+and generated metadata. The required identities are the typed tags and lowered
+slots.
+
+This is why the first design keeps `domain`, `event`, `resource slot`,
+`extent`, `participant`, and `kernel_context`, but rejects public raw
+descriptors, string runtime environments, public scheduler classes, and raw
+rank/worker ids in the normal authoring API.
+
 ## What The Orchestrate Program Must Express
 
 The orchestrate program should express only the information needed before
