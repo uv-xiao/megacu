@@ -13,6 +13,6 @@ Rules:
 
 ## Active Tasks
 
-- `docs/in_progress/public_builder_surface.md` - implement the first
-  compile-only public Megacu builder, view, and `program_ir` surface for the
-  GEMM+AllReduce program descriptors.
+- `docs/in_progress/public_builder_surface.md` - implement the first locally
+  verifiable Megacu lifecycle for the GEMM+AllReduce phased and overlap
+  targets.

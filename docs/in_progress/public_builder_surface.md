@@ -1,4 +1,4 @@
-# Feature Task: Public Builder Surface
+# Feature Task: Complete First Megacu Implementation
 
 - Branch: `implementation/public-builder-surface`
 - PR: #3
@@ -7,10 +7,11 @@
 
 ## Goal
 
-Implement the first compile-only public Megacu programming surface from the
-accepted implementation-ready design: `program_builder`, typed tags, domains,
-participants, resources, events, submissions, runtime views, and status types
-needed by the GEMM+AllReduce phased and overlap program descriptors.
+Implement the first locally verifiable Megacu lifecycle from the accepted
+implementation-ready design: public program authoring, host materialization,
+target metadata sections, CMake component/orchestrate target plumbing, direct
+compiled orchestrate ABI, runtime validation, and negative overlap-guard checks
+for the phased and overlap GEMM+AllReduce targets.
 
 ## Input
 
@@ -28,9 +29,21 @@ needed by the GEMM+AllReduce phased and overlap program descriptors.
   - `include/megacu/backends/nvshmem.h`
 - Internal first-pass record declarations:
   - `include/megacu/detail/program_ir.h`
-- Compile-only examples or tests proving
-  `gemm_allreduce_phased_program` and `gemm_allreduce_overlap_program` can be
-  authored with the public builder surface.
+- Target metadata and materialization headers:
+  - `include/megacu/detail/target_metadata.h`
+  - `include/megacu/detail/materialize.h`
+- CMake functions:
+  - `cmake/MegacuTargets.cmake`
+- Example target:
+  - `examples/cuda_nvshmem_gemm_allreduce/`
+- Tests proving:
+  - `gemm_allreduce_phased_program` and `gemm_allreduce_overlap_program` can be
+    authored with the public builder surface;
+  - materialization emits program facts and metadata sections;
+  - overlap schedules require a co-residency guard;
+  - direct orchestrate ABI validates typed runtime views and returns
+    `megacu::status`;
+  - target creation uses CMake/native build plumbing without generated CUDA.
 
 ## Scope Checklist
 
@@ -38,7 +51,11 @@ needed by the GEMM+AllReduce phased and overlap program descriptors.
 - [x] Implement public builder and typed view headers
 - [x] Implement minimal internal `program_ir` record declarations
 - [x] Add compile-only GEMM+AllReduce descriptor coverage
-- [x] Verify locally
+- [x] Implement materialization and target metadata sections
+- [x] Implement CMake component/orchestrate target plumbing
+- [x] Implement direct GEMM+AllReduce orchestrate ABI smoke path
+- [x] Add negative overlap-guard and metadata validation tests
+- [x] Verify locally across build, materialization, metadata, and ABI tests
 - [ ] Sync `docs/todo/` and `docs/in_progress/`
 
 ## Verification
@@ -47,14 +64,20 @@ needed by the GEMM+AllReduce phased and overlap program descriptors.
   platform, backend, or metadata plan classes are exposed.
 - Compile-only test proves phased and overlap GEMM+AllReduce descriptors build
   using only the planned public headers.
+- Materializer tests prove extents, domains, participants, resources, events,
+  submissions, dispatch, schedule, kernel, and backend sections are present.
+- Negative materializer test proves an overlap target with blocking device wait
+  and no co-residency guard fails.
+- Direct ABI tests prove invalid runtime resources return non-OK
+  `megacu::status` before any launch path.
 - Static or grep check proves no runtime strategy selection, string event
   lookup, generated CUDA source, or generic `runtime_env` surface is introduced.
 
 ## Tests
 
 - Add a focused build/compile-only test target for the two program descriptors.
-- Run the repository build or the narrow compile-only target once build tooling
-  exists.
+- Add materialization, metadata validation, CMake, and direct ABI smoke tests.
+- Run the repository CMake build and CTest suite.
 - If full CUDA/NVSHMEM tooling is unavailable locally, skip only the runtime
   execution checks and record the reason.
 

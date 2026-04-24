@@ -592,3 +592,17 @@ were later promoted into `docs/design/`.
     abstractions. Multi-platform/backend support should come from narrow
     component adapters and build-time selection, not from a broad public
     lifecycle or taxonomy.
+
+- 2026-04-24 Asia/Shanghai - Implement complete Megacu in one PR
+  > We shouldn't only implement a single slice in this PR, since we cannot verify. You need to implement the complete megacu in this PR.
+  - Context: User reviewed the first implementation PR after it only added the
+    public compile-only builder surface.
+  - Related: `docs/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/public_builder_surface.md`, PR #3.
+  - Agent interpretation: PR #3 must broaden from a narrow authoring-surface
+    slice to a locally verifiable first Megacu implementation covering the full
+    design lifecycle: authoring, materialization, metadata sections, CMake
+    target plumbing, direct orchestrate ABI, validation, and negative checks.
+    Hardware-dependent CUDA+NVSHMEM execution may still be skipped with an
+    explicit reason when unavailable, but the implementation cannot stop at a
+    non-verifiable public API slice.
