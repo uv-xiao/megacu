@@ -44,6 +44,15 @@ struct gemm_ar_problem {
   std::int32_t tile_n = 0;
 };
 
+struct gemm_ar_comm_ops {
+  megacu::status (*sum_reduce_f32)(
+      megacu::nvshmem::team_view team,
+      void *dest,
+      void const *src,
+      std::int64_t elements,
+      void *stream) = nullptr;
+};
+
 struct gemm_allreduce_phased_program {
   static void describe(megacu::program_builder &p) {
     auto m_tiles = p.extent<m_tiles_extent>("m_tiles");
@@ -72,9 +81,9 @@ struct gemm_allreduce_phased_program {
         megacu::over(tile),
         megacu::place(compute),
         megacu::args()
-            .a(ws.a)
-            .b(ws.b)
-            .partial(ws.partial)
+            .a(ws.field(&gemm_ar_workspace::a, "a"))
+            .b(ws.field(&gemm_ar_workspace::b, "b"))
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
             .release(partial_ready.release()));
 
     p.submit(
@@ -82,8 +91,8 @@ struct gemm_allreduce_phased_program {
         megacu::over(tile),
         megacu::place(reduce),
         megacu::args()
-            .partial(ws.partial)
-            .out(ws.c)
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
+            .out(ws.field(&gemm_ar_workspace::c, "c"))
             .acquire(partial_ready.acquire_all(rank)));
   }
 };
@@ -116,9 +125,9 @@ struct gemm_allreduce_overlap_program {
         megacu::over(tile),
         megacu::place(compute),
         megacu::args()
-            .a(ws.a)
-            .b(ws.b)
-            .partial(ws.partial)
+            .a(ws.field(&gemm_ar_workspace::a, "a"))
+            .b(ws.field(&gemm_ar_workspace::b, "b"))
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
             .release(partial_ready.release()));
 
     p.submit(
@@ -126,8 +135,8 @@ struct gemm_allreduce_overlap_program {
         megacu::over(tile),
         megacu::place(reduce),
         megacu::args()
-            .partial(ws.partial)
-            .out(ws.c)
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
+            .out(ws.field(&gemm_ar_workspace::c, "c"))
             .acquire(partial_ready.acquire_all(
                 rank,
                 megacu::event_wait::blocking_device())));

@@ -71,9 +71,9 @@ struct gemm_allreduce_phased_program {
         megacu::over(tile),
         megacu::place(compute),
         megacu::args()
-            .a(ws.a)
-            .b(ws.b)
-            .partial(ws.partial)
+            .a(ws.field(&gemm_ar_workspace::a, "a"))
+            .b(ws.field(&gemm_ar_workspace::b, "b"))
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
             .release(partial_ready.release()));
 
     p.submit(
@@ -81,8 +81,8 @@ struct gemm_allreduce_phased_program {
         megacu::over(tile),
         megacu::place(reduce),
         megacu::args()
-            .partial(ws.partial)
-            .out(ws.c)
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
+            .out(ws.field(&gemm_ar_workspace::c, "c"))
             .acquire(partial_ready.acquire_all(rank)));
   }
 };
@@ -115,9 +115,9 @@ struct gemm_allreduce_overlap_program {
         megacu::over(tile),
         megacu::place(compute),
         megacu::args()
-            .a(ws.a)
-            .b(ws.b)
-            .partial(ws.partial)
+            .a(ws.field(&gemm_ar_workspace::a, "a"))
+            .b(ws.field(&gemm_ar_workspace::b, "b"))
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
             .release(partial_ready.release()));
 
     p.submit(
@@ -125,8 +125,8 @@ struct gemm_allreduce_overlap_program {
         megacu::over(tile),
         megacu::place(reduce),
         megacu::args()
-            .partial(ws.partial)
-            .out(ws.c)
+            .partial(ws.field(&gemm_ar_workspace::partial, "partial"))
+            .out(ws.field(&gemm_ar_workspace::c, "c"))
             .acquire(partial_ready.acquire_all(
                 rank,
                 megacu::event_wait::blocking_device())));
@@ -146,6 +146,10 @@ int main() {
   assert(phased_ir.submissions.size() == 2);
   assert(phased_ir.submissions[0].op_name == ops::gemm_tile_produce::name);
   assert(phased_ir.submissions[1].op_name == ops::allreduce_tile_consume::name);
+  assert(phased_ir.submissions[0].args[0].resource_slot == 0);
+  assert(phased_ir.submissions[0].args[0].member_name == "a");
+  assert(phased_ir.submissions[1].args[1].resource_slot == 0);
+  assert(phased_ir.submissions[1].args[1].member_name == "c");
 
   megacu::program_builder overlap;
   gemm_allreduce_overlap_program::describe(overlap);

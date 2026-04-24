@@ -620,3 +620,13 @@ were later promoted into `docs/design/`.
     CUDA on real devices, including a single-host two-card CUDA smoke path, and
     then add Docker-provisioned CUDA+NVSHMEM validation for a two-card single
     host run.
+
+- 2026-04-24 Asia/Shanghai - Require correctness before closing risks
+  > For questions: 1. until real correctness test; 2. implement a numeric path. You should move on to solve the risks and missing things.
+  - Context: User answered the open review questions about how far PR #3
+    should go before it can be considered implementation-ready.
+  - Related: `docs/in_progress/public_builder_surface.md`, PR #3.
+  - Agent interpretation: Smoke tests are not enough for this PR. The first
+    implementation must include a numeric GEMM+AllReduce path and keep closing
+    review risks until correctness is validated on real CUDA and CUDA+NVSHMEM
+    paths, even if the first numeric path is intentionally small.

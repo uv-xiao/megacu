@@ -10,8 +10,9 @@
 Implement the first locally verifiable Megacu lifecycle from the accepted
 implementation-ready design: public program authoring, host materialization,
 target metadata sections, CMake component/orchestrate target plumbing, direct
-compiled orchestrate ABI, runtime validation, and negative overlap-guard checks
-for the phased and overlap GEMM+AllReduce targets.
+compiled orchestrate ABI, runtime validation, numeric GEMM+AllReduce
+correctness, and negative overlap-guard checks for the phased and overlap
+GEMM+AllReduce targets.
 
 ## Input
 
@@ -50,6 +51,17 @@ for the phased and overlap GEMM+AllReduce targets.
   - Docker NVSHMEM tests exercise two single-host PEs, NVSHMEM host bootstrap,
     symmetric allocation, CUDA stream/device setup, and the direct orchestrate
     ABI with NVSHMEM-backed symmetric views;
+  - numeric CUDA tests execute the compiled phased GEMM+AllReduce target on a
+    real CUDA stream and compare the output matrix against host-computed
+    expected values;
+  - numeric Docker NVSHMEM tests execute the compiled overlap GEMM+AllReduce
+    target under two ranks and compare both rank outputs after an NVSHMEM
+    sum-reduce;
+  - resource arguments bind concrete workspace fields through member pointers,
+    so the program IR records both the workspace slot and field name used by
+    each kernel argument;
+  - phased and overlap static libraries each export a linked metadata symbol
+    validated by a consuming test binary;
   - target creation uses CMake/native build plumbing without generated CUDA.
 
 ## Scope Checklist
@@ -67,6 +79,9 @@ for the phased and overlap GEMM+AllReduce targets.
 - [x] Verify locally across build, materialization, metadata, ABI, CUDA device,
   and CUDA two-card tests
 - [x] Add Docker-provisioned two-card NVSHMEM runtime validation
+- [x] Add numeric GEMM+AllReduce correctness on CUDA and two-rank NVSHMEM
+- [x] Make resource-field bindings concrete in program IR
+- [x] Prove linked per-target metadata symbols from consuming binaries
 - [x] Sync `docs/todo/` and `docs/in_progress/`
 
 ## Verification
@@ -88,6 +103,12 @@ for the phased and overlap GEMM+AllReduce targets.
 - CUDA multi-card smoke tests prove the local build can touch two GPUs on the
   same host, perform a peer copy between them, and pass one logical two-PE team
   view per device through the compiled orchestrate ABI.
+- CUDA numeric correctness tests prove the compiled phased target launches a
+  real CUDA GEMM path, invokes a backend-provided reduction primitive through
+  the concrete target ops table, and writes the expected output matrix.
+- Linked metadata tests prove a consuming binary can link the phased and
+  overlap target metadata symbols and validate their schedule mode, extent,
+  domain, and team-size facts without re-materializing descriptors.
 - Static or grep check proves no runtime strategy selection, string event
   lookup, generated CUDA source, or generic `runtime_env` surface is introduced.
 - Host inspection currently finds CUDA, Open MPI, Docker, and two idle A100s,
@@ -95,14 +116,16 @@ for the phased and overlap GEMM+AllReduce targets.
   validation is therefore provided by a CUDA/NVSHMEM Docker environment.
 - Docker NVSHMEM smoke tests prove the packaged NVSHMEM host runtime can
   bootstrap two PEs on one host, allocate symmetric buffers, synchronize both
-  PEs, and pass NVSHMEM-backed symmetric views into the compiled orchestrate
-  ABI on two visible GPUs.
+  PEs, pass NVSHMEM-backed symmetric views into the compiled orchestrate ABI on
+  two visible GPUs, execute the overlap target's numeric GEMM path, and verify
+  both ranks observe the expected sum-reduced matrix.
 
 ## Tests
 
 - Add a focused build/compile-only test target for the two program descriptors.
 - Add materialization, metadata validation, CMake, and direct ABI smoke tests.
 - Add CUDA runtime smoke tests for one device and single-host two-card plumbing.
+- Add numeric CUDA GEMM+AllReduce correctness tests for the compiled target.
 - Run the repository CMake build and CTest suite.
 - If CUDA runtime is unavailable, skip only CUDA tests by absence of
   `CUDAToolkit`; if fewer than two GPUs are visible, skip only the two-card
@@ -114,7 +137,8 @@ for the phased and overlap GEMM+AllReduce targets.
 Current local evidence:
 
 ```sh
-MEGACU_TEST_CUDA_DEVICES=5,6 ctest --test-dir build --output-on-failure
+MEGACU_TEST_CUDA_DEVICES=5,6 MEGACU_TEST_CUDA_DEVICE=6 \
+  ctest --test-dir build --output-on-failure
 tools/run_nvshmem_two_card_docker.sh
 ```
 

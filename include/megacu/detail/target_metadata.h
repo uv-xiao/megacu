@@ -124,50 +124,75 @@ inline std::string to_json(target_metadata const &metadata) {
   return json;
 }
 
-inline std::uint32_t checksum(std::span<const std::byte> bytes) {
+constexpr std::uint32_t mix(std::uint32_t result, std::uint32_t value) {
+  return (result * 131u) + value;
+}
+
+constexpr std::uint32_t checksum(metadata_header header) {
+  header.checksum = 0;
   std::uint32_t result = 0;
-  for (auto byte : bytes) {
-    result = (result * 131u) + static_cast<std::uint8_t>(byte);
-  }
+  result = mix(result, header.magic);
+  result = mix(result, header.version);
+  result = mix(result, header.header_bytes);
+  result = mix(result, header.total_bytes);
+  result = mix(result, header.extents);
+  result = mix(result, header.domains);
+  result = mix(result, header.participants);
+  result = mix(result, header.resources);
+  result = mix(result, header.events);
+  result = mix(result, header.submissions);
+  result = mix(result, header.team_size);
+  result = mix(result, static_cast<std::uint8_t>(header.progress));
   return result;
 }
 
-inline std::vector<std::byte> serialize(target_metadata const &metadata) {
+constexpr metadata_header make_metadata_header(
+    std::uint16_t extents,
+    std::uint16_t domains,
+    std::uint16_t participants,
+    std::uint16_t resources,
+    std::uint16_t events,
+    std::uint16_t submissions,
+    std::uint16_t team_size,
+    progress_model progress) {
   metadata_header header;
-  header.extents = metadata.program.extent_count;
-  header.domains = metadata.program.domain_count;
-  header.participants = metadata.program.participant_count;
-  header.resources = metadata.program.resource_count;
-  header.events = metadata.program.event_count;
-  header.submissions = metadata.program.submission_count;
-  header.team_size = metadata.backend.team_size;
-  header.progress = metadata.schedule.progress;
+  header.extents = extents;
+  header.domains = domains;
+  header.participants = participants;
+  header.resources = resources;
+  header.events = events;
+  header.submissions = submissions;
+  header.team_size = team_size;
+  header.progress = progress;
+  header.checksum = checksum(header);
+  return header;
+}
+
+inline std::vector<std::byte> serialize(target_metadata const &metadata) {
+  auto header = make_metadata_header(
+      metadata.program.extent_count,
+      metadata.program.domain_count,
+      metadata.program.participant_count,
+      metadata.program.resource_count,
+      metadata.program.event_count,
+      metadata.program.submission_count,
+      metadata.backend.team_size,
+      metadata.schedule.progress);
 
   std::vector<std::byte> bytes(sizeof(header));
   std::memcpy(bytes.data(), &header, sizeof(header));
-  auto *stored = reinterpret_cast<metadata_header *>(bytes.data());
-  stored->checksum = 0;
-  stored->checksum = checksum(bytes);
   return bytes;
 }
 
-inline status validate(std::span<const std::byte> bytes) {
-  if (bytes.size() < sizeof(metadata_header)) {
-    return {status_code::metadata_error, 1, "metadata too small"};
-  }
-
-  metadata_header header;
-  std::memcpy(&header, bytes.data(), sizeof(header));
+inline status validate(metadata_header header) {
   if (header.magic != 0x4d435531 || header.version != 1) {
     return {status_code::metadata_error, 2, "metadata header mismatch"};
   }
-  if (header.total_bytes != bytes.size()) {
+  if (header.header_bytes != sizeof(metadata_header) ||
+      header.total_bytes != sizeof(metadata_header)) {
     return {status_code::metadata_error, 3, "metadata size mismatch"};
   }
-
-  auto copy = std::vector<std::byte>(bytes.begin(), bytes.end());
-  reinterpret_cast<metadata_header *>(copy.data())->checksum = 0;
-  if (checksum(copy) != header.checksum) {
+  if (checksum(header) != header.checksum) {
     return {status_code::metadata_error, 4, "metadata checksum mismatch"};
   }
 
@@ -177,6 +202,16 @@ inline status validate(std::span<const std::byte> bytes) {
   }
 
   return {};
+}
+
+inline status validate(std::span<const std::byte> bytes) {
+  if (bytes.size() < sizeof(metadata_header)) {
+    return {status_code::metadata_error, 1, "metadata too small"};
+  }
+
+  metadata_header header;
+  std::memcpy(&header, bytes.data(), sizeof(header));
+  return validate(header);
 }
 
 }  // namespace megacu::detail

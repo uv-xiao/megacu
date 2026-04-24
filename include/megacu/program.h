@@ -53,10 +53,18 @@ struct participant_ref {
 };
 
 template <class SlotTag, class View>
-struct resource_ref : View {
+struct resource_ref {
   detail::slot_index slot = detail::invalid_slot;
 
   constexpr operator detail::resource_handle() const { return {slot}; }
+
+  template <class Member>
+  constexpr auto field(Member View::*, std::string_view member_name) const;
+};
+
+struct resource_field_ref {
+  detail::slot_index resource_slot = detail::invalid_slot;
+  std::string_view member_name;
 };
 
 struct domain_set {
@@ -131,27 +139,35 @@ struct arg_pack {
   std::vector<detail::arg_binding> args;
   std::vector<detail::event_use> events;
 
-  template <class T>
-  arg_pack a(T const &) && {
-    args.push_back({.name = "a", .member_name = "a"});
+  arg_pack a(resource_field_ref field) && {
+    args.push_back({
+        .name = "a",
+        .resource_slot = field.resource_slot,
+        .member_name = field.member_name});
     return std::move(*this);
   }
 
-  template <class T>
-  arg_pack b(T const &) && {
-    args.push_back({.name = "b", .member_name = "b"});
+  arg_pack b(resource_field_ref field) && {
+    args.push_back({
+        .name = "b",
+        .resource_slot = field.resource_slot,
+        .member_name = field.member_name});
     return std::move(*this);
   }
 
-  template <class T>
-  arg_pack partial(T const &) && {
-    args.push_back({.name = "partial", .member_name = "partial"});
+  arg_pack partial(resource_field_ref field) && {
+    args.push_back({
+        .name = "partial",
+        .resource_slot = field.resource_slot,
+        .member_name = field.member_name});
     return std::move(*this);
   }
 
-  template <class T>
-  arg_pack out(T const &) && {
-    args.push_back({.name = "out", .member_name = "out"});
+  arg_pack out(resource_field_ref field) && {
+    args.push_back({
+        .name = "out",
+        .resource_slot = field.resource_slot,
+        .member_name = field.member_name});
     return std::move(*this);
   }
 
@@ -300,5 +316,13 @@ class program_builder {
   std::vector<std::vector<detail::event_use>> submission_event_storage_;
   std::vector<detail::submission_decl> submissions_;
 };
+
+template <class SlotTag, class View>
+template <class Member>
+constexpr auto resource_ref<SlotTag, View>::field(
+    Member View::*,
+    std::string_view member_name) const {
+  return resource_field_ref{.resource_slot = slot, .member_name = member_name};
+}
 
 }  // namespace megacu

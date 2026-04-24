@@ -5,10 +5,28 @@ function(megacu_add_components)
   if(NOT MEGACU_NAME)
     message(FATAL_ERROR "megacu_add_components requires NAME")
   endif()
+  foreach(required DISPATCHER SCHEDULER KERNEL_LOWERING PLATFORM BACKEND)
+    if(NOT MEGACU_${required})
+      message(FATAL_ERROR "megacu_add_components requires ${required}")
+    endif()
+  endforeach()
 
-  add_library(${MEGACU_NAME} INTERFACE)
-  target_compile_features(${MEGACU_NAME} INTERFACE cxx_std_20)
-  target_link_libraries(${MEGACU_NAME} INTERFACE megacu_headers)
+  add_library(${MEGACU_NAME} STATIC
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/components/component_anchor.cc)
+  target_compile_features(${MEGACU_NAME} PUBLIC cxx_std_20)
+  target_link_libraries(${MEGACU_NAME} PUBLIC megacu_headers)
+  target_compile_definitions(${MEGACU_NAME} PRIVATE
+    "MEGACU_COMPONENT_DISPATCHER=\"${MEGACU_DISPATCHER}\""
+    "MEGACU_COMPONENT_SCHEDULER=\"${MEGACU_SCHEDULER}\""
+    "MEGACU_COMPONENT_KERNEL_LOWERING=\"${MEGACU_KERNEL_LOWERING}\""
+    "MEGACU_COMPONENT_PLATFORM=\"${MEGACU_PLATFORM}\""
+    "MEGACU_COMPONENT_BACKEND=\"${MEGACU_BACKEND}\"")
+  set_target_properties(${MEGACU_NAME} PROPERTIES
+    MEGACU_DISPATCHER "${MEGACU_DISPATCHER}"
+    MEGACU_SCHEDULER "${MEGACU_SCHEDULER}"
+    MEGACU_KERNEL_LOWERING "${MEGACU_KERNEL_LOWERING}"
+    MEGACU_PLATFORM "${MEGACU_PLATFORM}"
+    MEGACU_BACKEND "${MEGACU_BACKEND}")
 endfunction()
 
 function(megacu_add_orchestrate_target)
@@ -18,6 +36,12 @@ function(megacu_add_orchestrate_target)
 
   if(NOT MEGACU_TARGET)
     message(FATAL_ERROR "megacu_add_orchestrate_target requires TARGET")
+  endif()
+  if(NOT MEGACU_PROGRAM)
+    message(FATAL_ERROR "megacu_add_orchestrate_target requires PROGRAM")
+  endif()
+  if(NOT MEGACU_COMPONENTS)
+    message(FATAL_ERROR "megacu_add_orchestrate_target requires COMPONENTS")
   endif()
   if(NOT MEGACU_SOURCES)
     message(FATAL_ERROR "megacu_add_orchestrate_target requires SOURCES")
@@ -32,7 +56,11 @@ function(megacu_add_orchestrate_target)
   endif()
 
   target_compile_definitions(${MEGACU_TARGET} PRIVATE
-    "MEGACU_TARGET_NAME=${MEGACU_TARGET}"
-    "MEGACU_PROGRAM_NAME=${MEGACU_PROGRAM}"
-    "MEGACU_SCHEDULER_MODE=${MEGACU_SCHEDULER_MODE}")
+    "MEGACU_TARGET_NAME=\"${MEGACU_TARGET}\""
+    "MEGACU_PROGRAM_NAME=\"${MEGACU_PROGRAM}\""
+    "MEGACU_SCHEDULER_MODE=\"${MEGACU_SCHEDULER_MODE}\"")
+  set_target_properties(${MEGACU_TARGET} PROPERTIES
+    MEGACU_PROGRAM "${MEGACU_PROGRAM}"
+    MEGACU_COMPONENTS "${MEGACU_COMPONENTS}"
+    MEGACU_SCHEDULER_MODE "${MEGACU_SCHEDULER_MODE}")
 endfunction()

@@ -1,34 +1,16 @@
 #include <cuda_runtime.h>
 
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
+#include <cstdlib>
 #include <vector>
 
 #include "examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce.h"
 
-// The CUDA 12.8 Debian package ships a host library that exports these C API
-// symbols, while its CMake package references a missing device archive. Keep
-// this smoke on the exported host ABI until the device package is available.
-extern "C" {
-int nvshmemx_hostlib_init_attr(unsigned int flags, void *attr);
-void nvshmemx_hostlib_finalize();
-int nvshmem_my_pe();
-int nvshmem_n_pes();
-void *nvshmem_malloc(std::size_t size);
-void nvshmem_free(void *ptr);
-void nvshmem_barrier_all();
-int nvshmem_float_sum_reduce(
-    int team,
-    float *dest,
-    float const *src,
-    std::size_t nreduce);
-}
-
 namespace {
 
-constexpr int kSkipTest = 77;
 constexpr int kM = 2;
 constexpr int kN = 3;
 constexpr int kK = 4;
@@ -36,82 +18,96 @@ constexpr std::size_t kABytes = kM * kK * sizeof(float);
 constexpr std::size_t kBBytes = kK * kN * sizeof(float);
 constexpr std::size_t kCBytes = kM * kN * sizeof(float);
 constexpr std::size_t kPartialBytes = 2 * kCBytes;
-constexpr int kNvshmemTeamWorld = 0;
 
 void require_cuda(cudaError_t error) {
   assert(error == cudaSuccess);
 }
 
-gemm_ar_problem correctness_problem() {
-  return {
-      .m = kM,
-      .n = kN,
-      .k = kK,
-      .tile_m = kM,
-      .tile_n = kN};
+int choose_device() {
+  int count = 0;
+  require_cuda(cudaGetDeviceCount(&count));
+  assert(count > 0);
+
+  if (char const *env = std::getenv("MEGACU_TEST_CUDA_DEVICE")) {
+    char *end = nullptr;
+    long requested = std::strtol(env, &end, 10);
+    assert(end != env && *end == '\0');
+    assert(requested >= 0 && requested < count);
+    return static_cast<int>(requested);
+  }
+
+  return count - 1;
 }
 
-megacu::status nvshmem_sum_reduce_f32(
+megacu::status double_local_sum(
     megacu::nvshmem::team_view,
     void *dest,
     void const *src,
     std::int64_t elements,
     void *stream) {
+  std::vector<float> host(static_cast<std::size_t>(elements));
+  require_cuda(cudaMemcpyAsync(
+      host.data(),
+      src,
+      host.size() * sizeof(float),
+      cudaMemcpyDeviceToHost,
+      static_cast<cudaStream_t>(stream)));
   require_cuda(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
-  auto rc = nvshmem_float_sum_reduce(
-      kNvshmemTeamWorld,
-      static_cast<float *>(dest),
-      static_cast<float const *>(src),
-      static_cast<std::size_t>(elements));
-  if (rc != 0) {
-    return {megacu::status_code::backend_error, 1, "nvshmem sum reduce failed"};
+  for (float &value : host) {
+    value *= 2.0f;
   }
-  nvshmem_barrier_all();
+  require_cuda(cudaMemcpyAsync(
+      dest,
+      host.data(),
+      host.size() * sizeof(float),
+      cudaMemcpyHostToDevice,
+      static_cast<cudaStream_t>(stream)));
   return {};
+}
+
+float expected(std::vector<float> const &a,
+               std::vector<float> const &b,
+               int row,
+               int col) {
+  float value = 0.0f;
+  for (int kk = 0; kk < kK; ++kk) {
+    value += a[row * kK + kk] * b[kk * kN + col];
+  }
+  return 2.0f * value;
 }
 
 }  // namespace
 
 int main() {
-  assert(nvshmemx_hostlib_init_attr(0, nullptr) == 0);
-
-  int pe = nvshmem_my_pe();
-  int npes = nvshmem_n_pes();
-  if (npes != 2) {
-    nvshmemx_hostlib_finalize();
-    return kSkipTest;
-  }
-
-  int device_count = 0;
-  require_cuda(cudaGetDeviceCount(&device_count));
-  if (device_count < 2) {
-    nvshmemx_hostlib_finalize();
-    return kSkipTest;
-  }
-
-  int device = pe % device_count;
+  int device = choose_device();
   require_cuda(cudaSetDevice(device));
 
   cudaStream_t stream = nullptr;
   require_cuda(cudaStreamCreate(&stream));
 
+  std::vector<float> host_a{
+      1.0f, 2.0f, 3.0f, 4.0f,
+      2.0f, 1.0f, 0.5f, 3.0f};
+  std::vector<float> host_b{
+      1.0f, 0.0f, 2.0f,
+      0.5f, 1.0f, 0.0f,
+      2.0f, 1.5f, 1.0f,
+      1.0f, 2.0f, 0.5f};
+  std::vector<float> host_c(kM * kN, 0.0f);
+
   void *a = nullptr;
   void *b = nullptr;
   void *c = nullptr;
+  void *partial = nullptr;
   void *scratch = nullptr;
+  void *events = nullptr;
   require_cuda(cudaMalloc(&a, kABytes));
   require_cuda(cudaMalloc(&b, kBBytes));
   require_cuda(cudaMalloc(&c, kCBytes));
+  require_cuda(cudaMalloc(&partial, kPartialBytes));
   require_cuda(cudaMalloc(&scratch, 128));
+  require_cuda(cudaMalloc(&events, 128));
 
-  void *partial = nvshmem_malloc(kPartialBytes);
-  void *events = nvshmem_malloc(128);
-  assert(partial != nullptr);
-  assert(events != nullptr);
-
-  std::vector<float> host_a(kM * kK, static_cast<float>(pe + 1));
-  std::vector<float> host_b(kK * kN, 1.0f);
-  std::vector<float> host_c(kM * kN, 0.0f);
   require_cuda(cudaMemcpyAsync(
       a, host_a.data(), kABytes, cudaMemcpyHostToDevice, stream));
   require_cuda(cudaMemcpyAsync(
@@ -120,7 +116,7 @@ int main() {
 
   megacu::backend_id backend{1};
   megacu::session_id session{7};
-  gemm_ar_comm_ops ops{.sum_reduce_f32 = nvshmem_sum_reduce_f32};
+  gemm_ar_comm_ops ops{.sum_reduce_f32 = double_local_sum};
 
   gemm_ar_workspace workspace{
       .a = {
@@ -145,48 +141,51 @@ int main() {
       .scratch = megacu::span<std::byte>{
           static_cast<std::byte *>(scratch),
           128}};
-
   megacu::event_storage_view event_storage{
       .buffer = {
           .data = events,
           .bytes = 128,
           .backend = backend,
           .session = session}};
-
   megacu::cuda::launch_view launch{
       .stream = stream,
       .device_ordinal = device};
   megacu::nvshmem::team_view team{
       .team = &ops,
-      .team_my_pe = pe,
-      .team_n_pes = npes,
-      .world_my_pe = pe,
-      .world_n_pes = npes,
+      .team_my_pe = 0,
+      .team_n_pes = 2,
+      .world_my_pe = 0,
+      .world_n_pes = 2,
       .cuda_device_ordinal = device,
       .backend = backend,
       .session = session};
 
-  auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-      workspace, event_storage, launch, team, correctness_problem());
+  auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+      workspace,
+      event_storage,
+      launch,
+      team,
+      gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = kM, .tile_n = kN});
   assert(status.code == megacu::status_code::ok);
 
   require_cuda(cudaMemcpyAsync(
       host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
-  for (float value : host_c) {
-    assert(std::fabs(value - 12.0f) < 1.0e-4f);
+
+  for (int row = 0; row < kM; ++row) {
+    for (int col = 0; col < kN; ++col) {
+      float want = expected(host_a, host_b, row, col);
+      float got = host_c[row * kN + col];
+      assert(std::fabs(got - want) < 1.0e-4f);
+    }
   }
 
-  nvshmem_barrier_all();
-  nvshmem_free(events);
-  nvshmem_free(partial);
-
+  require_cuda(cudaFree(events));
   require_cuda(cudaFree(scratch));
+  require_cuda(cudaFree(partial));
   require_cuda(cudaFree(c));
   require_cuda(cudaFree(b));
   require_cuda(cudaFree(a));
   require_cuda(cudaStreamDestroy(stream));
-
-  nvshmemx_hostlib_finalize();
   return 0;
 }
