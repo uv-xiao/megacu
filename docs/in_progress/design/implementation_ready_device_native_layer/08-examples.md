@@ -108,14 +108,14 @@ megacu_add_orchestrate_target(
     write_then_signal=write_then_signal_kernel
     wait_then_check=wait_then_check_kernel
   COMPONENTS cuda_nvshmem_static
-  MAP producer_lane TO RANK 0
-  MAP consumer_lane TO RANK 1
 )
 ```
 
 Feature shown: CMake owns reusable component compilation and orchestrate-target
 compilation/linking. Ordinary user code just calls the compiled orchestration.
-The participant mapping resolves virtual ids to backend ranks for this target.
+The selected dispatcher inside `cuda_nvshmem_static` owns participant placement
+and emits the mapping from virtual participants to backend peers for this
+target.
 
 ## Example 4: External Framework Wrapper Path
 

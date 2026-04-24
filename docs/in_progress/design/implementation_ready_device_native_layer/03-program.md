@@ -413,17 +413,20 @@ auto producer = p.participant<producer_lane>("producer");
 auto consumer = p.participant<consumer_lane>("consumer");
 ```
 
-For the first static example, the mapping is stated in the CMake target
-configuration:
+Virtual participants are declarations of logical roles, not placement
+configuration. They are inputs to the dispatcher. The dispatcher selected for a
+target decides how those roles map to backend-native ranks, lanes, CTAs, or
+peers for each domain point.
 
-```cmake
-MAP producer_lane TO RANK 0
-MAP consumer_lane TO RANK 1
-```
+For the first static example, a simple dispatcher policy can decide:
 
-Runtime kernels do not use participant names as strings. Lowering creates a
-placement table that maps virtual participants and domain points to backend-
-native ids.
+- `producer_lane` maps to the source PE for a tile;
+- `consumer_lane` maps to the destination PE for the same tile;
+- the concrete source/destination relation is represented in the dispatcher's
+  participant table, not in CMake syntax and not in kernel code.
+
+CMake should only select or link the dispatcher component that owns this rule.
+Runtime kernels do not use participant names as strings.
 
 Virtual participants are allowed only when they remove raw rank/worker ids from
 the public program. They must not become a second scheduler API.

@@ -31,6 +31,11 @@ mapping strategy and scheduling strategy are not the same thing.
 
 Implementation owner: `src/dispatcher/`.
 
+Participant placement belongs here. CMake may select the dispatcher target, but
+CMake should not expose ad hoc `producer_lane -> rank 0` mapping syntax in the
+public Megacu API. A dispatcher implementation or typed dispatcher policy owns
+that rule and emits a participant table during target lowering.
+
 First dispatcher contract:
 
 - input: lowered program facts from the public builder
@@ -41,6 +46,18 @@ First dispatcher contract:
 - no ownership of event wait/signal semantics
 - no ownership of execution order
 - no public authoring API beyond optional placement hints
+
+For the first static CUDA/NVSHMEM example, the dispatcher can implement a
+fixed two-role policy:
+
+- `producer_lane` resolves to the producer PE for the current tile point;
+- `consumer_lane` resolves to the consumer PE for the same tile point;
+- the resulting participant table is consumed by kernel lowering and backend
+  event resolution.
+
+If a future workload needs a different producer/consumer relation, it should
+use a different dispatcher policy or dispatcher configuration, not CMake
+one-off mapping lines and not runtime scheduler selection.
 
 ## Scheduler
 

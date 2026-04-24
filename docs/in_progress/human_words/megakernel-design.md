@@ -417,3 +417,16 @@ were later promoted into `docs/design/`.
     concept and compare typed runtime binding against generic env bags,
     positional arguments, rebuild-per-shape, raw kernel plumbing, and
     Megacu-owned allocation.
+
+- 2026-04-24 Asia/Shanghai - Dispatcher owns virtual participant mapping
+  > This is weird. Why config in CMake? Why not do in dispatcher?
+  - Context: User pointed at `MAP producer_lane TO RANK 0` /
+    `MAP consumer_lane TO RANK 1` in the active design and questioned why
+    participant placement was represented as CMake configuration.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`
+  - Agent interpretation: Virtual participants are logical role declarations.
+    CMake may select the dispatcher component, but dispatcher policy owns
+    participant-to-backend placement and emits participant mapping metadata.

@@ -85,8 +85,6 @@ megacu_add_orchestrate_target(
     write_then_signal=write_then_signal_kernel
     wait_then_check=wait_then_check_kernel
   COMPONENTS cuda_nvshmem_static
-  MAP producer_lane TO RANK 0
-  MAP consumer_lane TO RANK 1
 )
 ```
 
@@ -95,7 +93,8 @@ Required properties:
 - component targets are reusable build artifacts;
 - orchestrate targets depend on component targets;
 - strategy choice happens in CMake/native build metadata;
-- virtual participant mappings are resolved into target metadata;
+- CMake selects or links the dispatcher component, but the dispatcher owns
+  virtual participant placement and emits participant mapping metadata;
 - runtime C++ cannot choose a different dispatcher, scheduler, lowering,
   platform, or backend for that target;
 - the build can emit inspection metadata for generated or lowered code.
