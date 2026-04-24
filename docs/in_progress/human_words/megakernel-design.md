@@ -430,3 +430,18 @@ were later promoted into `docs/design/`.
   - Agent interpretation: Virtual participants are logical role declarations.
     CMake may select the dispatcher component, but dispatcher policy owns
     participant-to-backend placement and emits participant mapping metadata.
+
+- 2026-04-24 Asia/Shanghai - Parameterized compiled orchestrate function
+  > I found the split between orchestrate-target structure and run-time dynamics not very necessary. Why not made orchestrate just to be a parameterized one? Why we still need exec.bind and exec.run upon compiled orch?
+  - Context: User questioned the public `executor` / `bind` / `run` layer after
+    the target has already been compiled.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: Keep descriptor slots as lowering internals, but make
+    the public compiled target a normal parameterized orchestrate function.
+    Runtime parameter binding and fast-path `run` are generated/linked target
+    internals, not public post-compile APIs.

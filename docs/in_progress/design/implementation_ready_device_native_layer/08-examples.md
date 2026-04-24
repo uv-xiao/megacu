@@ -47,8 +47,8 @@ struct event_storage_slot;
 
 struct event_copy_program {
   static void describe(megacu::program_builder &p) {
-    // `tiles` is a runtime count. It is supplied later by
-    // exec.run(megacu::extent<tiles_extent>(tiles)).
+    // `tiles` is a runtime count supplied by the parameterized orchestrate
+    // function.
     auto tiles = p.extent<tiles_extent>("tiles");
 
     // `tile` is the logical set of work items, one point per payload copy.
@@ -58,7 +58,7 @@ struct event_copy_program {
     auto producer = p.participant<producer_lane>("producer");
     auto consumer = p.participant<consumer_lane>("consumer");
 
-    // Runtime resources. The direct wrapper fills them with exec.bind.
+    // Runtime resources. The parameterized orchestrate function supplies them.
     auto workspace = p.resource<workspace_slot, event_copy_workspace>("workspace");
     auto events = p.resource<event_storage_slot, megacu::event_storage_view>("events");
 
@@ -142,8 +142,8 @@ For `cuda_nvshmem_event_copy_orchestrate`, the built target runs this sequence:
 
 1. runtime C++ calls
    `cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles)`;
-2. the wrapper binds typed runtime views to lowered resource/event slots;
-3. `executor<event_copy_program>::run` launches the selected static persistent
+2. generated or linked target code binds function parameters to lowered slots;
+3. internal fast-path execution launches the selected static persistent
    CUDA/NVSHMEM path;
 4. the dispatcher metadata maps each `tile_domain` point to producer and
    consumer backend peers;
@@ -161,5 +161,5 @@ Term meanings in this example:
 - `workspace`: caller-owned payload/scratch storage used by kernels.
 - `events`: caller-owned synchronization storage used by backend event
   endpoints.
-- `exec.bind`: typed runtime resource binding, from slot tag to value.
-- `megacu::extent`: typed runtime extent binding, from extent tag to count.
+- compiled parameter binding: internal target code maps typed function
+  parameters to lowered resource and extent slots.

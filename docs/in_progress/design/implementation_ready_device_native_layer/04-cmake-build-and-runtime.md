@@ -110,50 +110,55 @@ The design has three resolution stages:
    metadata:
    domain slot, event slot, participant slot, dispatch table, schedule payload,
    backend event layout.
-3. **Runtime binding**: the compiled orchestrate function receives typed
+3. **Parameterized call**: the compiled orchestrate function receives typed
    runtime values:
    workspace views, event storage, NVSHMEM team, and dynamic extents inside the
-   target envelope. These values fill the already-lowered slots.
+   target envelope. The function implementation fills the already-lowered slots
+   internally before launching the selected execution path.
 
 Labels never drive runtime lookup. They appear in diagnostics, metadata dumps,
 and verification output.
 
-## Runtime Binding Necessity
+## Parameterized Orchestrate Necessity
 
-`exec.bind<slot>(value)` and `megacu::extent<tag>(value)` are the runtime
-boundary between a pre-lowered target and per-call values.
+The public runtime boundary should be a parameterized compiled orchestrate
+function, not `exec.bind(...)` plus `exec.run(...)`.
 
-They are necessary because the build graph can know the structure of the
-program, but it cannot know every runtime pointer, buffer size, team handle, or
-tile count. The compiled target therefore has typed holes:
+The split that is still necessary is not a public API split. The build graph can
+know the program structure, but it cannot know every runtime pointer, buffer
+size, team handle, or tile count. The compiled target therefore has internal
+typed slots:
 
 - resource slots for values such as workspace and event storage;
 - extent slots for dynamic domain sizes such as `tiles`;
-- backend handle slots, supplied through `executor<Program>{team}` or explicit
-  backend resources.
+- backend handle slots, supplied by typed function parameters such as
+  `nvshmem_team_view`.
 
-The design uses typed binding instead of alternatives:
+The parameterized function fills those slots internally. It gives users one
+ordinary C++ call:
+
+```cpp
+cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles);
+```
+
+This is preferable to exposing the slots directly:
 
 | Alternative | Why not primary |
 | --- | --- |
+| Public `exec.bind(...)` plus `exec.run(...)` | Exposes an implementation mechanism after the target is already compiled and makes the runtime surface look like a two-phase mini-runtime. |
 | Generic `runtime_env` bag | Reintroduces stringly lookup and hides required resources from the C++ signature. |
 | Positional argument array | Compact but brittle; generated metadata and user code can disagree silently. |
 | Rebuild for every shape | Defeats repeated-run use cases and makes dynamic tile/token counts expensive. |
 | Let kernels receive all raw pointers/handles manually | Pushes lowering details into every kernel and prevents scheduler/backend inspection. |
 | Megacu-owned allocator/event pool | Makes Megacu responsible for allocation policy and framework integration decisions. |
 
-Typed binding is intentionally narrow. It does not select strategy and does not
-build anything. It only fills slots that were declared in the program descriptor
-and lowered into the compiled target.
-
 For `cuda_nvshmem_event_copy`:
 
-- `exec.bind<workspace_slot>(workspace)` fills the payload/scratch storage slot;
-- `exec.bind<event_storage_slot>(events)` fills the synchronization storage
-  slot used by `ready_event`;
-- `exec.run(megacu::extent<tiles_extent>(tiles))` fills the runtime domain
-  size, causing exactly `tiles` logical tile points to run under the already
-  chosen dispatcher/scheduler/lowering/backend.
+- `workspace` fills the payload/scratch storage slot;
+- `events` fills the synchronization storage slot used by `ready_event`;
+- `team` fills the backend handle slot;
+- `tiles` fills the runtime domain size, causing exactly `tiles` logical tile
+  points to run under the already chosen dispatcher/scheduler/lowering/backend.
 
 ## Runtime Surface
 
@@ -181,19 +186,14 @@ cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles);
 There is no primary runtime API for loading a module by path or passing an
 untyped environment bag.
 
-The direct function can be a small wrapper around the compiled executor:
+The direct function is the compiled target ABI:
 
 ```cpp
 void cuda_nvshmem_event_copy_orchestrate(
     event_copy_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
-    std::int32_t tiles) {
-  megacu::executor<event_copy_program> exec{team};
-  exec.bind<workspace_slot>(workspace);
-  exec.bind<event_storage_slot>(events);
-  exec.run(megacu::extent<tiles_extent>(tiles));
-}
+    std::int32_t tiles);
 ```
 
 ## Orchestrate
@@ -223,8 +223,9 @@ Those decisions were already made by the build graph.
 
 ## Run
 
-`run` is still the repeated fast-path device execution inside the orchestrate
-program.
+`run` is the internal repeated fast-path device execution inside the compiled
+orchestrate target. It is not a separate public object users call after
+constructing the compiled target.
 
 If a structural property changes, the target may need to be rebuilt by the
 build graph. `run` must not absorb that work.
@@ -232,7 +233,7 @@ build graph. `run` must not absorb that work.
 For the first static persistent CUDA/NVSHMEM target, `run` should do only:
 
 1. validate runtime extents against the target envelope;
-2. bind explicit runtime views and backend handles to lowered slots;
+2. map explicit runtime views and backend handles to lowered slots;
 3. launch the selected persistent CUDA path or direct launch sequence;
 4. return status or propagate platform/backend errors.
 
@@ -260,16 +261,17 @@ There is no runtime phase that still secretly chooses scheduler or lowering.
 
 ## Dynamic Behavior
 
-The lifecycle handles dynamic behavior at three different levels:
+The lifecycle handles dynamic behavior at two public levels:
 
 - **component-target structure**: which reusable dispatcher/scheduler/lowering
   engines exist
-- **orchestrate-target structure**: how one concrete orchestrate program is
-  compiled/linked against those engines
-- **run-time dynamics**: extents, slices, scalars, and other values inside the
-  program's validated envelope
+- **compiled orchestrate function**: how one concrete orchestrate program is
+  compiled/linked against those engines, including which parameters remain
+  dynamic at call time
 
-This avoids turning `run` into a hidden graph builder or runtime compiler.
+Runtime dynamics are just parameters of the compiled orchestrate function. This
+avoids turning `run` into a hidden graph builder or runtime compiler while also
+avoiding a public bind/run layer after compilation.
 
 ## Working Path
 

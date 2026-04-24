@@ -18,32 +18,24 @@ struct workspace_slot;
 struct event_storage_slot;
 struct tiles_extent;
 
-// Ordinary function exported by the compiled orchestrate target.
-// It is the user/framework call surface.
+// Ordinary parameterized function exported by the compiled orchestrate target.
+// It is the user/framework call surface; there is no public executor object.
 void cuda_nvshmem_event_copy_orchestrate(
     event_copy_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
-    std::int32_t tiles) {
-  megacu::executor<event_copy_program> exec{team};
-
-  // Resource bindings: connect runtime values to descriptor slots.
-  exec.bind<workspace_slot>(workspace);
-  exec.bind<event_storage_slot>(events);
-
-  // Extent binding: this run has `tiles` tile-domain points.
-  exec.run(megacu::extent<tiles_extent>(tiles));
-}
+    std::int32_t tiles);
 ```
 
-`exec.bind<slot>(value)` does not perform string lookup. `slot` is a typed
-resource identity declared in `event_copy_program::describe(...)`; `value` is
-the concrete runtime view for this call.
+The function parameters fill the descriptor slots by type:
 
-`megacu::extent<tiles_extent>(tiles)` does not allocate work. It supplies the
-runtime count for the domain extent declared by
-`p.extent<tiles_extent>("tiles")`. Lowered dispatcher and scheduler metadata
-use that count to decide which tile points run.
+- `workspace` fills `workspace_slot`;
+- `events` fills `event_storage_slot`;
+- `team` fills the backend handle slot;
+- `tiles` fills `tiles_extent`.
+
+That binding is generated or linked into the compiled target. It is not a
+public `exec.bind(...)` step.
 
 The descriptor compiled into that target looks like:
 
@@ -114,10 +106,11 @@ Megacu-generated or Megacu-linked target metadata.
 At runtime:
 
 1. deployment code calls `cuda_nvshmem_event_copy_orchestrate(...)`;
-2. the executor receives explicit runtime values such as workspace views,
-   event storage, and `nvshmem_team_view`;
-3. `bind` and `run` attach those values to pre-lowered slots and extents;
-4. `run` enters the selected CUDA/NVSHMEM execution path;
+2. the compiled target receives explicit runtime values such as workspace
+   views, event storage, `nvshmem_team_view`, and tile count;
+3. generated or linked target code attaches those values to pre-lowered slots
+   and enters the selected CUDA/NVSHMEM execution path;
+4. internal fast-path execution launches the selected kernels;
 5. kernels use `kernel_context` to resolve current domain points, virtual
    participants, and event endpoints.
 

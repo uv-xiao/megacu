@@ -50,18 +50,7 @@ void cuda_nvshmem_event_copy_orchestrate(
     event_copy_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
-    std::int32_t tiles) {
-  megacu::executor<event_copy_program> exec{team};
-
-  // `workspace` is payload/scratch storage supplied by the caller.
-  exec.bind<workspace_slot>(workspace);
-
-  // `events` is synchronization storage used by lowered ready_event endpoints.
-  exec.bind<event_storage_slot>(events);
-
-  // `tiles` is the runtime size of tile_domain for this run.
-  exec.run(megacu::extent<tiles_extent>(tiles));
-}
+    std::int32_t tiles);
 ```
 
 The matching program descriptor must declare the domains, participants, events,
@@ -91,7 +80,6 @@ strategy.
 
 - Public API headers:
   - `include/megacu/program.h`
-  - `include/megacu/executor.h`
   - `include/megacu/views.h`
   - `include/megacu/backends/nvshmem.h`
 - Build rules:

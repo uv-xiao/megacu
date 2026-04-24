@@ -40,10 +40,10 @@
   native C++ build path, not by Python or runtime parsing
 - design or compile evidence that each public concept in
   `03-program.md` is required by either scheduling, lowering, backend
-  resolution, or runtime binding
-- tests or inspection proving typed `exec.bind` and `megacu::extent` fill
-  pre-lowered slots and do not select dispatcher, scheduler, lowering,
-  platform, or backend strategy
+  resolution, or runtime parameterization
+- tests or inspection proving compiled function parameters fill pre-lowered
+  slots and do not select dispatcher, scheduler, lowering, platform, or backend
+  strategy
 - native build checks that the artifact is produced by ordinary CUDA/C++
   compilation rather than runtime code generation
 - direct-call smoke tests for the compiled orchestrate program

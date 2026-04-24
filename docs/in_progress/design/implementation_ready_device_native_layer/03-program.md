@@ -8,10 +8,9 @@ generic runtime-loaded module.
 
 ## Terms
 
-- **Orchestrate program**: the C++ function users write to declare tasks,
-  events, resources, and `run`. In the first implementation this should be a
-  small C++ program descriptor plus a direct runtime wrapper, both compiled
-  into the orchestrate target.
+- **Orchestrate program**: the C++ descriptor users write to declare tasks,
+  events, resources, and logical extents. CMake lowers it into a compiled,
+  parameterized orchestrate function.
 - **Operator** or **named op**: a user kernel entry identified by a C++ op tag
   and implemented by a native CUDA/C++ kernel or callable device function.
 - **Task** or **submission**: one invocation of an operator over a logical
@@ -34,12 +33,12 @@ generic runtime-loaded module.
 - **Kernel context**: the lowered device-side context passed to operators so a
   kernel can resolve its current domain point, virtual peers, event endpoints,
   workspace slices, and backend primitives without string lookup.
-- **Extent**: the runtime size of a domain. In the first example,
-  `megacu::extent<tiles_extent>(tiles)` says how many tile domain points exist
-  for this run.
+- **Extent**: the runtime size of a domain. In the first example, the
+  `tiles` parameter says how many tile domain points exist for this call.
 - **Resource slot**: a typed program-declared input to the compiled target.
   `workspace_slot` and `event_storage_slot` are not allocation ids; they are
-  typed binding points that `exec.bind<slot>(value)` fills at runtime.
+  internal binding points that the compiled orchestrate function fills from its
+  typed parameters.
 
 Names are labels. They are useful for diagnostics and generated metadata, but
 they are not runtime lookup keys. The implementation must use typed tags and
@@ -58,7 +57,7 @@ with explicit coordination while preserving a thin runtime path.
 | Domain | Names the logical workset before CUDA/rank mapping is chosen. | The API would expose CUDA block ids, ranks, lanes, or packed coordinates directly, tying the core to one backend strategy. |
 | Extent | Supplies the runtime size of a domain without rebuilding the target. | Every new tile/token count would either require rebuilding or require a generic runtime graph builder. |
 | Domain point | Gives kernels and metadata a way to talk about one logical work item. | Kernel code could not ask "which tile am I executing?" without backend-specific ids. |
-| Resource slot | Gives the compiled target typed runtime inputs. | The runtime would need a generic `runtime_env`, positional argument convention, or string lookup. |
+| Resource slot | Lets lowering connect descriptor resources to typed function parameters. | The implementation would need a generic `runtime_env`, brittle positional convention, or string lookup. |
 | Workspace | Groups caller-owned payload/scratch storage without making Megacu an allocator. | Users would either pass many unrelated buffers into every API or Megacu would need to own allocation policy. |
 | Event storage | Separates synchronization storage from payload workspace. | Backend event state would be hidden inside payload buffers or allocated by Megacu, weakening explicit resource ownership. |
 | Event | Represents a logical wait/signal dependency between tasks. | Communication ordering would live only in kernel code, so the scheduler/lowering could not inspect or validate it. |
@@ -95,8 +94,6 @@ The first public headers should be:
 
 - `include/megacu/program.h`: `program_builder`, domain/event/participant/
   resource/submit builders, and extent tags.
-- `include/megacu/executor.h`: compiled target executor, runtime binding, and
-  `run`.
 - `include/megacu/views.h`: typed resource views.
 - `include/megacu/backends/nvshmem.h`: first backend runtime and device views.
 
@@ -104,8 +101,8 @@ The first public headers should be:
 
 To make build-time lowering concrete, the first implementation should not try
 to inspect arbitrary C++ function bodies. Users write a C++ program descriptor
-with an explicit `describe(...)` method, then expose an ordinary runtime
-function that calls the compiled executor.
+with an explicit `describe(...)` method. CMake lowers that descriptor into an
+ordinary parameterized orchestrate function.
 
 For the first validation target:
 
@@ -118,29 +115,29 @@ For the first validation target:
   used by those tasks.
 - `events` is caller-provided event storage where the backend adapter can place
   the concrete signal/wait state for `ready_event`.
-- `exec.bind<workspace_slot>(workspace)` binds the runtime workspace view to
-  the resource slot declared by `p.resource<workspace_slot, ...>()`.
-- `exec.bind<event_storage_slot>(events)` binds the runtime event-storage view
-  to the event storage slot used by `p.event<ready_event>(...)`.
-- `exec.run(megacu::extent<tiles_extent>(tiles))` supplies the runtime extent
-  for the `tiles_extent` declared by `p.extent<tiles_extent>("tiles")` and then
-  runs the lowered target.
+- the compiled function parameter `workspace` fills the descriptor's
+  `workspace_slot`.
+- the compiled function parameter `events` fills the descriptor's
+  `event_storage_slot`.
+- the compiled function parameter `tiles` fills the descriptor's
+  `tiles_extent` and determines how many tile domain points run.
 
 ```cpp
 struct event_copy_program {
   static void describe(megacu::program_builder &p) {
-    // Runtime value supplied by exec.run(megacu::extent<tiles_extent>(tiles)).
+    // Runtime value supplied by the generated function's `tiles` parameter.
     auto tiles = p.extent<tiles_extent>("tiles");
 
     // Logical work domain: one domain point per payload copy.
     auto tile = p.domain<tile_domain>("tile", tiles);
 
-    // Virtual communication endpoints. Target configuration maps them to
-    // backend-native ranks or lanes.
+    // Virtual communication endpoints. The selected dispatcher maps them to
+    // backend-native ranks or lanes during target lowering.
     auto producer = p.participant<producer_lane>("producer");
     auto consumer = p.participant<consumer_lane>("consumer");
 
-    // Typed runtime resources. Values are supplied by exec.bind<slot>(...).
+    // Typed runtime resources. Values are supplied by generated function
+    // parameters with matching slots.
     auto workspace = p.resource<workspace_slot, event_copy_workspace>("workspace");
     auto events = p.resource<event_storage_slot, megacu::event_storage_view>("events");
 
@@ -169,22 +166,14 @@ void cuda_nvshmem_event_copy_orchestrate(
     event_copy_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
-    std::int32_t tiles) {
-  megacu::executor<event_copy_program> exec{team};
-
-  // Bind caller-provided storage to resource slots declared in describe(...).
-  exec.bind<workspace_slot>(workspace);
-  exec.bind<event_storage_slot>(events);
-
-  // Supply the runtime size of the tile domain and launch the lowered target.
-  exec.run(megacu::extent<tiles_extent>(tiles));
-}
+    std::int32_t tiles);
 ```
 
 `describe(...)` is the concrete program surface that CMake/native build tooling
-can compile into metadata. The runtime wrapper is the direct call surface used
-by applications and framework wrappers. This keeps build work out of runtime
-C++ while avoiding a hidden parser for arbitrary C++.
+can compile into metadata. The parameterized `cuda_nvshmem_event_copy_orchestrate`
+function is the direct call surface used by applications and framework wrappers.
+This keeps build work out of runtime C++ while avoiding a hidden parser for
+arbitrary C++.
 
 ## Named Ops
 
@@ -498,14 +487,12 @@ The concrete structure is:
 - author one program descriptor with `describe(...)`
 - attach resources/events/domains through small builders
 - let the build graph lower the descriptor into target metadata
-- expose an ordinary runtime function that binds values and calls
-  `executor<program>::run(...)`
+- expose an ordinary parameterized runtime function whose implementation maps
+  parameters to lowered slots and enters the lowered execution path internally
 
 For the first implementation, the required public surface is:
 
 - `megacu::program_builder`
-- `megacu::executor<Program>`
-- `megacu::extent`
 - `megacu::domain`
 - `megacu::event`
 - `megacu::participant`
@@ -513,8 +500,8 @@ For the first implementation, the required public surface is:
 - `megacu::place(participant)`
 - `megacu::args()`
 - `megacu::program_builder::submit(...)`
-- `megacu::executor::bind(...)`
-- `megacu::executor::run(...)`
+- generated or declared parameterized orchestrate function, such as
+  `cuda_nvshmem_event_copy_orchestrate(...)`
 
 Anything else must justify why event, task/submission, schedule, or kernel
 contracts cannot work without it.
