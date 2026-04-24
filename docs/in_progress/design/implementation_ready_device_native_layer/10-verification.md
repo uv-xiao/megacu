@@ -36,8 +36,8 @@
 
 - CMake/build tests that produce reusable component targets
 - CMake/build tests that produce one orchestrate target from those components
-- build evidence that `PROGRAM event_copy_program` metadata is produced by the
-  native C++ build path, not by Python or runtime parsing
+- build evidence that `PROGRAM gemm_allreduce_program` metadata is produced by
+  the native C++ build path, not by Python or runtime parsing
 - design or compile evidence that each public concept in
   `03-program.md` is required by either scheduling, lowering, backend
   resolution, or runtime parameterization
@@ -54,7 +54,8 @@
 - repeated-run tests showing the internal `run(...)` path stays cheap
 - integration tests showing CMake/build drive target creation while runtime C++
   only calls the compiled orchestration
-- two-rank runtime smoke tests for the first target where hardware is available
+- two-rank GEMM+AllReduce correctness tests for the first target where hardware
+  is available
 
 ## Example-To-Evidence Mapping
 
@@ -73,8 +74,12 @@
   compile-only checks showing kernels use typed `kernel_context` APIs instead
   of string event lookup or hand-authored backend signal addresses.
 - First slice runtime behavior in `09-first-validation-slice.md`:
-  two-rank CUDA/NVSHMEM test where hardware exists; explicit skip reason where
-  local NVSHMEM multi-GPU execution is unavailable.
+  two-rank CUDA/NVSHMEM GEMM+AllReduce correctness test where hardware exists;
+  explicit skip reason where local NVSHMEM multi-GPU execution is unavailable.
+- Larger MPK-style example in `08-examples.md`:
+  design/compile evidence that a serving-layer program can link CUDA-provided
+  RMSNorm, linear, paged-attention, split-reduce, and residual-output operator
+  bodies without changing the public program model.
 - No runtime strategy selection:
   code inspection or test hook proving `run` does not call build, CMake,
   dispatcher selection, scheduler selection, backend selection, or string-based

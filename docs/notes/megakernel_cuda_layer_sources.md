@@ -45,6 +45,29 @@ scheduler CTAs. Its key concrete idea is an SM-level task/event graph. The publi
 repo confirms this design in code: `TaskDesc`, `EventDesc`, worker queues,
 scheduler queues, event counters, NVSHMEM support, and generated task variants.
 
+Follow-up reading on 2026-04-24 for the implementation-ready examples focused on
+the CUDA-provided task side of MPK:
+
+- `include/mirage/persistent_kernel/runtime_header.h` defines `TaskType`,
+  `EventType`, `FullTaskDesc`, `TaskDesc`, and `RuntimeConfig`, including
+  Hopper, SM100, and multi-GPU task families.
+- `src/kernel/graph.cc` registers concrete task names such as
+  `linear_cutlass_hopper`, `paged_attention_hopper`, `rmsnorm_hopper`,
+  `moe_w13_linear_sm90`, `mla_decode_sm100`, `mla_reduce_sm100`,
+  `nvshmem_allgather_strided_put`, and `nvshmem_tile_allreduce`.
+- `include/mirage/persistent_kernel/tasks/cute/hopper/gemm_ws_mpk.cuh` provides
+  a CUDA/CuTe/CUTLASS-style Hopper linear task body with TMA, warpgroup roles,
+  GMMA, pipeline barriers, and residual epilogue behavior.
+- `demo/reference_mugraphs/qwen_mlp.py`, `group_query_attention.py`, and
+  runtime Python tests show larger model fragments built from RMSNorm, matmul,
+  attention, and runtime CUDA wrappers.
+
+The active Megacu design uses this as evidence for a larger MPK-style example,
+but deliberately does not copy MPK's generated-CUDA path. Megacu should express
+the task/event/dependency structure and link CUDA-provided operator bodies; MPK
+shows why the operator set needs to include real serving tasks such as RMSNorm,
+linear, paged attention, split reduction, MoE, and NVSHMEM collectives.
+
 Event Tensor is closest to a compiler abstraction: it lifts events from
 individual synchronization objects into tensor-shaped, symbolic compiler IR
 objects. Its most important contribution is not a new semaphore primitive, but a

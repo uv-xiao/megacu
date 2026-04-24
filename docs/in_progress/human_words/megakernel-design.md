@@ -462,3 +462,21 @@ were later promoted into `docs/design/`.
     select and link reusable dispatcher, scheduler, lowering, platform,
     backend, and kernel implementations; they must not emit new C++/CUDA or
     translate the orchestrate program into another language.
+
+- 2026-04-24 Asia/Shanghai - Strengthen examples with GEMM+AllReduce and MPK
+  > The example is too weak. We need a gemm-allreduce fusion-kernel as the example. You can get information and reference code from related repositories. Also, we need another bigger example from mpk (where cuda is provided).
+  - Context: User reviewed the event-copy example and found it insufficient for
+    implementation-ready design.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`,
+    `docs/notes/distributed_backend_sources.md`,
+    `docs/notes/megakernel_cuda_layer_sources.md`
+  - Agent interpretation: Replace the toy event-copy proof with a
+    GEMM+AllReduce fusion target that exercises real compute/communication
+    overlap, then add an MPK-style serving-layer example grounded in MPK's
+    CUDA-provided operator families.

@@ -106,74 +106,83 @@ ordinary parameterized orchestrate function.
 
 For the first validation target:
 
-- `tiles` is a runtime integer count: how many independent payload copies to
-  run.
-- `tile` is the logical domain over those copies. If `tiles == 128`, the
-  domain has points `tile 0` through `tile 127`.
-- a producer task and a consumer task are submitted for each tile point.
-- `workspace` is caller-provided storage containing payload buffers and scratch
-  used by those tasks.
+- `problem` is a runtime descriptor containing `M`, `N`, `K`, strides, datatype
+  envelope, and tile shape.
+- `output_tile` is the logical domain over GEMM output tiles. If `M` and `N`
+  imply 128 output tiles, the domain has points `tile 0` through `tile 127`.
+- a GEMM producer task and an AllReduce consumer task are submitted for each
+  output tile.
+- `workspace` is caller-provided storage containing `A`, `B`, per-rank partial
+  output, final output, and scratch buffers used by those tasks.
 - `events` is caller-provided event storage where the backend adapter can place
-  the concrete signal/wait state for `ready_event`.
+  the concrete signal/wait state for `partial_ready_event`.
 - the compiled function parameter `workspace` fills the descriptor's
-  `workspace_slot`.
+  `gemm_ar_workspace_slot`.
 - the compiled function parameter `events` fills the descriptor's
   `event_storage_slot`.
-- the compiled function parameter `tiles` fills the descriptor's
-  `tiles_extent` and determines how many tile domain points run.
+- the compiled function parameter `problem` fills the matrix and tile extents
+  and determines how many logical output tile points run.
 
 ```cpp
-struct event_copy_program {
+struct gemm_allreduce_program {
   static void describe(megacu::program_builder &p) {
-    // Runtime value supplied by the generated function's `tiles` parameter.
-    auto tiles = p.extent<tiles_extent>("tiles");
+    // Runtime values supplied by the compiled function's `problem` parameter.
+    auto m_tiles = p.extent<m_tiles_extent>("m_tiles");
+    auto n_tiles = p.extent<n_tiles_extent>("n_tiles");
 
-    // Logical work domain: one domain point per payload copy.
-    auto tile = p.domain<tile_domain>("tile", tiles);
+    // Logical work domain: one domain point per output matrix tile.
+    auto tile = p.domain<output_tile_domain>("output_tile", m_tiles, n_tiles);
+    auto rank = p.domain<rank_domain>("rank", p.backend_extent("team_size"));
 
-    // Virtual communication endpoints. The selected dispatcher maps them to
-    // backend-native ranks or lanes during target lowering.
-    auto producer = p.participant<producer_lane>("producer");
-    auto consumer = p.participant<consumer_lane>("consumer");
+    // Virtual execution roles. The selected dispatcher maps them to
+    // backend-native CTAs, lanes, ranks, or peers during target lowering.
+    auto compute = p.participant<compute_lane>("compute");
+    auto reduce = p.participant<reduce_lane>("reduce");
 
-    // Typed runtime resources. Values are supplied by generated function
+    // Typed runtime resources. Values are supplied by compiled function
     // parameters with matching slots.
-    auto workspace = p.resource<workspace_slot, event_copy_workspace>("workspace");
+    auto workspace = p.resource<gemm_ar_workspace_slot, gemm_ar_workspace>("workspace");
     auto events = p.resource<event_storage_slot, megacu::event_storage_view>("events");
 
-    // Logical event family: one ready event per tile point from producer to
-    // consumer, backed by the event storage resource.
-    auto ready = p.event<ready_event>(
-        "ready",
-        tile,
-        megacu::remote_event{.from = producer, .to = consumer, .storage = events});
+    // Logical event family: one partial-ready event per tile and rank.
+    auto partial_ready = p.event<partial_ready_event>(
+        "partial_ready",
+        megacu::over(tile, rank),
+        megacu::remote_event{.from = compute, .to = reduce, .storage = events});
 
     p.submit(
-        ops::write_then_signal{},
+        ops::gemm_tile_produce{},
         megacu::over(tile),
-        megacu::place(producer),
-        megacu::args().payload(workspace.payload).signal(ready.release()));
+        megacu::place(compute),
+        megacu::args()
+            .a(workspace.a)
+            .b(workspace.b)
+            .partial(workspace.partial)
+            .release(partial_ready.release()));
 
     p.submit(
-        ops::wait_then_check{},
+        ops::allreduce_tile_consume{},
         megacu::over(tile),
-        megacu::place(consumer),
-        megacu::args().wait(ready.acquire()).payload(workspace.payload));
+        megacu::place(reduce),
+        megacu::args()
+            .partial(workspace.partial)
+            .out(workspace.c)
+            .acquire(partial_ready.acquire_all(rank)));
   }
 };
 
-void cuda_nvshmem_event_copy_orchestrate(
-    event_copy_workspace workspace,
+void cuda_nvshmem_gemm_allreduce_orchestrate(
+    gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
-    std::int32_t tiles);
+    gemm_ar_problem problem);
 ```
 
 `describe(...)` is the concrete program surface that CMake/native build tooling
-can compile into metadata. The parameterized `cuda_nvshmem_event_copy_orchestrate`
-function is the direct call surface used by applications and framework wrappers.
-This keeps build work out of runtime C++ while avoiding a hidden parser for
-arbitrary C++.
+can compile into metadata. The parameterized
+`cuda_nvshmem_gemm_allreduce_orchestrate` function is the direct call surface
+used by applications and framework wrappers. This keeps build work out of
+runtime C++ while avoiding a hidden parser for arbitrary C++.
 
 ## Named Ops
 
@@ -194,12 +203,12 @@ Initial API shape:
 
 ```cpp
 namespace ops {
-struct write_then_signal {
-  static constexpr auto name = "write_then_signal";
+struct gemm_tile_produce {
+  static constexpr auto name = "gemm_tile_produce";
 };
 
-struct wait_then_check {
-  static constexpr auto name = "wait_then_check";
+struct allreduce_tile_consume {
+  static constexpr auto name = "allreduce_tile_consume";
 };
 }
 ```
@@ -211,13 +220,13 @@ The CMake target maps op tags to implementation symbols:
 
 ```cmake
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_event_copy
-  PROGRAM event_copy_program
-  SOURCES event_copy_orchestrate.cc
-  KERNELS event_copy_kernels.cu
+  TARGET cuda_nvshmem_gemm_allreduce
+  PROGRAM gemm_allreduce_program
+  SOURCES gemm_allreduce_orchestrate.cc
+  KERNELS gemm_allreduce_kernels.cu
   OPS
-    write_then_signal=write_then_signal_kernel
-    wait_then_check=wait_then_check_kernel
+    gemm_tile_produce=gemm_tile_produce_kernel
+    allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
 )
 ```
@@ -259,9 +268,12 @@ normal examples.
 provided storage:
 
 ```cpp
-struct event_copy_workspace {
+struct gemm_ar_workspace {
+  megacu::tensor_view a;
+  megacu::tensor_view b;
+  megacu::tensor_view partial;
+  megacu::tensor_view c;
   megacu::span<std::byte> scratch;
-  megacu::span<std::uint64_t> payload;
 };
 ```
 
@@ -269,9 +281,11 @@ The orchestrate program receives this view, passes typed slices to submissions,
 and lowering records which resource slots kernels need. Allocation remains with
 the caller or framework wrapper.
 
-For `cuda_nvshmem_event_copy`, the workspace is deliberately small:
+For `cuda_nvshmem_gemm_allreduce`, the workspace is explicit:
 
-- `payload`: the buffer written by producer tasks and checked by consumer tasks;
+- `a` and `b`: input matrix views;
+- `partial`: symmetric or peer-addressable per-rank GEMM output storage;
+- `c`: final reduced output;
 - `scratch`: optional temporary storage for backend or kernel bookkeeping.
 
 The workspace is not where Megacu stores event state. Event state lives in the
@@ -297,40 +311,42 @@ can flatten them into compact target metadata.
 Initial API shape:
 
 ```cpp
-struct ready_event;
+struct partial_ready_event;
 
-auto ready = p.event<ready_event>(
-    "ready",
-    tile,
+auto partial_ready = p.event<partial_ready_event>(
+    "partial_ready",
+    megacu::over(tile, rank),
     megacu::remote_event{
-        .from = producer,
-        .to = consumer,
+        .from = compute,
+        .to = reduce,
         .storage = events});
 
 args()
-    .signal(ready.release())
-    .wait(ready.acquire());
+    .release(partial_ready.release())
+    .acquire(partial_ready.acquire_all(rank));
 ```
 
 Event handles own logical coordination only. Backend signal objects, event
 storage offsets, memory-order details, and remote-rank mappings are target
 internals owned by lowering and backend adapters.
 
-The event name `"ready"` is diagnostic. The typed tag `ready_event` is the
-stable program identity. Lowering turns `ready_event` into an event slot and an
-event-storage layout. At runtime, the backend adapter resolves that slot plus
-the current domain point and virtual participants into the concrete NVSHMEM
-signal address or equivalent backend object.
+The event name `"partial_ready"` is diagnostic. The typed tag
+`partial_ready_event` is the stable program identity. Lowering turns
+`partial_ready_event` into an event slot and an event-storage layout. At
+runtime, the backend adapter resolves that slot plus the current domain point
+and virtual participants into the concrete NVSHMEM signal address or equivalent
+backend object.
 
-For `cuda_nvshmem_event_copy`, `ready_event` means:
+For `cuda_nvshmem_gemm_allreduce`, `partial_ready_event` means:
 
-- for each tile point, producer releases one ready event after writing payload;
-- for the same tile point, consumer acquires that ready event before reading
-  payload;
+- for each output tile and producing rank, the GEMM producer releases readiness
+  after writing its partial tile;
+- the AllReduce consumer acquires all rank-specific readiness events before
+  reducing that tile;
 - the event-storage resource gives the backend adapter memory where concrete
   signal/wait state can live;
-- the event label `"ready"` may appear in logs or metadata dumps, but kernels
-  resolve the event through `ctx.event<ready_event>(tile, peer)`.
+- the event label `"partial_ready"` may appear in logs or metadata dumps, but
+  kernels resolve the event through `ctx.event<partial_ready_event>(tile, peer)`.
 
 ## Logical Work Domain
 
@@ -362,26 +378,29 @@ It does not need the user to pre-assign worker ids or scheduler lanes.
 Initial API shape:
 
 ```cpp
-struct tile_domain;
+struct output_tile_domain;
 
-auto tiles = p.extent<tiles_extent>("tiles");
-auto tile = p.domain<tile_domain>("tile", tiles);
-p.submit(ops::write_then_signal{}, megacu::over(tile), args);
+auto m_tiles = p.extent<m_tiles_extent>("m_tiles");
+auto n_tiles = p.extent<n_tiles_extent>("n_tiles");
+auto tile = p.domain<output_tile_domain>("output_tile", m_tiles, n_tiles);
+p.submit(ops::gemm_tile_produce{}, megacu::over(tile), args);
 ```
 
 The domain name is for authoring and diagnostics. Lowering may replace it with
 compact ids in materialized metadata, but those ids are not public authoring
 API.
 
-The first implementation only needs one-dimensional domains. Multi-dimensional
-helpers can be added later only if examples need them.
+The first implementation needs a two-dimensional output-tile domain for
+GEMM+AllReduce. Multi-dimensional helpers should still be narrow: they exist to
+express real tile coordinates, not to expose backend worker ids.
 
-In `cuda_nvshmem_event_copy`, the domain relation is:
+In `cuda_nvshmem_gemm_allreduce`, the domain relation is:
 
 ```text
-tiles_extent = runtime count, for example 128
-tile_domain  = logical set {0, 1, ..., 127}
-tile point   = one element of tile_domain, for example tile 17
+m_tiles_extent     = runtime count derived from M and tile_m
+n_tiles_extent     = runtime count derived from N and tile_n
+output_tile_domain = logical set {(m, n)}
+tile point         = one element, for example output tile (3, 7)
 ```
 
 The dispatcher decides how tile points map to CUDA blocks, persistent-worker
@@ -396,11 +415,11 @@ known. Megacu models that through virtual participants.
 Initial API shape:
 
 ```cpp
-struct producer_lane;
-struct consumer_lane;
+struct compute_lane;
+struct reduce_lane;
 
-auto producer = p.participant<producer_lane>("producer");
-auto consumer = p.participant<consumer_lane>("consumer");
+auto compute = p.participant<compute_lane>("compute");
+auto reduce = p.participant<reduce_lane>("reduce");
 ```
 
 Virtual participants are declarations of logical roles, not placement
@@ -410,10 +429,10 @@ peers for each domain point.
 
 For the first static example, a simple dispatcher policy can decide:
 
-- `producer_lane` maps to the source PE for a tile;
-- `consumer_lane` maps to the destination PE for the same tile;
-- the concrete source/destination relation is represented in the dispatcher's
-  participant table, not in CMake syntax and not in kernel code.
+- `compute_lane` maps to GEMM-producing placements for an output tile;
+- `reduce_lane` maps to communication/reduction placements for the same tile;
+- backend peers for each rank-specific partial tile are represented in the
+  dispatcher's participant table, not in CMake syntax and not in kernel code.
 
 CMake should only select or link the dispatcher component that owns this rule.
 Runtime kernels do not use participant names as strings.
@@ -430,12 +449,14 @@ Initial API shape:
 
 ```cpp
 p.submit(
-    ops::write_then_signal{},
+    ops::gemm_tile_produce{},
     megacu::over(tile),
-    megacu::place(producer),
+    megacu::place(compute),
     megacu::args()
-        .payload(workspace.payload)
-        .signal(ready.release()));
+        .a(workspace.a)
+        .b(workspace.b)
+        .partial(workspace.partial)
+        .release(partial_ready.release()));
 ```
 
 `submit` records:
@@ -470,15 +491,16 @@ runtime C++ must expose a build-capable API.
 Shape:
 
 ```cpp
-struct tiles_extent;
-struct tile_domain;
-struct producer_lane;
-struct consumer_lane;
-struct ready_event;
-struct workspace_slot;
+struct m_tiles_extent;
+struct n_tiles_extent;
+struct output_tile_domain;
+struct compute_lane;
+struct reduce_lane;
+struct partial_ready_event;
+struct gemm_ar_workspace_slot;
 struct event_storage_slot;
 
-struct event_copy_program {
+struct gemm_allreduce_program {
   static void describe(megacu::program_builder &p);
 };
 ```
@@ -501,8 +523,8 @@ For the first implementation, the required public surface is:
 - `megacu::place(participant)`
 - `megacu::args()`
 - `megacu::program_builder::submit(...)`
-- generated or declared parameterized orchestrate function, such as
-  `cuda_nvshmem_event_copy_orchestrate(...)`
+- declared or exported parameterized orchestrate function, such as
+  `cuda_nvshmem_gemm_allreduce_orchestrate(...)`
 
 Anything else must justify why event, task/submission, schedule, or kernel
 contracts cannot work without it.
@@ -528,22 +550,22 @@ strings:
 
 ```cpp
 extern "C" __global__
-void write_then_signal_kernel(
+void gemm_tile_produce_kernel(
     megacu::cuda::kernel_context ctx,
-    event_copy_workspace workspace) {
-  auto tile = ctx.domain_point<tile_domain>();
-  auto peer = ctx.peer<consumer_lane>(tile);
-  auto ready = ctx.event<ready_event>(tile, peer);
+    gemm_ar_workspace workspace,
+    gemm_ar_problem problem) {
+  auto tile = ctx.domain_point<output_tile_domain>();
+  auto rank = ctx.local_rank();
+  auto ready = ctx.event<partial_ready_event>(tile, rank);
 
-  workspace.payload[tile.linear] = make_payload(tile.linear);
+  gemm_tile_accumulate(workspace.a, workspace.b, workspace.partial, problem, tile);
   megacu::nvshmem::signal(ctx, ready, 1);
 }
 ```
 
-`ctx.peer<consumer_lane>(tile)` is where the virtual participant is resolved to
-the backend-native peer for this lowered target. `ctx.event<ready_event>(...)`
-is where the event tag is resolved to the backend-native event endpoint for
-this domain point and peer. There is no device-side string lookup.
+`ctx.local_rank()` and `ctx.event<partial_ready_event>(...)` are where the
+logical rank and event tag resolve to the backend-native endpoint for this
+lowered target. There is no device-side string lookup.
 
 ## What The Program Does Not Contain
 
@@ -560,7 +582,8 @@ Those belong to build-graph lowering and to target internals.
 ## Program Implementation Target
 
 The first code slice should prove the program model through
-`examples/cuda_nvshmem_event_copy/` and compile checks under `tests/build/`.
+`examples/cuda_nvshmem_gemm_allreduce/` and compile checks under
+`tests/build/`.
 
 Program-model evidence:
 

@@ -99,23 +99,23 @@ artifacts by default. It should not force recompilation of reusable engines.
 
 The first implementation should obtain program metadata from the explicit C++
 descriptor, not from a Python tool and not from runtime parsing. CMake can do
-that by compiling a small native materializer for `PROGRAM event_copy_program`
-or by instantiating C++ templates that materialize target metadata during the
-native build. The exact mechanism is an implementation detail, but it must stay
-inside the native build graph and must not emit new C++/CUDA source as the
-normal lowering mechanism.
+that by compiling a small native materializer for
+`PROGRAM gemm_allreduce_program` or by instantiating C++ templates that
+materialize target metadata during the native build. The exact mechanism is an
+implementation detail, but it must stay inside the native build graph and must
+not emit new C++/CUDA source as the normal lowering mechanism.
 
 Initial CMake API shape:
 
 ```cmake
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_event_copy
-  PROGRAM event_copy_program
-  SOURCES event_copy_orchestrate.cc
-  KERNELS event_copy_kernels.cu
+  TARGET cuda_nvshmem_gemm_allreduce
+  PROGRAM gemm_allreduce_program
+  SOURCES gemm_allreduce_orchestrate.cc
+  KERNELS gemm_allreduce_kernels.cu
   OPS
-    write_then_signal=write_then_signal_kernel
-    wait_then_check=wait_then_check_kernel
+    gemm_tile_produce=gemm_tile_produce_kernel
+    allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
 )
 ```
@@ -137,8 +137,8 @@ Required properties:
 The design has three resolution stages:
 
 1. **Authoring**: users write typed tags and labels:
-   `event_copy_program`, `tile_domain`, `ready_event`, `producer_lane`,
-   `"ready"`.
+   `gemm_allreduce_program`, `output_tile_domain`,
+   `partial_ready_event`, `compute_lane`, `"partial_ready"`.
 2. **Target lowering**: CMake-selected components turn tags into compact target
    metadata:
    domain slot, event slot, participant slot, dispatch table, schedule payload,
@@ -146,9 +146,9 @@ The design has three resolution stages:
    generation.
 3. **Parameterized call**: the compiled orchestrate function receives typed
    runtime values:
-   workspace views, event storage, NVSHMEM team, and dynamic extents inside the
-   target envelope. The function implementation fills the already-lowered slots
-   internally before launching the selected execution path.
+   workspace views, event storage, NVSHMEM team, and a problem descriptor inside
+   the target envelope. The function implementation fills the already-lowered
+   slots internally before launching the selected execution path.
 
 Labels never drive runtime lookup. They appear in diagnostics, metadata dumps,
 and verification output.
@@ -164,7 +164,7 @@ size, team handle, or tile count. The compiled target therefore has internal
 typed slots:
 
 - resource slots for values such as workspace and event storage;
-- extent slots for dynamic domain sizes such as `tiles`;
+- extent slots for dynamic domain sizes such as matrix tile counts;
 - backend handle slots, supplied by typed function parameters such as
   `nvshmem_team_view`.
 
@@ -172,7 +172,7 @@ The parameterized function fills those slots internally. It gives users one
 ordinary C++ call:
 
 ```cpp
-cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles);
+cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem);
 ```
 
 This is preferable to exposing the slots directly:
@@ -186,13 +186,16 @@ This is preferable to exposing the slots directly:
 | Let kernels receive all raw pointers/handles manually | Pushes lowering details into every kernel and prevents scheduler/backend inspection. |
 | Megacu-owned allocator/event pool | Makes Megacu responsible for allocation policy and framework integration decisions. |
 
-For `cuda_nvshmem_event_copy`:
+For `cuda_nvshmem_gemm_allreduce`:
 
-- `workspace` fills the payload/scratch storage slot;
-- `events` fills the synchronization storage slot used by `ready_event`;
+- `workspace` fills tensor, partial-output, final-output, and scratch storage
+  slots;
+- `events` fills the synchronization storage slot used by
+  `partial_ready_event`;
 - `team` fills the backend handle slot;
-- `tiles` fills the runtime domain size, causing exactly `tiles` logical tile
-  points to run under the already chosen dispatcher/scheduler/lowering/backend.
+- `problem` fills the runtime matrix shape, stride, datatype envelope, and tile
+  extents, causing the corresponding logical output tiles to run under the
+  already chosen dispatcher/scheduler/lowering/backend.
 
 ## Runtime Surface
 
@@ -210,11 +213,12 @@ The runtime should not re-decide strategy.
 Runtime code should link the orchestrate target and call an explicit function:
 
 ```cpp
-event_copy_workspace workspace{scratch, payload};
+gemm_ar_workspace workspace{a, b, partial, c, scratch};
 megacu::event_storage_view events{event_buffer, event_bytes};
 megacu::nvshmem_team_view team{nvshmem_team};
+gemm_ar_problem problem{M, N, K, strides, tile_shape};
 
-cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles);
+cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem);
 ```
 
 There is no primary runtime API for loading a module by path or passing an
@@ -223,11 +227,11 @@ untyped environment bag.
 The direct function is the compiled target ABI:
 
 ```cpp
-void cuda_nvshmem_event_copy_orchestrate(
-    event_copy_workspace workspace,
+void cuda_nvshmem_gemm_allreduce_orchestrate(
+    gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
-    std::int32_t tiles);
+    gemm_ar_problem problem);
 ```
 
 ## Orchestrate
