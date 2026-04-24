@@ -151,6 +151,8 @@ megacu_add_orchestrate_target(
     gemm_tile_produce=gemm_tile_produce_kernel
     allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
+  BACKEND_ENVELOPE
+    TEAM_SIZE 2
 )
 ```
 
@@ -173,6 +175,8 @@ The first implementation should fail CMake configure or build if:
 - a resource slot in the program has no matching parameter in the declared
   orchestrate ABI;
 - the selected backend cannot provide a required event scope or primitive;
+- the selected backend needs a fixed target envelope, such as `TEAM_SIZE`, and
+  the orchestrate target does not provide it;
 - a dispatcher or scheduler cannot consume the program's domain shape.
 
 ## Resolution Pipeline
@@ -189,9 +193,9 @@ The design has three resolution stages:
    generation.
 3. **Parameterized call**: the compiled orchestrate function receives typed
    runtime values:
-   workspace views, event storage, NVSHMEM team, and a problem descriptor inside
-   the target envelope. The function implementation fills the already-lowered
-   slots internally before launching the selected execution path.
+   workspace views, event storage, CUDA launch view, NVSHMEM team, and a problem
+   descriptor inside the target envelope. The function implementation fills the
+   already-lowered slots internally before launching the selected execution path.
 
 Labels never drive runtime lookup. They appear in diagnostics, metadata dumps,
 and verification output.
@@ -216,6 +220,9 @@ Owner by stage:
 - `schedule_plan`: `src/scheduler/static_persistent.*`;
 - `kernel_plan`: `src/lowering/persistent_stitch.*`;
 - `backend_plan`: `src/backends/nvshmem/lowering.*`;
+- `launch/runtime views`: `include/megacu/platform/cuda.h`,
+  `include/megacu/backends/nvshmem.h`, and
+  `docs/in_progress/design/implementation_ready_device_native_layer/11-distributed-launch-and-framework-integration.md`;
 - metadata writer/reader: `src/target/metadata.*`.
 
 ## Parameterized Orchestrate Necessity
@@ -230,14 +237,16 @@ typed slots:
 
 - resource slots for values such as workspace and event storage;
 - extent slots for dynamic domain sizes such as matrix tile counts;
+- platform launch slots, supplied by typed function parameters such as
+  `megacu::cuda::launch_view`;
 - backend handle slots, supplied by typed function parameters such as
-  `nvshmem_team_view`.
+  `megacu::nvshmem::team_view`.
 
 The parameterized function fills those slots internally. It gives users one
 ordinary C++ call:
 
 ```cpp
-cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem);
+cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem);
 ```
 
 This is preferable to exposing the slots directly:
@@ -257,6 +266,7 @@ For `cuda_nvshmem_gemm_allreduce`:
   slots;
 - `events` fills the synchronization storage slot used by
   `partial_ready_event`;
+- `launch` fills the CUDA stream/device slot;
 - `team` fills the backend handle slot;
 - `problem` fills the runtime matrix shape, stride, datatype envelope, and tile
   extents, causing the corresponding logical output tiles to run under the
@@ -279,11 +289,13 @@ Runtime code should link the orchestrate target and call an explicit function:
 
 ```cpp
 gemm_ar_workspace workspace{a, b, partial, c, scratch};
-megacu::event_storage_view events{event_buffer, event_bytes};
-megacu::nvshmem_team_view team{nvshmem_team};
+megacu::event_storage_view events{event_buffer, event_bytes, true};
+megacu::cuda::launch_view launch{stream, device_ordinal};
+megacu::nvshmem::team_view team{nvshmem_team, my_pe, n_pes, world_pe, world_n_pes,
+                                device_ordinal, megacu::nvshmem::ownership::external};
 gemm_ar_problem problem{M, N, K, strides, tile_shape};
 
-cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem);
+cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem);
 ```
 
 There is no primary runtime API for loading a module by path or passing an
@@ -295,7 +307,8 @@ The direct function is the compiled target ABI:
 void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
-    megacu::nvshmem_team_view team,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 ```
 
@@ -309,6 +322,7 @@ object.
 It may:
 
 - accept the concrete buffers/views required by the program
+- accept the concrete CUDA stream/device view required by the program
 - accept the concrete communicator/backend handles required by the program
 - allocate or attach runtime-owned state required by that program
 - validate max envelopes that were left runtime-configurable

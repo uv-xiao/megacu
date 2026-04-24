@@ -93,7 +93,8 @@ The compiled target ABI is explicit:
 void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
-    megacu::nvshmem_team_view team,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 ```
 
@@ -177,13 +178,17 @@ megacu_add_orchestrate_target(
     gemm_tile_produce=gemm_tile_produce_kernel
     allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
+  BACKEND_ENVELOPE
+    TEAM_SIZE 2
 )
 ```
 
 CMake selects and links the reusable dispatcher, scheduler, lowering, platform,
-backend, and kernel implementations. The dispatcher owns the mapping from
+backend, and kernel implementations. The target envelope fixes the first proof
+to a two-PE CUDA+NVSHMEM team, but the dispatcher still owns the mapping from
 `compute_lane` and `reduce_lane` to execution placements and backend peers. The
-CMake file does not contain ad hoc rank mapping rules.
+CMake file does not contain ad hoc rank mapping rules such as
+`compute_lane -> rank 0`.
 
 ## Example 4: What Runs
 
@@ -191,9 +196,9 @@ For `cuda_nvshmem_gemm_allreduce_orchestrate`, the built target runs this
 sequence:
 
 1. runtime C++ calls
-   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem)`;
+   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem)`;
 2. the compiled function validates the problem envelope and fills lowered
-   resource, extent, and backend handle slots;
+   resource, extent, CUDA launch, and backend handle slots;
 3. internal `run(...)` launches the linked CUDA/NVSHMEM execution path;
 4. the dispatcher payload maps `output_tile_domain` points to compute and
    communication placements;
@@ -215,31 +220,80 @@ Term meanings in this example:
 ## Example 5: Framework Wrapper Path
 
 Megacu stays C++/CUDA. A framework wrapper owns tensor conversion and workspace
-policy, then calls the compiled target directly.
+policy, a launch adapter owns process/rank/bootstrap state, then the wrapper
+calls the compiled target directly.
 
 ```cpp
 void torch_gemm_allreduce(
     torch_tensor a,
     torch_tensor b,
     torch_tensor c,
-    torch_tensor partial,
-    torch_tensor event_buffer,
-    dist_handle handle,
+    megacu_torch::symmetric_tensor partial,
+    megacu_torch::event_tensor events,
+    megacu_torch::nvshmem_session &session,
     gemm_ar_problem problem) {
+  auto launch = session.current_cuda_launch_view();
+  auto team = session.team_view();
+
   cuda_nvshmem_gemm_allreduce_orchestrate(
       gemm_ar_workspace{
           .a = wrapper_tensor(a),
           .b = wrapper_tensor(b),
           .partial = wrapper_tensor(partial),
           .c = wrapper_tensor(c)},
-      wrapper_events(event_buffer),
-      wrapper_nvshmem(handle),
+      wrapper_events(events),
+      launch,
+      team,
       problem);
 }
 ```
 
 The wrapper may cache workspace allocation or event buffers. It does not choose
-the scheduler or backend at runtime.
+the scheduler or backend at runtime. It must check that `partial` and `events`
+come from the same NVSHMEM session and are symmetric allocations.
+
+The first Torch launch path should look like:
+
+```python
+session = megacu.torch.NvshmemSession.from_torch_distributed()
+partial = session.empty_symmetric_like(c)
+events = session.empty_event_storage(
+    cuda_nvshmem_gemm_allreduce.event_bytes(problem))
+
+megacu.torch.gemm_allreduce(
+    a, b, c, partial=partial, events=events,
+    session=session, problem=problem)
+```
+
+Run it with a fixed-size Torch world:
+
+```bash
+torchrun --standalone --nnodes=1 --nproc-per-node=2 \
+  tests/integration/torch/test_cuda_nvshmem_gemm_allreduce.py
+```
+
+The first MPI launch path should look like:
+
+```cpp
+auto session = megacu::launch::mpi_nvshmem_session::create({
+    .comm = MPI_COMM_WORLD,
+    .local_cuda_device = local_device_from_mpi_rank(),
+    .initialize_mpi = false});
+
+auto launch = session.launch(stream);
+auto team = session.team();
+auto partial = session.symmetric_alloc(partial_bytes, 128);
+auto events = session.symmetric_alloc(event_bytes, alignof(std::uint64_t));
+
+cuda_nvshmem_gemm_allreduce_orchestrate(
+    workspace, event_view(events), launch, team, problem);
+```
+
+Run it with:
+
+```bash
+mpirun -np 2 ./cuda_nvshmem_gemm_allreduce_mpi --m 128 --n 128 --k 128
+```
 
 ## Example 6: Larger MPK-Style CUDA Serving Program
 

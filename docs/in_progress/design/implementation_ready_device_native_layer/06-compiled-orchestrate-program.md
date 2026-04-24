@@ -24,7 +24,8 @@ struct n_tiles_extent;
 void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
-    megacu::nvshmem_team_view team,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 ```
 
@@ -32,6 +33,7 @@ The function parameters fill the descriptor slots by type:
 
 - `workspace` fills `gemm_ar_workspace_slot`;
 - `events` fills `event_storage_slot`;
+- `launch` fills the CUDA platform launch slot;
 - `team` fills the backend handle slot;
 - `problem` fills matrix shape, stride, datatype envelope, and tile extents.
 
@@ -94,6 +96,20 @@ struct tensor_view {
 Shape and stride live in `gemm_ar_problem` for this target. A general tensor
 shape system is not required for the first implementation.
 
+The first CUDA launch view only needs:
+
+```cpp
+namespace megacu::cuda {
+struct launch_view {
+  cudaStream_t stream;
+  int device_ordinal;
+};
+}
+```
+
+The MPI or Torch launch adapter constructs this value. The compiled target only
+validates and consumes it.
+
 ## Function Body Shape
 
 The orchestrate function is ordinary C++ in the target. It may be handwritten in
@@ -103,7 +119,8 @@ The orchestrate function is ordinary C++ in the target. It may be handwritten in
 void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
-    megacu::nvshmem_team_view team,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
     gemm_ar_problem problem) {
   auto *metadata = megacu::detail::target_metadata_for<
       gemm_allreduce_program,
@@ -112,6 +129,7 @@ void cuda_nvshmem_gemm_allreduce_orchestrate(
   megacu::detail::runtime_slots slots;
   slots.set<gemm_ar_workspace_slot>(workspace);
   slots.set<event_storage_slot>(events);
+  slots.set_platform(launch);
   slots.set_backend(team);
   slots.set_extent<m_tiles_extent>(ceil_div(problem.m, problem.tile_m));
   slots.set_extent<n_tiles_extent>(ceil_div(problem.n, problem.tile_n));
@@ -154,7 +172,8 @@ At runtime:
 
 1. deployment code calls `cuda_nvshmem_gemm_allreduce_orchestrate(...)`;
 2. the compiled target receives explicit runtime values such as workspace
-   views, event storage, `nvshmem_team_view`, and `gemm_ar_problem`;
+   views, event storage, `megacu::cuda::launch_view`,
+   `megacu::nvshmem::team_view`, and `gemm_ar_problem`;
 3. linked target code and metadata attach those values to pre-lowered slots and
    enter the selected CUDA/NVSHMEM execution path;
 4. internal fast-path execution launches the selected kernels;

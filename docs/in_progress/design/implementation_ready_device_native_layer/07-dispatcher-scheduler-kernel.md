@@ -255,12 +255,18 @@ objects.
 
 For CUDA/NVSHMEM first, `src/backends/nvshmem/` must provide:
 
-- `nvshmem_team_view`: typed runtime handle passed into the orchestrate program;
+- `megacu::nvshmem::team_view`: typed runtime handle passed into the
+  orchestrate program;
 - event-storage layout rules for `remote_event`;
 - peer resolution from dispatcher participant slots to NVSHMEM PE ids;
 - signal/wait helpers callable from lowered kernels;
 - host/runtime validation that the supplied team and event storage match the
   target envelope.
+
+The CUDA platform adapter under `src/platform/cuda/` must provide
+`megacu::cuda::launch_view`, stream/device validation, and launch payload
+construction. The NVSHMEM backend adapter must not hide CUDA stream policy inside
+the team handle.
 
 Initial device-side API shape:
 
@@ -307,8 +313,11 @@ struct nvshmem_backend_plan {
 
 Runtime validation for this plan must check:
 
-- `team.size()` matches the rank-domain extent used by target lowering;
+- `team.team_n_pes` matches the rank-domain extent used by target lowering;
+- `launch.device_ordinal` matches the CUDA device selected before NVSHMEM
+  initialization;
 - `events.bytes` is large enough for every `event_layout_entry`;
+- `events` is symmetric when any lowered event has remote scope;
 - `workspace.partial` is symmetric or otherwise acceptable to the selected
   NVSHMEM primitive;
 - multimem-specific paths are only enabled when the backend reports support.

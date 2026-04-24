@@ -31,6 +31,14 @@
   This violates the program model.
 - Mapping/scheduling conflation: dispatcher and scheduler are not clearly
   separated. This weakens implementation clarity.
+- Distributed bootstrap gap: CUDA+NVSHMEM examples require a team handle but no
+  adapter owns `torchrun`/`mpirun`, CUDA device selection, NVSHMEM bootstrap, or
+  symmetric allocation. This makes the first multi-GPU proof impossible to run.
+- Framework control-plane confusion: Torch Distributed collectives are used as
+  the device communication backend instead of only as rank/world-size and UID
+  exchange for NVSHMEM bootstrap.
+- Team-size ambiguity: a target compiled for one team-size envelope is launched
+  with a different NVSHMEM PE count.
 
 ## Verification Requirements
 
@@ -61,6 +69,18 @@
   only calls the compiled orchestration
 - two-rank GEMM+AllReduce correctness tests for the first target where hardware
   is available
+- MPI launch integration test or skip:
+  `mpirun -np 2 ./cuda_nvshmem_gemm_allreduce_mpi ...`
+- Torch launch integration test or skip:
+  `torchrun --standalone --nnodes=1 --nproc-per-node=2 ...`
+- tests or inspection proving `nvshmemx_init_attr`/`nvshmem_finalize` are owned
+  by launch adapters or caller code, not by the compiled orchestrate target
+- tests proving the Torch adapter validates Torch rank/world size against
+  NVSHMEM PE id/count before kernel launch
+- tests proving the MPI adapter validates MPI rank/world size against NVSHMEM PE
+  id/count before kernel launch
+- tests proving symmetric event and partial buffers are required when the
+  backend plan requires remote NVSHMEM access
 
 ## Concrete Metadata Checks
 
@@ -83,6 +103,10 @@ The first metadata JSON must be checked for these facts:
   the event dependency, not a full-kernel implicit barrier;
 - a backend plan that names event storage size, event offsets, team size, and
   whether multimem reduce is enabled.
+- a platform launch slot for `megacu::cuda::launch_view`;
+- a backend target envelope with `TEAM_SIZE 2` for the first proof;
+- resource metadata marking `partial` and `events` as requiring symmetric
+  NVSHMEM-accessible storage.
 
 Any missing item means the design has not become implementation-ready.
 
@@ -103,8 +127,13 @@ Any missing item means the design has not become implementation-ready.
   compile-only checks showing kernels use typed `kernel_context` APIs instead
   of string event lookup or hand-authored backend signal addresses.
 - First slice runtime behavior in `09-first-validation-slice.md`:
-  two-rank CUDA/NVSHMEM GEMM+AllReduce correctness test where hardware exists;
-  explicit skip reason where local NVSHMEM multi-GPU execution is unavailable.
+  two-rank CUDA/NVSHMEM GEMM+AllReduce correctness tests through both MPI and
+  Torch launch paths where hardware exists; explicit skip reason for each
+  unavailable launcher or local NVSHMEM multi-GPU environment.
+- Distributed launch contract in
+  `11-distributed-launch-and-framework-integration.md`:
+  adapter unit tests for team construction, device selection, symmetric
+  allocation checks, and rank/world mismatch failures.
 - Larger MPK-style example in `08-examples.md`:
   design/compile evidence that a serving-layer program can link CUDA-provided
   RMSNorm, linear, paged-attention, split-reduce, and residual-output operator

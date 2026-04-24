@@ -53,8 +53,11 @@ lives, and how it is checked.
 - `09-first-validation-slice.md`: first narrow proof slice under the new
   boundary.
 - `10-verification.md`: contracts, failure modes, and verification evidence.
+- `11-distributed-launch-and-framework-integration.md`: CUDA+NVSHMEM
+  multi-process launch, Torch Distributed integration, MPI integration, and
+  symmetric allocation contracts.
 
-Files `00` through `10` are the current active draft. They should be refined in
+Files `00` through `11` are the current active draft. They should be refined in
 place until each contract, example, planned path, and verification requirement
 is implementation-ready.
 
@@ -66,6 +69,8 @@ is implementation-ready.
   `docs/notes/distributed_backend_sources.md`
 - FlashInfer framework-integration source reading:
   `docs/notes/framework_integration_sources.md`
+- NVSHMEM and PyTorch distributed launch source reading:
+  `docs/notes/distributed_launch_sources.md`
 - PTO Runtime / simpler orchestration-surface reading:
   `docs/notes/orchestration_surface_sources.md`
 

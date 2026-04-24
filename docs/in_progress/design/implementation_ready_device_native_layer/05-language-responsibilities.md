@@ -53,6 +53,8 @@ C++/CUDA is the right place for:
 - backend primitive headers and device calls
 - platform adapters
 - backend adapters
+- launch adapters for process-model bootstrap and typed runtime-view
+  construction
 - reusable lowering implementations and linked target metadata
 - the authored orchestrate program
 - the internal `run(...)` path
@@ -65,12 +67,15 @@ be a regular compiled target.
 The runtime C++ API should be small:
 
 - call the compiled orchestrate program
+- construct typed launch/backend views through optional launch adapters when the
+  caller does not already own them
 
 It should not:
 
 - expose CMake/build steps
 - expose strategy selection
 - expose packaging concerns that belong to the offline build path
+- initialize or finalize NVSHMEM inside the compiled orchestrate target
 
 That is the core boundary for implementation.
 
@@ -105,7 +110,15 @@ For the first implementation, the cleanest split is:
   - orchestrate-program authoring
   - kernels
   - reusable dispatcher/scheduler/lowering/platform/backend implementations
+  - optional MPI/NVSHMEM launch adapter
   - `run(...)`
+
+- **Framework integration**
+  - Torch Distributed adapter code that reads rank/world state, exchanges the
+    NVSHMEM UID, owns symmetric allocation wrappers, and calls the compiled C++
+    target through an extension binding
+  - no framework types in `program_ir`, dispatcher, scheduler, kernel, or
+    backend-plan records
 
 This aligns the implementation path with the design goal of compile-time
 strategy selection and runtime minimal overhead.

@@ -507,3 +507,20 @@ were later promoted into `docs/design/`.
     Other Mirage repository paths may be historical context, but should not be
     used as MPK-related support for design decisions without a new explicit
     source-reading justification.
+
+- 2026-04-24 Asia/Shanghai - Fill multi-GPU running gap
+  > review the implementation documents to see if it is complete or concrete enough. What I found not enough is about the multi-gpu running. We need to support CUDA+NVSHMEM, but I don't see where megacu is integrated for torchdistributed running or mpi running.
+  >
+  > We need to fill the missing thigns.
+  - Context: User accepted the review finding that the implementation-ready docs
+    were missing the CUDA+NVSHMEM process-launch and framework-integration
+    contract.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/11-distributed-launch-and-framework-integration.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`,
+    `docs/notes/distributed_launch_sources.md`
+  - Agent interpretation: The design must specify how Torch Distributed and MPI
+    process models construct CUDA launch views, NVSHMEM team views, symmetric
+    allocations, and validation evidence before the compiled orchestrate target
+    runs.

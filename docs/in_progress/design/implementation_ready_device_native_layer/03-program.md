@@ -96,6 +96,7 @@ The first public headers should be:
 - `include/megacu/program.h`: `program_builder`, domain/event/participant/
   resource/submit builders, and extent tags.
 - `include/megacu/views.h`: typed resource views.
+- `include/megacu/platform/cuda.h`: first CUDA launch/runtime view.
 - `include/megacu/backends/nvshmem.h`: first backend runtime and device views.
 
 ## Builder Output
@@ -268,7 +269,8 @@ struct gemm_allreduce_program {
 void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
-    megacu::nvshmem_team_view team,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 ```
 
@@ -349,7 +351,11 @@ Initial API shape:
 ```cpp
 namespace megacu {
 struct workspace_view;
-struct event_storage_view;
+struct event_storage_view {
+  void *data;
+  std::int64_t bytes;
+  bool symmetric;
+};
 struct tensor_view;
 }
 ```
@@ -385,6 +391,10 @@ For `cuda_nvshmem_gemm_allreduce`, the workspace is explicit:
 The workspace is not where Megacu stores event state. Event state lives in the
 separate `event_storage_view` so the design can reason about payload storage
 and synchronization storage independently.
+
+For remote CUDA+NVSHMEM events, `event_storage_view::symmetric` must be true.
+The launch adapter or caller owns allocation; the compiled target owns
+validation before launch.
 
 ## Events
 

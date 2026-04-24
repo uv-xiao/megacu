@@ -54,7 +54,8 @@ struct n_tiles_extent;
 void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
-    megacu::nvshmem_team_view team,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 ```
 
@@ -75,10 +76,12 @@ The runtime proof should look like:
 
 1. build the reusable component target set;
 2. build the concrete GEMM+AllReduce orchestrate target;
-3. call the compiled orchestrate program on two ranks/GPUs;
-4. verify the output against a native baseline for one or more small matrix
+3. construct either an MPI/NVSHMEM session or a Torch/NVSHMEM session;
+4. call the compiled orchestrate program on two ranks/GPUs with explicit
+   `launch` and `team` views;
+5. verify the output against a native baseline for one or more small matrix
    shapes;
-5. inspect metadata or linked symbols proving the target uses the selected
+6. inspect metadata or linked symbols proving the target uses the selected
    dispatcher, scheduler, lowering, CUDA platform, NVSHMEM backend, and named
    kernel implementations.
 
@@ -91,6 +94,8 @@ strategy.
   - `include/megacu/program.h`
   - `include/megacu/views.h`
   - `include/megacu/backends/nvshmem.h`
+  - `include/megacu/platform/cuda.h`
+  - `include/megacu/launch/mpi_nvshmem.h`
 - Internal metadata headers:
   - `include/megacu/detail/program_ir.h`
   - `include/megacu/detail/dispatch_plan.h`
@@ -106,11 +111,14 @@ strategy.
   - `src/lowering/`
   - `src/platform/cuda/`
   - `src/backends/nvshmem/`
+  - `src/launch/mpi_nvshmem/`
+  - `src/integrations/torch/`
   - `src/target/`
 - Proof:
   - `examples/cuda_nvshmem_gemm_allreduce/`
   - `tests/build/`
   - `tests/runtime/`
+  - `tests/integration/torch/`
 
 ## Acceptance Evidence
 
@@ -124,8 +132,10 @@ Required evidence:
 - linked-artifact and metadata inspection for the built CUDA/NVSHMEM target;
 - inspection proving kernel lowering selected/linked existing implementations
   rather than emitting new CUDA/C++ source;
-- two-rank output-correctness test where environment permits;
-- explicit skip reason where local NVSHMEM multi-GPU execution is unavailable.
+- MPI-launched two-rank output-correctness test where environment permits;
+- Torch-launched two-rank output-correctness test where environment permits;
+- explicit skip reason for each unavailable launcher or local NVSHMEM multi-GPU
+  execution environment.
 
 Ready-to-implement criteria:
 
@@ -156,11 +166,16 @@ The implementation should land in this order:
    plans for the static CUDA/NVSHMEM target.
 5. Direct ABI smoke test:
    deployment code can call
-   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, team, problem)`
+   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem)`
    without constructing an executor or runtime environment.
-6. Runtime CUDA/NVSHMEM proof:
-   where hardware exists, run a small two-rank GEMM+AllReduce correctness test;
-   otherwise, record the skip reason and keep compile/metadata evidence.
+6. MPI/NVSHMEM launch proof:
+   `mpirun -np 2 ./cuda_nvshmem_gemm_allreduce_mpi ...` constructs a
+   `mpi_nvshmem_session`, validates the two-PE team, and runs correctness where
+   hardware exists.
+7. Torch/NVSHMEM launch proof:
+   `torchrun --standalone --nnodes=1 --nproc-per-node=2 ...` constructs a
+   fixed-world `NvshmemSession`, validates Torch rank/world against NVSHMEM
+   PE/count, and runs correctness where hardware exists.
 
 Each milestone should have a small test or inspection artifact before moving to
 the next one. The first implementation should not start with the MPK-style
