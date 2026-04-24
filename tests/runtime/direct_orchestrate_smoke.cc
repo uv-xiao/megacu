@@ -67,7 +67,7 @@ int main() {
   assert(overlap.code == megacu::status_code::ok);
 
   auto bad_team = team;
-  bad_team.team_n_pes = 1;
+  bad_team.team_n_pes = 3;
   auto wrong_team_size = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
       workspace, events, launch, bad_team, small_problem());
   assert(wrong_team_size.code == megacu::status_code::invalid_argument);

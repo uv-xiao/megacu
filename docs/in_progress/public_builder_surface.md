@@ -37,6 +37,7 @@ GEMM+AllReduce targets.
   - `cmake/MegacuTargets.cmake`
 - Example target:
   - `examples/cuda_nvshmem/gemm_allreduce/`
+  - `examples/cuda_nvshmem/gemm_allreduce/CMakeLists.txt`
 - Tests proving:
   - `gemm_allreduce_phased_program` and `gemm_allreduce_overlap_program` can be
     authored with the public builder surface;
@@ -51,12 +52,12 @@ GEMM+AllReduce targets.
   - Docker NVSHMEM tests exercise two single-host PEs, NVSHMEM host bootstrap,
     symmetric allocation, CUDA stream/device setup, and the direct orchestrate
     ABI with NVSHMEM-backed symmetric views;
-  - numeric CUDA tests execute the compiled phased GEMM+AllReduce target on a
-    real CUDA stream and compare the output matrix against host-computed
-    expected values;
-  - numeric Docker NVSHMEM tests execute the compiled overlap GEMM+AllReduce
-    target under two ranks and compare both rank outputs after an NVSHMEM
-    sum-reduce;
+  - numeric CUDA tests execute golden phased, golden overlap, Megacu phased,
+    and Megacu overlap on a real CUDA stream and compare output matrices
+    against host-computed expected values;
+  - numeric Docker NVSHMEM tests execute golden phased, golden overlap, Megacu
+    phased, and Megacu overlap under two ranks and compare both rank outputs
+    after an NVSHMEM sum-reduce;
   - resource arguments bind concrete workspace fields through member pointers,
     so the program IR records both the workspace slot and field name used by
     each kernel argument;
@@ -80,6 +81,9 @@ GEMM+AllReduce targets.
   and CUDA two-card tests
 - [x] Add Docker-provisioned two-card NVSHMEM runtime validation
 - [x] Add numeric GEMM+AllReduce correctness on CUDA and two-rank NVSHMEM
+- [x] Replace the minimal numeric path with golden phased/overlap baselines and
+  two Megacu implementations
+- [x] Move example target ownership into the example-local `CMakeLists.txt`
 - [x] Make resource-field bindings concrete in program IR
 - [x] Prove linked per-target metadata symbols from consuming binaries
 - [x] Sync `docs/todo/` and `docs/in_progress/`
@@ -103,9 +107,10 @@ GEMM+AllReduce targets.
 - CUDA multi-card smoke tests prove the local build can touch two GPUs on the
   same host, perform a peer copy between them, and pass one logical two-PE team
   view per device through the compiled orchestrate ABI.
-- CUDA numeric correctness tests prove the compiled phased target launches a
-  real CUDA GEMM path, invokes a backend-provided reduction primitive through
-  the concrete target ops table, and writes the expected output matrix.
+- CUDA numeric correctness tests prove golden phased, golden overlap, Megacu
+  phased, and Megacu overlap run on a real CUDA stream and write expected output
+  matrices. The overlap golden uses a persistent fused CUDA kernel with
+  co-resident compute and communication CTAs.
 - Linked metadata tests prove a consuming binary can link the phased and
   overlap target metadata symbols and validate their schedule mode, extent,
   domain, and team-size facts without re-materializing descriptors.
@@ -117,8 +122,8 @@ GEMM+AllReduce targets.
 - Docker NVSHMEM smoke tests prove the packaged NVSHMEM host runtime can
   bootstrap two PEs on one host, allocate symmetric buffers, synchronize both
   PEs, pass NVSHMEM-backed symmetric views into the compiled orchestrate ABI on
-  two visible GPUs, execute the overlap target's numeric GEMM path, and verify
-  both ranks observe the expected sum-reduced matrix.
+  two visible GPUs, execute golden phased/overlap and Megacu phased/overlap
+  paths, and verify both ranks observe the expected sum-reduced matrix.
 
 ## Tests
 

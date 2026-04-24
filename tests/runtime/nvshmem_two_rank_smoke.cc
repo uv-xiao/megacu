@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 
+#include "examples/cuda_nvshmem/gemm_allreduce/golden/golden_gemm_allreduce.h"
 #include "examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce.h"
 
 // The CUDA 12.8 Debian package ships a host library that exports these C API
@@ -70,6 +71,41 @@ megacu::status nvshmem_sum_reduce_f32(
   return {};
 }
 
+golden_status golden_nvshmem_sum_reduce_f32(
+    void *,
+    void *dest,
+    void const *src,
+    std::int64_t elements,
+    void *stream) {
+  require_cuda(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
+  auto rc = nvshmem_float_sum_reduce(
+      kNvshmemTeamWorld,
+      static_cast<float *>(dest),
+      static_cast<float const *>(src),
+      static_cast<std::size_t>(elements));
+  if (rc != 0) {
+    return {golden_status_code::backend_error, 1, "nvshmem sum reduce failed"};
+  }
+  nvshmem_barrier_all();
+  return {};
+}
+
+void reset_outputs(void *c, void *partial, void *events, cudaStream_t stream) {
+  require_cuda(cudaMemsetAsync(c, 0, kCBytes, stream));
+  require_cuda(cudaMemsetAsync(partial, 0, kPartialBytes, stream));
+  require_cuda(cudaMemsetAsync(events, 0, 128, stream));
+}
+
+void check_expected(void *c, cudaStream_t stream) {
+  std::vector<float> host_c(kM * kN, 0.0f);
+  require_cuda(cudaMemcpyAsync(
+      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaStreamSynchronize(stream));
+  for (float value : host_c) {
+    assert(std::fabs(value - 12.0f) < 1.0e-4f);
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -111,12 +147,54 @@ int main() {
 
   std::vector<float> host_a(kM * kK, static_cast<float>(pe + 1));
   std::vector<float> host_b(kK * kN, 1.0f);
-  std::vector<float> host_c(kM * kN, 0.0f);
   require_cuda(cudaMemcpyAsync(
       a, host_a.data(), kABytes, cudaMemcpyHostToDevice, stream));
   require_cuda(cudaMemcpyAsync(
       b, host_b.data(), kBBytes, cudaMemcpyHostToDevice, stream));
-  require_cuda(cudaMemsetAsync(c, 0, kCBytes, stream));
+  reset_outputs(c, partial, events, stream);
+
+  golden_gemm_ar_workspace golden_workspace{
+      .a = {.data = a, .bytes = static_cast<std::int64_t>(kABytes)},
+      .b = {.data = b, .bytes = static_cast<std::int64_t>(kBBytes)},
+      .partial = {
+          .data = partial,
+          .bytes = static_cast<std::int64_t>(kPartialBytes)},
+      .c = {.data = c, .bytes = static_cast<std::int64_t>(kCBytes)},
+      .barriers = events,
+      .barrier_bytes = 128};
+  golden_gemm_ar_launch golden_launch{
+      .stream = stream,
+      .device_ordinal = device};
+  golden_gemm_ar_team golden_team{
+      .team = nullptr,
+      .team_my_pe = pe,
+      .team_n_pes = npes,
+      .world_my_pe = pe,
+      .world_n_pes = npes,
+      .cuda_device_ordinal = device};
+  golden_gemm_ar_comm_ops golden_ops{
+      .sum_reduce_f32 = golden_nvshmem_sum_reduce_f32};
+  golden_gemm_ar_problem golden_problem{
+      .m = kM,
+      .n = kN,
+      .k = kK,
+      .tile_m = 1,
+      .tile_n = 2,
+      .compute_ctas = 2,
+      .comm_ctas = 1};
+
+  auto golden_status = golden_phased_multi_card_gemm_allreduce_f32(
+      golden_workspace, golden_launch, golden_team, golden_problem, &golden_ops);
+  assert(golden_status.code == golden_status_code::ok);
+  check_expected(c, stream);
+
+  reset_outputs(c, partial, events, stream);
+  golden_status = golden_overlap_multi_card_gemm_allreduce_f32(
+      golden_workspace, golden_launch, golden_team, golden_problem, &golden_ops);
+  assert(golden_status.code == golden_status_code::ok);
+  check_expected(c, stream);
+
+  reset_outputs(c, partial, events, stream);
 
   megacu::backend_id backend{1};
   megacu::session_id session{7};
@@ -166,16 +244,16 @@ int main() {
       .backend = backend,
       .session = session};
 
-  auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+  auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
       workspace, event_storage, launch, team, correctness_problem());
   assert(status.code == megacu::status_code::ok);
+  check_expected(c, stream);
 
-  require_cuda(cudaMemcpyAsync(
-      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
-  require_cuda(cudaStreamSynchronize(stream));
-  for (float value : host_c) {
-    assert(std::fabs(value - 12.0f) < 1.0e-4f);
-  }
+  reset_outputs(c, partial, events, stream);
+  status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+      workspace, event_storage, launch, team, correctness_problem());
+  assert(status.code == megacu::status_code::ok);
+  check_expected(c, stream);
 
   nvshmem_barrier_all();
   nvshmem_free(events);

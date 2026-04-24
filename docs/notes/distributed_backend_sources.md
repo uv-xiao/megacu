@@ -154,6 +154,50 @@ handwritten or library-provided GEMM implementation and backend reduction
 primitive rather than synthesize a new CUDA kernel from the orchestrate
 descriptor.
 
+Follow-up reading on 2026-04-25 focused on how Triton-distributed implements
+the fused GEMM+AllReduce kernel:
+
+- `GemmARContext` owns symmetric GEMM output, symmetric AllReduce output, GEMM
+  barrier buffers, tile barrier buffers, grid barrier buffers, multi-store
+  barrier buffers, the communication stream, the number of communication SMs,
+  and the selected AllReduce method.
+- `kernel_fused_gemm_allreduce` launches one cooperative grid. Program ids
+  below `NUM_COMM_SMS` run communication work; the remaining program ids run
+  persistent GEMM work. This is the key overlap structure: communication CTAs
+  and GEMM CTAs are resident at the same time.
+- `kernel_persistent_gemm_notify` is the compute side. Each GEMM CTA loops over
+  output tiles assigned by `tile_id += NUM_GEMM_SMS`, computes one tile, stores
+  the tile into a symmetric GEMM output buffer, then releases readiness through
+  `gemm_barrier_ptr`. The barrier granularity is selected by `TILE_MAP_LEVEL`:
+  tile-wise, row-wise, or rank-wise.
+- `consumer_all_reduce_kernel` and
+  `consumer_all_reduce_load_store_kernel` are the communication side. Each
+  communication CTA loops over assigned output tiles or chunks, waits until all
+  peer GEMM barriers for that tile/chunk are ready, then reduces peer symmetric
+  GEMM outputs into the final AllReduce output. One path uses multimem
+  load-reduce/store; the fallback uses explicit peer loads through symmetric
+  pointers.
+- `multi_st_barrier_ptr` coordinates the multimem store path after
+  communication CTAs publish reduced values to symmetric output.
+- `barrier_on_this_grid(grid_barrier_ptr, use_cooperative)` is used after the
+  fused compute/communication sections so the cooperative grid has an
+  intra-kernel completion point before optional output copy.
+- `low_latency_gemm_allreduce_op` double-buffers the context phase, resets
+  barriers when needed, and launches the fused kernel with grid size
+  `NUM_COMM_SMS + min(NUM_GEMM_SMS, num_output_tiles)`.
+- `gemm_allreduce_op` is the two-kernel stream-overlap variant. It launches the
+  persistent GEMM notifier on the current stream, launches the consumer
+  AllReduce on a separate high-priority communication stream, and then makes the
+  current stream wait on the communication stream. This still overlaps compute
+  and communication, but it relies on separate kernels/streams rather than a
+  single cooperative fused kernel.
+
+The Megacu example should mirror the important semantics, not the Triton syntax:
+reserve logical compute and communication participants, use a persistent tile
+loop for GEMM work, signal tile readiness, have communication work wait on
+readiness before reducing, and keep backend-specific reduction mechanics behind
+a narrow target ops interface.
+
 ## What UniEP Contributes
 
 UniEP is a focused mega-kernel system for expert-parallel MoE training. It is

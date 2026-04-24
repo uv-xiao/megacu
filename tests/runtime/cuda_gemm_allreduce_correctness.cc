@@ -5,8 +5,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <vector>
 
+#include "examples/cuda_nvshmem/gemm_allreduce/golden/golden_gemm_allreduce.h"
 #include "examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce.h"
 
 namespace {
@@ -39,32 +41,6 @@ int choose_device() {
   return count - 1;
 }
 
-megacu::status double_local_sum(
-    megacu::nvshmem::team_view,
-    void *dest,
-    void const *src,
-    std::int64_t elements,
-    void *stream) {
-  std::vector<float> host(static_cast<std::size_t>(elements));
-  require_cuda(cudaMemcpyAsync(
-      host.data(),
-      src,
-      host.size() * sizeof(float),
-      cudaMemcpyDeviceToHost,
-      static_cast<cudaStream_t>(stream)));
-  require_cuda(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
-  for (float &value : host) {
-    value *= 2.0f;
-  }
-  require_cuda(cudaMemcpyAsync(
-      dest,
-      host.data(),
-      host.size() * sizeof(float),
-      cudaMemcpyHostToDevice,
-      static_cast<cudaStream_t>(stream)));
-  return {};
-}
-
 float expected(std::vector<float> const &a,
                std::vector<float> const &b,
                int row,
@@ -73,7 +49,35 @@ float expected(std::vector<float> const &a,
   for (int kk = 0; kk < kK; ++kk) {
     value += a[row * kK + kk] * b[kk * kN + col];
   }
-  return 2.0f * value;
+  return value;
+}
+
+void check_expected(std::vector<float> const &host_a,
+                    std::vector<float> const &host_b,
+                    std::vector<float> const &host_c,
+                    float allreduce_scale,
+                    char const *label) {
+  for (int row = 0; row < kM; ++row) {
+    for (int col = 0; col < kN; ++col) {
+      float want = allreduce_scale * expected(host_a, host_b, row, col);
+      float got = host_c[row * kN + col];
+      if (std::fabs(got - want) >= 1.0e-4f) {
+        std::cerr << label << " mismatch row=" << row << " col=" << col
+                  << " got=" << got << " want=" << want << "\n";
+      }
+      assert(std::fabs(got - want) < 1.0e-4f);
+    }
+  }
+}
+
+void reset_outputs(
+    void *c,
+    void *partial,
+    void *events,
+    cudaStream_t stream) {
+  require_cuda(cudaMemsetAsync(c, 0, kCBytes, stream));
+  require_cuda(cudaMemsetAsync(partial, 0, kPartialBytes, stream));
+  require_cuda(cudaMemsetAsync(events, 0, 128, stream));
 }
 
 }  // namespace
@@ -112,11 +116,50 @@ int main() {
       a, host_a.data(), kABytes, cudaMemcpyHostToDevice, stream));
   require_cuda(cudaMemcpyAsync(
       b, host_b.data(), kBBytes, cudaMemcpyHostToDevice, stream));
-  require_cuda(cudaMemsetAsync(c, 0, kCBytes, stream));
+  reset_outputs(c, partial, events, stream);
+
+  golden_gemm_ar_workspace golden_workspace{
+      .a = {.data = a, .bytes = static_cast<std::int64_t>(kABytes)},
+      .b = {.data = b, .bytes = static_cast<std::int64_t>(kBBytes)},
+      .partial = {
+          .data = partial,
+          .bytes = static_cast<std::int64_t>(kPartialBytes)},
+      .c = {.data = c, .bytes = static_cast<std::int64_t>(kCBytes)},
+      .barriers = events,
+      .barrier_bytes = 128};
+  golden_gemm_ar_launch golden_launch{
+      .stream = stream,
+      .device_ordinal = device};
+  golden_gemm_ar_problem golden_problem{
+      .m = kM,
+      .n = kN,
+      .k = kK,
+      .tile_m = 1,
+      .tile_n = 2,
+      .compute_ctas = 2,
+      .comm_ctas = 1};
+
+  auto golden_status = golden_phased_single_card_gemm_allreduce_f32(
+      golden_workspace, golden_launch, golden_problem);
+  assert(golden_status.code == golden_status_code::ok);
+  require_cuda(cudaMemcpyAsync(
+      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaStreamSynchronize(stream));
+  check_expected(host_a, host_b, host_c, 1.0f, "golden_phased_single");
+
+  reset_outputs(c, partial, events, stream);
+  golden_status = golden_overlap_single_card_gemm_allreduce_f32(
+      golden_workspace, golden_launch, golden_problem);
+  assert(golden_status.code == golden_status_code::ok);
+  require_cuda(cudaMemcpyAsync(
+      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaStreamSynchronize(stream));
+  check_expected(host_a, host_b, host_c, 1.0f, "golden_overlap_single");
+
+  reset_outputs(c, partial, events, stream);
 
   megacu::backend_id backend{1};
   megacu::session_id session{7};
-  gemm_ar_comm_ops ops{.sum_reduce_f32 = double_local_sum};
 
   gemm_ar_workspace workspace{
       .a = {
@@ -151,11 +194,11 @@ int main() {
       .stream = stream,
       .device_ordinal = device};
   megacu::nvshmem::team_view team{
-      .team = &ops,
+      .team = nullptr,
       .team_my_pe = 0,
-      .team_n_pes = 2,
+      .team_n_pes = 1,
       .world_my_pe = 0,
-      .world_n_pes = 2,
+      .world_n_pes = 1,
       .cuda_device_ordinal = device,
       .backend = backend,
       .session = session};
@@ -165,20 +208,27 @@ int main() {
       event_storage,
       launch,
       team,
-      gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = kM, .tile_n = kN});
+      gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = 1, .tile_n = 2});
   assert(status.code == megacu::status_code::ok);
 
   require_cuda(cudaMemcpyAsync(
       host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
+  check_expected(host_a, host_b, host_c, 1.0f, "megacu_phased_single");
 
-  for (int row = 0; row < kM; ++row) {
-    for (int col = 0; col < kN; ++col) {
-      float want = expected(host_a, host_b, row, col);
-      float got = host_c[row * kN + col];
-      assert(std::fabs(got - want) < 1.0e-4f);
-    }
-  }
+  reset_outputs(c, partial, events, stream);
+  status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+      workspace,
+      event_storage,
+      launch,
+      team,
+      gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = 1, .tile_n = 2});
+  assert(status.code == megacu::status_code::ok);
+
+  require_cuda(cudaMemcpyAsync(
+      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaStreamSynchronize(stream));
+  check_expected(host_a, host_b, host_c, 1.0f, "megacu_overlap_single");
 
   require_cuda(cudaFree(events));
   require_cuda(cudaFree(scratch));

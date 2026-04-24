@@ -630,3 +630,30 @@ were later promoted into `docs/design/`.
     implementation must include a numeric GEMM+AllReduce path and keep closing
     review risks until correctness is validated on real CUDA and CUDA+NVSHMEM
     paths, even if the first numeric path is intentionally small.
+
+- 2026-04-25 Asia/Shanghai - Require golden phased and overlap examples
+  > We should provide two golden: golden_phased, golden_overlap. Also, I didn't see a persistent loop for gemm_allreduce, which is required for overlapping verison. You can look at research/repos/triton-distributed/python/triton_dist/kernels/nvidia/gemm_allreduce.py, and record how the fused kernel is implemented with triton-dist. For the phased one, can we also do some tiling for  some task-level overlapping?
+  - Context: User reviewed the CUDA+NVSHMEM GEMM+AllReduce example after the
+    first numeric path and example organization landed in PR #3.
+  - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
+    `docs/notes/distributed_backend_sources.md`, PR #3.
+  - Agent interpretation: The example should grow from one minimal numeric path
+    into two named golden examples. The overlap golden needs a persistent
+    compute/communication loop resembling the Triton-Distributed fused kernel.
+    The phased golden should also use tiled work and readiness so it can show
+    task-level overlap boundaries, even if communication remains phase-gated.
+
+- 2026-04-25 Asia/Shanghai - Golden baselines separate from two Megacu implementations
+  > Just remove the minimal numeric path. For golden mode, we just use pure cuda/nvshmem without megacu things to achieve the correct version. For each, it should support two version (one card and multiple cards).  And then, we need to use megacu to implement the two corresponding versions. Especially, for the phased one, the megacu version should be able to make gemm tile and ar tile happen together (loosing false dependencies) whenever data is ready. I think megacu should be able to run the design on single card or multiple cards automatically (depends on dispatcher, backend, ...) when the CMake configured. Another requirement for agent rules is to let each example has its own cmake file, not using the one at the repo root.
+
+  > "Then add four corresponding Megacu implementations with the same semantics" I think we only need two Megacu implementation, since megacu should be able to generalize from single card to multiple cards.
+  - Context: User refined the approved golden example direction before
+    implementation.
+  - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
+    `.agents/rules/example-organization.md`, PR #3.
+  - Agent interpretation: Keep golden baselines Megacu-free and platform
+    native. Provide single-card and multi-card golden variants for both phased
+    and overlap, but only two Megacu implementations: phased and overlap. The
+    Megacu implementation should choose single-card versus multi-card behavior
+    from the target/team/backend configuration rather than duplicating program
+    code.

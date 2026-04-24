@@ -33,11 +33,11 @@ int choose_device() {
 
 gemm_ar_problem small_problem() {
   return {
-      .m = 16,
-      .n = 16,
-      .k = 16,
-      .tile_m = 16,
-      .tile_n = 16};
+      .m = 2,
+      .n = 2,
+      .k = 2,
+      .tile_m = 1,
+      .tile_n = 1};
 }
 
 }  // namespace
@@ -80,8 +80,14 @@ int main() {
   megacu::session_id session{7};
 
   gemm_ar_workspace workspace{
-      .a = {.data = a, .bytes = static_cast<std::int64_t>(kBytes)},
-      .b = {.data = b, .bytes = static_cast<std::int64_t>(kBytes)},
+      .a = {
+          .data = a,
+          .bytes = static_cast<std::int64_t>(kBytes),
+          .type = megacu::dtype::f32},
+      .b = {
+          .data = b,
+          .bytes = static_cast<std::int64_t>(kBytes),
+          .type = megacu::dtype::f32},
       .partial = {
           .buffer = {
               .data = partial,
@@ -89,7 +95,10 @@ int main() {
               .backend = backend,
               .session = session},
           .type = megacu::dtype::f32},
-      .c = {.data = c, .bytes = static_cast<std::int64_t>(kBytes)},
+      .c = {
+          .data = c,
+          .bytes = static_cast<std::int64_t>(kBytes),
+          .type = megacu::dtype::f32},
       .scratch = megacu::span<std::byte>{
           static_cast<std::byte *>(scratch),
           kBytes}};
@@ -107,9 +116,9 @@ int main() {
   megacu::nvshmem::team_view team{
       .team = nullptr,
       .team_my_pe = 0,
-      .team_n_pes = 2,
+      .team_n_pes = 1,
       .world_my_pe = 0,
-      .world_n_pes = 2,
+      .world_n_pes = 1,
       .cuda_device_ordinal = device,
       .backend = backend,
       .session = session};

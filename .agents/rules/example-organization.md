@@ -7,6 +7,9 @@
 - Use the same `<platform>_<backend>` and `<example>` names across
   `examples/`, `docker/`, and `tools/` so code, containers, and run scripts are
   discoverable as one unit.
+- Every example owns its own `CMakeLists.txt`. The repository root may add the
+  example with `add_subdirectory(...)`, but example libraries, golden targets,
+  run targets, and example-specific tests must be declared by the example.
 - Every example directory must include a `README.md` that explains:
   - what the example demonstrates;
   - the source file layout;

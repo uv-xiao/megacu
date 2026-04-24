@@ -55,11 +55,11 @@ selected_devices choose_devices(int count) {
 
 gemm_ar_problem small_problem() {
   return {
-      .m = 16,
-      .n = 16,
-      .k = 16,
-      .tile_m = 16,
-      .tile_n = 16};
+      .m = 2,
+      .n = 2,
+      .k = 2,
+      .tile_m = 1,
+      .tile_n = 1};
 }
 
 device_allocation allocate_device(int device) {
@@ -152,8 +152,8 @@ megacu::status orchestrate_on(device_allocation allocation,
       .device_ordinal = allocation.device};
   megacu::nvshmem::team_view team{
       .team = nullptr,
-      .team_my_pe = logical_pe,
-      .team_n_pes = 2,
+      .team_my_pe = 0,
+      .team_n_pes = 1,
       .world_my_pe = logical_pe,
       .world_n_pes = 2,
       .cuda_device_ordinal = allocation.device,

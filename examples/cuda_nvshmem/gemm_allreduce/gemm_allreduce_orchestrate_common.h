@@ -7,8 +7,17 @@
 #include <megacu/detail/target_metadata.h>
 
 #ifdef MEGACU_HAS_CUDA_NUMERIC_PATH
-extern "C" megacu::status megacu_cuda_gemm_allreduce_f32(
+extern "C" megacu::status megacu_cuda_gemm_allreduce_phased_f32(
     gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
+    gemm_ar_problem problem,
+    gemm_ar_comm_ops const *ops);
+
+extern "C" megacu::status megacu_cuda_gemm_allreduce_overlap_f32(
+    gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
     gemm_ar_problem problem,
@@ -36,7 +45,7 @@ inline megacu::status validate_common(
       problem.tile_m <= 0 || problem.tile_n <= 0) {
     return {megacu::status_code::invalid_argument, 1, "invalid problem shape"};
   }
-  if (team.team_n_pes != 2 || team.team_my_pe < 0 ||
+  if ((team.team_n_pes != 1 && team.team_n_pes != 2) || team.team_my_pe < 0 ||
       team.team_my_pe >= team.team_n_pes) {
     return {megacu::status_code::invalid_argument, 2, "invalid team envelope"};
   }
@@ -93,17 +102,20 @@ inline megacu::status validate_numeric_f32(
   return {};
 }
 
-inline megacu::status run_numeric_if_bound(
+inline megacu::status run_numeric(
     gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
-    gemm_ar_problem problem) {
-  if (team.team == nullptr) {
+    gemm_ar_problem problem,
+    megacu::detail::progress_model progress) {
+  if (launch.stream == nullptr) {
     return {};
   }
 
   auto *ops = static_cast<gemm_ar_comm_ops const *>(team.team);
-  if (ops->sum_reduce_f32 == nullptr) {
+  if (team.team_n_pes > 1 &&
+      (ops == nullptr || ops->sum_reduce_f32 == nullptr)) {
     return {
         megacu::status_code::invalid_argument,
         9,
@@ -116,7 +128,12 @@ inline megacu::status run_numeric_if_bound(
   }
 
 #ifdef MEGACU_HAS_CUDA_NUMERIC_PATH
-  return megacu_cuda_gemm_allreduce_f32(workspace, launch, team, problem, ops);
+  if (progress == megacu::detail::progress_model::phased) {
+    return megacu_cuda_gemm_allreduce_phased_f32(
+        workspace, events, launch, team, problem, ops);
+  }
+  return megacu_cuda_gemm_allreduce_overlap_f32(
+      workspace, events, launch, team, problem, ops);
 #else
   return {
       megacu::status_code::unsupported,
@@ -141,7 +158,13 @@ inline megacu::status orchestrate_impl(
   if (validation.code != megacu::status_code::ok) {
     return validation;
   }
-  return run_numeric_if_bound(workspace, launch, team, problem);
+  return run_numeric(
+      workspace,
+      events,
+      launch,
+      team,
+      problem,
+      linked_metadata.progress);
 }
 
 }  // namespace gemm_ar_detail
