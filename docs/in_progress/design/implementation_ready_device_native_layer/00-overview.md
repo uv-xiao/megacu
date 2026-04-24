@@ -1,7 +1,12 @@
-# Megacu Device-Native Layer Design
+# Implementation-Ready Megacu Device-Native Layer Design
 
-This directory holds the accepted Megacu device-native design in one flat,
-ordered set of files.
+This directory holds the active implementation-ready Megacu device-native
+design in one flat, ordered set of files.
+
+The picked stable direction remains in `docs/design/megacu_cpp_cuda_layer.md`.
+This directory is the working area for making that direction concrete enough to
+implement. Do not promote these chapters back into `docs/design/` until the PR
+closeout merge.
 
 The public lifecycle is:
 
@@ -34,8 +39,12 @@ fill a generic environment bag.
 - `09-first-validation-slice.md`: first narrow proof slice under the new
   boundary.
 - `10-verification.md`: contracts, failure modes, and verification evidence.
+- `11-implementation-contracts.md`: concrete public surfaces, planned paths,
+  first slice, and example-to-evidence mapping.
 
-Files `00` through `10` are the canonical accepted design.
+Files `00` through `11` are the current active draft. They should be refined in
+place until each contract, example, planned path, and verification requirement
+is implementation-ready.
 
 ## Source Context
 

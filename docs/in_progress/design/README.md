@@ -9,4 +9,5 @@ multiple files.
 
 ## Active Workstreams
 
-No active design workstreams are open right now.
+- `docs/in_progress/design/implementation_ready_device_native_layer/` - active
+  implementation-ready Megacu device-native layer design.

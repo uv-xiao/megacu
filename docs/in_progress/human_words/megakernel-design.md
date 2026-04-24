@@ -351,3 +351,15 @@ were later promoted into `docs/design/`.
     engines should be compiled once and reused; the concrete program should
     reuse those artifacts through the build graph, without moving hidden
     compilation into `run`.
+
+- 2026-04-24 Asia/Shanghai - Start implementation-ready design PR
+  > Let's start a new PR to do implementation-ready design. The first step is to only keep the picked things in the design document docs/design, and remove those stale ones. Then we need to make things concrete in docs/in_progress/design. While we work in docs/in_progress/design, the docs/design should just be kept untouched, and we'll do document merging at the end of the PR.
+  - Context: User requested a new PR-scoped design workflow before continuing
+    concrete implementation-ready architecture work.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/implementation_ready_device_native_design.md`
+  - Agent interpretation: Keep `docs/design/` as a concise picked-direction
+    snapshot, remove unfinished detailed chapters from stable design docs, do
+    concrete refinement only under `docs/in_progress/design/`, and merge
+    accepted documents back into `docs/design/` at PR closeout.
