@@ -495,3 +495,15 @@ were later promoted into `docs/design/`.
   - Agent interpretation: Implementation-ready design must include concrete
     records, owner paths, slot binding, materialization flow, function-body
     shape, and metadata checks, not only concept explanations and examples.
+
+- 2026-04-24 Asia/Shanghai - Restrict MPK source evidence
+  > For example creation, we need to make it clear that not everything inside mpk repo relates to mpk, since the original mirage things are outdated but still kept in the repo. Only things in research/repos/mirage-mpk/src/kernel and research/repos/mirage-mpk/python/mirage/mpk should be thought about as mpk-related.
+  - Context: User corrected the source boundary for MPK-based examples and
+    design evidence.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/notes/megakernel_cuda_layer_sources.md`
+  - Agent interpretation: Treat only `src/kernel/` and `python/mirage/mpk/`
+    under `research/repos/mirage-mpk/` as MPK evidence for active examples.
+    Other Mirage repository paths may be historical context, but should not be
+    used as MPK-related support for design decisions without a new explicit
+    source-reading justification.

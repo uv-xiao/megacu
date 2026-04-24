@@ -244,8 +244,12 @@ the scheduler or backend at runtime.
 ## Example 6: Larger MPK-Style CUDA Serving Program
 
 The second example is larger and intentionally closer to MPK. MPK's repository
-contains CUDA-provided task implementations and task registration for operator
-families such as:
+also contains older Mirage code, so this example only uses MPK-related evidence
+from `research/repos/mirage-mpk/src/kernel/` and
+`research/repos/mirage-mpk/python/mirage/mpk/`.
+
+Those MPK paths contain CUDA-provided task implementations, persistent-kernel
+construction, and task registration for operator families such as:
 
 - Hopper linear and linear-with-residual tasks;
 - Hopper paged attention, RMSNorm, SiLU multiply, embedding, and MoE tasks;
