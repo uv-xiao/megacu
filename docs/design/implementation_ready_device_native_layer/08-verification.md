@@ -209,12 +209,11 @@ Any missing item means the design has not become implementation-ready.
   uses only builder helpers, typed runtime views, two CMake functions, and the
   compiled orchestrate function.
 
-## Ready-To-Promote Criteria
+## Implementation-Start Criteria
 
-This active design is ready to merge back into `docs/design/` only when:
+This design is ready to guide implementation when:
 
 - every public surface has a planned owner and file path in the owning chapter;
 - every example has a corresponding test, inspection, or skip rule;
-- no stable doc points at unfinished draft content as implemented behavior;
 - the first implementation slice can be built from the component contracts
   without introducing new public concepts.

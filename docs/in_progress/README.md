@@ -13,6 +13,4 @@ Rules:
 
 ## Active Tasks
 
-- `docs/in_progress/implementation_ready_device_native_design.md` - make the
-  picked Megacu device-native direction implementation-ready while keeping
-  stable design docs untouched until PR closeout.
+No active task files after the implementation-ready design closeout.

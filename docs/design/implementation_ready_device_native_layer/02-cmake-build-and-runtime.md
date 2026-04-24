@@ -273,10 +273,10 @@ Owner by section:
 - backend section: `src/backends/nvshmem/lowering.*`;
 - `launch/runtime views`: `include/megacu/platform/cuda.h`,
   `include/megacu/backends/nvshmem.h`, and
-  `docs/in_progress/design/implementation_ready_device_native_layer/09-distributed-launch-and-framework-integration.md`;
+  `docs/design/implementation_ready_device_native_layer/09-distributed-launch-and-framework-integration.md`;
 - metadata writer/reader: `src/target/metadata.*`.
 - metadata ABI and embedding guardrails:
-  `docs/in_progress/design/implementation_ready_device_native_layer/10-implementation-architecture.md`.
+  `docs/design/implementation_ready_device_native_layer/10-implementation-architecture.md`.
 
 ## Parameterized Orchestrate Slot Fill
 

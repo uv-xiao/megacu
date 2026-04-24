@@ -1,15 +1,13 @@
 # Implementation-Ready Megacu Device-Native Layer Design
 
-This directory holds the active implementation-ready Megacu device-native
-design in one flat, ordered set of files. It is an implementation contract set,
-not the stable architecture narrative.
+This directory holds the accepted implementation-ready Megacu device-native
+design in one flat, ordered set of files. It is the implementation contract set
+for the picked direction in `docs/design/megacu_cpp_cuda_layer.md`.
 
-The picked stable direction remains in `docs/design/megacu_cpp_cuda_layer.md`.
-Do not duplicate positioning, audience, competitor analysis, or stable
-principles here. This directory should contain only the API surfaces, internal
-records, owner paths, examples, failure checks, and verification evidence needed
-to implement that direction. Keep `docs/design/` untouched until the PR
-closeout merge.
+This directory intentionally avoids broad positioning, audience, and competitor
+analysis. It contains the API surfaces, internal records, owner paths,
+examples, failure checks, and verification evidence needed to start
+implementation.
 
 ## Implementation-Ready Bar
 
@@ -26,7 +24,7 @@ only when they are necessary to understand an implementation contract.
 
 ## Thinness Rule
 
-This draft must keep Megacu thinner than MPK, Triton-Distributed, and
+This design must keep Megacu thinner than MPK, Triton-Distributed, and
 MegaKittens-style systems at the user-facing layer. The first implementation
 public surface is limited to:
 
@@ -74,5 +72,5 @@ one of these tests:
 - `10-implementation-architecture.md`: cross-cutting implementation guardrails
   for metadata, status, op symbols, dependencies, and error boundaries.
 
-These chapters should be refined in place until each contract, example, planned
-path, and verification requirement is implementation-ready.
+These chapters are the starting contract for implementation. Implementation
+PRs may refine them when concrete code or verification exposes a mismatch.

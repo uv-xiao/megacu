@@ -3,11 +3,8 @@
 This is the stable entry point for the picked Megacu device-native layer
 direction.
 
-Implementation-ready detail is still active design work. During the current
-PR, those draft chapters live under
-`docs/in_progress/design/implementation_ready_device_native_layer/`. They should
-not be treated as implemented behavior until they are accepted and merged back
-into `docs/design/` at PR closeout.
+Implementation-ready contracts for the first implementation live under
+`docs/design/implementation_ready_device_native_layer/`.
 
 ## Accepted Direction
 
