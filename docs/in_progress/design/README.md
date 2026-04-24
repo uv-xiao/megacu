@@ -9,4 +9,4 @@ multiple files.
 
 ## Active Workstreams
 
-No active design workstreams are open right now.
+No active design workstreams after the implementation-ready design closeout.

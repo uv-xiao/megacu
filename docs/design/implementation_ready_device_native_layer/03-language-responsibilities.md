@@ -13,13 +13,6 @@ Authoring C++ is the right place for:
 - registering named kernels and native adapters
 - expressing the orchestration through a small builder surface
 
-This is the natural place for the current design because:
-
-- the project should stay C++ only
-- CMake should own build graph work outside the runtime API
-- the program model should stay close to ordinary native code rather than a
-  template-heavy metaprogramming layer
-
 This authoring code is the thing that gets compiled and run.
 
 ## CMake And Native Build Layer
@@ -32,7 +25,8 @@ They are the right place for:
 - compiling reusable dispatcher/scheduler/kernel-lowering targets
 - compiling reusable kernels and helper code
 - compiling/linking the authored orchestrate program target
-- executing any lowering/codegen needed by the chosen backend
+- materializing target metadata and selecting the required low-level
+  implementations
 - linking platform/backend adapters
 - producing optional inspection metadata
 
@@ -52,7 +46,9 @@ C++/CUDA is the right place for:
 - backend primitive headers and device calls
 - platform adapters
 - backend adapters
-- generated lowering code emitted during the build
+- launch adapters for process-model bootstrap and typed runtime-view
+  construction
+- reusable lowering implementations and linked target metadata
 - the authored orchestrate program
 - the internal `run(...)` path
 
@@ -64,30 +60,18 @@ be a regular compiled target.
 The runtime C++ API should be small:
 
 - call the compiled orchestrate program
+- construct typed launch/backend views through optional launch adapters when the
+  caller does not already own them
 
 It should not:
 
 - expose CMake/build steps
 - expose strategy selection
+- expose dispatcher, scheduler, lowering, platform, or backend plan objects
 - expose packaging concerns that belong to the offline build path
+- initialize or finalize NVSHMEM inside the compiled orchestrate target
 
 That is the core boundary for implementation.
-
-## What About Pure C++ Users?
-
-Pure C++ users are the primary path, but still through an offline CMake/native
-build path, not through a runtime build API.
-
-Possible working paths:
-
-- use CMake helper functions such as `megacu_add_components(...)` and
-  `megacu_add_orchestrate_target(...)`
-- use Bazel rules that mirror the same separation
-- check in prebuilt runtime artifacts when deployment needs that
-- link the resulting target and call the orchestrate function from C++
-
-So the absence of runtime build APIs does not mean C++ users are excluded. It
-only means strategy selection stays outside the runtime process.
 
 ## First Implementation Recommendation
 
@@ -96,14 +80,22 @@ For the first implementation, the cleanest split is:
 - **CMake/native build rules**
   - reusable component-target hooks
   - orchestrate-target hooks
-  - execution of any lowering/codegen needed by the backend
+  - target metadata materialization
+  - selection/linking of required backend-provided low-level implementations
   - CUDA/C++ compilation and linking
 
 - **C++/CUDA**
   - orchestrate-program authoring
   - kernels
-  - generated lowering code
+  - reusable dispatcher/scheduler/lowering/platform/backend implementations
+  - optional MPI/NVSHMEM launch adapter
   - `run(...)`
 
-This aligns the implementation path with the design goal of compile-time
-strategy selection and runtime minimal overhead.
+- **Framework integration**
+  - optional Torch Distributed adapter code outside Megacu core that reads
+    rank/world state, exchanges the NVSHMEM UID, owns symmetric allocation
+    wrappers, and calls the compiled C++ target through an extension binding
+  - no framework types in `program_ir`, dispatcher, scheduler, kernel, or
+    backend metadata-section records
+  - no Python dependency in public program headers, materializers, metadata,
+    lowering, backend adapters, or compiled target ABI

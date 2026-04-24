@@ -1,12 +1,10 @@
 # Design: Megacu Device-Native Layer
 
-This is the stable entry point for the accepted Megacu device-native layer
-design.
+This is the stable entry point for the picked Megacu device-native layer
+direction.
 
-The detailed design lives under `megacu_device_native_layer/` as one flat,
-ordered chapter set. Start at
-`docs/design/megacu_device_native_layer/00-overview.md` and read
-forward numerically.
+Implementation-ready contracts for the first implementation live under
+`docs/design/implementation_ready_device_native_layer/`.
 
 ## Accepted Direction
 
@@ -27,20 +25,6 @@ That means:
   implementations are organized as reusable build targets;
 - the authored orchestrate program is compiled/linked against those artifacts;
 - runtime C++ runs the compiled orchestration directly.
-
-## Ordered Design Files
-
-- `megacu_device_native_layer/00-overview.md`
-- `megacu_device_native_layer/01-positioning.md`
-- `megacu_device_native_layer/02-principles-and-naming.md`
-- `megacu_device_native_layer/03-program.md`
-- `megacu_device_native_layer/04-cmake-build-and-runtime.md`
-- `megacu_device_native_layer/05-language-responsibilities.md`
-- `megacu_device_native_layer/06-compiled-orchestrate-program.md`
-- `megacu_device_native_layer/07-dispatcher-scheduler-kernel.md`
-- `megacu_device_native_layer/08-examples.md`
-- `megacu_device_native_layer/09-first-validation-slice.md`
-- `megacu_device_native_layer/10-verification.md`
 
 ## Language Split
 

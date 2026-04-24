@@ -38,6 +38,10 @@ On 2026-04-23, the user corrected the additional source to
   - `python/triton_dist/mega_triton_kernel/kernels/{task_context.py,allreduce.py}`
   - `python/triton_dist/mega_triton_kernel/tasks/allreduce.py`
   - `python/triton_dist/kernels/nvidia/allgather_gemm.py`
+  - 2026-04-24 follow-up for implementation-ready examples:
+    `python/triton_dist/kernels/nvidia/gemm_allreduce.py`,
+    `python/triton_dist/kernels/nvidia/allgather_gemm.py`,
+    `python/triton_dist/mega_triton_kernel/kernels/allreduce.py`
 
 ### HazyResearch Megakernels / MegaKittens
 
@@ -127,6 +131,28 @@ optimized task implementations to specialize for backend capabilities without
 polluting the generic task graph. A generic task can declare "requires remote
 multimem reduce" or "requires symmetric pointer + signal"; the concrete backend
 then supplies the exact device operations.
+
+Follow-up reading on 2026-04-24 made this concrete enough for the active design
+example. `kernels/nvidia/gemm_allreduce.py` defines a fused shape with:
+
+- symmetric GEMM output buffers and AllReduce output buffers;
+- GEMM barrier buffers, tile barrier buffers, grid barrier buffers, and
+  multi-store barrier buffers;
+- communication CTAs waiting for GEMM tile readiness;
+- GEMM CTAs computing output tiles and setting per-tile readiness;
+- a fused kernel that assigns low program ids to communication work and the
+  remaining program ids to GEMM work;
+- backend-specific paths for multimem load-reduce/store and load-reduce-store
+  fallback.
+
+That is the right first Megacu validation example because it exercises all
+important boundaries at once: logical output-tile domains, rank/team
+participants, event readiness, dispatcher placement of compute versus
+communication work, backend primitive selection, and native kernel bodies. It
+also strengthens the "no generated CUDA" requirement: Megacu should link a
+handwritten or library-provided GEMM implementation and backend reduction
+primitive rather than synthesize a new CUDA kernel from the orchestrate
+descriptor.
 
 ## What UniEP Contributes
 

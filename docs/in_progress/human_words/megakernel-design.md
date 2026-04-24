@@ -351,3 +351,244 @@ were later promoted into `docs/design/`.
     engines should be compiled once and reused; the concrete program should
     reuse those artifacts through the build graph, without moving hidden
     compilation into `run`.
+
+- 2026-04-24 Asia/Shanghai - Start implementation-ready design PR
+  > Let's start a new PR to do implementation-ready design. The first step is to only keep the picked things in the design document docs/design, and remove those stale ones. Then we need to make things concrete in docs/in_progress/design. While we work in docs/in_progress/design, the docs/design should just be kept untouched, and we'll do document merging at the end of the PR.
+  - Context: User requested a new PR-scoped design workflow before continuing
+    concrete implementation-ready architecture work.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/implementation_ready_device_native_design.md`
+  - Agent interpretation: Keep `docs/design/` as a concise picked-direction
+    snapshot, remove unfinished detailed chapters from stable design docs, do
+    concrete refinement only under `docs/in_progress/design/`, and merge
+    accepted documents back into `docs/design/` at PR closeout.
+
+- 2026-04-24 Asia/Shanghai - Component-owned implementation contracts
+  > We shouldn't put every thing in 11-implemented-contracts.md. Instead, we need to make very component of the design concrete, including the core abstraction APIs (event, task, ...) and all needs to be implemented.
+  - Context: User reviewed the first PR slice and rejected concentrating
+    implementation detail in one catch-all contract chapter.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: Move concrete APIs, planned paths, records, and
+    evidence into the owning component chapters. The active design should make
+    each implementable component concrete instead of centralizing all detail in
+    a final implementation-contract appendix.
+
+- 2026-04-24 Asia/Shanghai - Explain orchestrator, operators, execution, and terms
+  > I found things /APIs are not concrete enough. Fundamentally, we need to make it clear what we program in orchestrator and kernels (operators), and how they will be runned. For example, when we write event (with a name) or call primitives in a kernel for communication with another kernel (identified by like a virtual id?), how they will be runned with backend things provided (like providing how virtual id is resolved and event names are resolved). Also, all implementation APIs are quite opaque still. Another problem is that we don't give enough explanation for concepts/terms yet. For example, I just cannot understand what the workspace or domain mean.
+  - Context: User reviewed the component-owned contracts and found that the
+    design still lacked a concrete execution model and term definitions.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: Define the vocabulary before APIs, distinguish
+    diagnostic labels from typed tags, specify what users program in the
+    orchestrator versus kernels, and document how lowering resolves domains,
+    virtual participants, event tags, workspace views, and backend handles into
+    runnable CUDA/NVSHMEM behavior.
+
+- 2026-04-24 Asia/Shanghai - Clarify tiles, tile, workspace, events, bind, and extent
+  > You should make it more cler about that is tiles, tile, workspace, events, and what exec.bind , megacu::extent are.
+  - Context: User reviewed the descriptor/executor model and called out
+    specific opaque terms in the first API example.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`
+  - Agent interpretation: Explain `tiles` as runtime extent count, `tile` as
+    logical domain, `workspace` as caller-owned payload/scratch storage,
+    `events` as caller-owned synchronization storage, `exec.bind` as typed slot
+    binding, and `megacu::extent` as typed runtime extent binding.
+
+- 2026-04-24 Asia/Shanghai - Require necessity analysis
+  > are these concepts and binding behavior necessary? Give rationale or necessity analysis.
+  - Context: User asked whether the newly clarified concepts and runtime
+    binding behavior are justified or removable.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: Add explicit necessity analysis for each public
+    concept and compare typed runtime binding against generic env bags,
+    positional arguments, rebuild-per-shape, raw kernel plumbing, and
+    Megacu-owned allocation.
+
+- 2026-04-24 Asia/Shanghai - Dispatcher owns virtual participant mapping
+  > This is weird. Why config in CMake? Why not do in dispatcher?
+  - Context: User pointed at `MAP producer_lane TO RANK 0` /
+    `MAP consumer_lane TO RANK 1` in the active design and questioned why
+    participant placement was represented as CMake configuration.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`
+  - Agent interpretation: Virtual participants are logical role declarations.
+    CMake may select the dispatcher component, but dispatcher policy owns
+    participant-to-backend placement and emits participant mapping metadata.
+
+- 2026-04-24 Asia/Shanghai - Parameterized compiled orchestrate function
+  > I found the split between orchestrate-target structure and run-time dynamics not very necessary. Why not made orchestrate just to be a parameterized one? Why we still need exec.bind and exec.run upon compiled orch?
+  - Context: User questioned the public `executor` / `bind` / `run` layer after
+    the target has already been compiled.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: Keep descriptor slots as lowering internals, but make
+    the public compiled target a normal parameterized orchestrate function.
+    Runtime parameter binding and fast-path `run` are generated/linked target
+    internals, not public post-compile APIs.
+
+- 2026-04-24 Asia/Shanghai - Lowering links existing implementations
+  > We need to make sure things like kernel-lowering and target-lowering doesn't emit/generate new code. Instead, it mainly link the required low-level implementation to the high-level APIs as the backend provides.
+  > We need to specify it very clear about what megacu's compilation do (compile, link) and not do (translation into new CUDA or other language code).
+  - Context: User clarified that target/kernel lowering should not be a source
+    generation or translation pipeline.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/03-language-responsibilities.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: Megacu compilation means native compile/link plus
+    compact metadata materialization. Kernel lowering and target lowering must
+    select and link reusable dispatcher, scheduler, lowering, platform,
+    backend, and kernel implementations; they must not emit new C++/CUDA or
+    translate the orchestrate program into another language.
+
+- 2026-04-24 Asia/Shanghai - Strengthen examples with GEMM+AllReduce and MPK
+  > The example is too weak. We need a gemm-allreduce fusion-kernel as the example. You can get information and reference code from related repositories. Also, we need another bigger example from mpk (where cuda is provided).
+  - Context: User reviewed the event-copy example and found it insufficient for
+    implementation-ready design.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`,
+    `docs/notes/distributed_backend_sources.md`,
+    `docs/notes/megakernel_cuda_layer_sources.md`
+  - Agent interpretation: Replace the toy event-copy proof with a
+    GEMM+AllReduce fusion target that exercises real compute/communication
+    overlap, then add an MPK-style serving-layer example grounded in MPK's
+    CUDA-provided operator families.
+
+- 2026-04-24 Asia/Shanghai - Design still not concrete enough
+  > I don't think the design is concrete enough to guide implementation. We need to refine things further.
+  - Context: User reviewed the GEMM+AllReduce and MPK example update and found
+    that the design still lacked enough implementation detail.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/00-overview.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: Implementation-ready design must include concrete
+    records, owner paths, slot binding, materialization flow, function-body
+    shape, and metadata checks, not only concept explanations and examples.
+
+- 2026-04-24 Asia/Shanghai - Restrict MPK source evidence
+  > For example creation, we need to make it clear that not everything inside mpk repo relates to mpk, since the original mirage things are outdated but still kept in the repo. Only things in research/repos/mirage-mpk/src/kernel and research/repos/mirage-mpk/python/mirage/mpk should be thought about as mpk-related.
+  - Context: User corrected the source boundary for MPK-based examples and
+    design evidence.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/notes/megakernel_cuda_layer_sources.md`
+  - Agent interpretation: Treat only `src/kernel/` and `python/mirage/mpk/`
+    under `research/repos/mirage-mpk/` as MPK evidence for active examples.
+    Other Mirage repository paths may be historical context, but should not be
+    used as MPK-related support for design decisions without a new explicit
+    source-reading justification.
+
+- 2026-04-24 Asia/Shanghai - Fill multi-GPU running gap
+  > review the implementation documents to see if it is complete or concrete enough. What I found not enough is about the multi-gpu running. We need to support CUDA+NVSHMEM, but I don't see where megacu is integrated for torchdistributed running or mpi running.
+  >
+  > We need to fill the missing thigns.
+  - Context: User accepted the review finding that the implementation-ready docs
+    were missing the CUDA+NVSHMEM process-launch and framework-integration
+    contract.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/09-distributed-launch-and-framework-integration.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`,
+    `docs/notes/distributed_launch_sources.md`
+  - Agent interpretation: The design must specify how Torch Distributed and MPI
+    process models construct CUDA launch views, NVSHMEM team views, symmetric
+    allocations, and validation evidence before the compiled orchestrate target
+    runs.
+
+- 2026-04-24 Asia/Shanghai - Separate phased and overlap GEMM+AllReduce
+  > Another problem is that, should we support two version of gemm-ar? One is just like MPK, where, in my mind, omit compute-comm overlap. The other one is the overlapping version. Especially for the overlapping one, I'm worried that we don't have the guard mechanism for two communicating tasks must run simultaneously when the communication happens.
+  - Context: User identified that the GEMM+AllReduce example was mixing a simple
+    correctness baseline with a true compute/communication overlap proof, and
+    noted the deadlock risk when communicating tasks are not simultaneously
+    resident.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-verification.md`
+  - Agent interpretation: The design should support both phased and overlapping
+    GEMM+AllReduce targets. Blocking communication in the overlap target requires
+    scheduler/kernel-lowering metadata that proves producer and consumer workers
+    are co-resident, or target lowering must reject the program.
+
+- 2026-04-24 Asia/Shanghai - Keep in-progress docs implementation-only
+  > docs/in_progress/design/implementation_ready_device_native_layer hold may implementation-unrelated information, some files and some contents inside files. We should leave these architecture things or decisions in docs/design (already there), and let docs/in_progress only hold implementation-related things. This should make the in_progress documents more concise.
+  - Context: User reviewed the implementation-ready draft after concrete launch
+    and overlap contracts were added and found that stable architecture
+    narrative was still mixed into the active implementation docs.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`
+  - Agent interpretation: Keep architecture positioning, principles, and stable
+    decisions in `docs/design/`. The active implementation-ready draft should
+    retain only implementation surfaces, records, owner paths, runtime paths,
+    examples, failure checks, and verification evidence.
+
+- 2026-04-24 Asia/Shanghai - Re-review implementation design for architecture health
+  > Review and check if the documents are complete and concrete enough, and also check if it meets the high-level architecture requirements or story. Also, you need to do good architecting again to make sure the implementation is robust, healthy, maintainable.
+  - Context: User asked for another architecture-quality pass after the active
+    implementation docs were made more concise.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`
+  - Agent interpretation: Re-check completeness against the high-level lifecycle
+    and C++-only story, then tighten implementation contracts that would affect
+    robustness, maintainability, metadata safety, runtime ABI stability, and
+    component ownership.
+
+- 2026-04-24 Asia/Shanghai - Do not force host/device op symbol pairs
+  > Why we need both host_symbol and device_symbol. Although for simpler (pto runtime), host (orch) and device (chip) is separated, in CUDA, we prefer to have everything as kernel. That is, we don't always have host. Will the explicit seperation of host_symbol and device_symbol harm the generalithy?
+  - Context: User reviewed the op implementation ABI added during the
+    architecture-hardening pass and questioned whether explicit host/device
+    symbol fields overfit PTO Runtime or harm CUDA generality.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-implementation-architecture.md`
+  - Agent interpretation: Model op implementation entrypoints by capabilities
+    required by the selected lowering mode, not mandatory host/device pairs.
+    A CUDA `__global__` launchable kernel is a valid op implementation without a
+    separate device-callable body; a callable body is only required when a
+    stitched lowering needs to call the op from within another kernel.
+
+- 2026-04-24 Asia/Shanghai - Keep Megacu thinner than related systems
+  > I looked through the design, and felt that the design is kind of heavy: there are lots of plans, records, views, ... I'm not sure if each is necessary, you should do another alignment to make sure our megacu layer is kept thin. Actually, I think mpk, triton-dist, megakittens are all quite thin. We should be thiner rather than heavier, even we have multi-platform/backend quirements.
+  - Context: User reviewed the implementation-ready draft after API and
+    metadata contracts were made concrete and found the design presentation
+    still too heavy.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`
+  - Agent interpretation: Keep the public Megacu layer thinner than related
+    systems. Plans, records, and views must be minimized; implementation plans
+    should be private target-metadata sections rather than extra public
+    abstractions. Multi-platform/backend support should come from narrow
+    component adapters and build-time selection, not from a broad public
+    lifecycle or taxonomy.

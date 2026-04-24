@@ -13,4 +13,4 @@ Rules:
 
 ## Active Tasks
 
-No active feature tasks are open right now.
+No active task files after the implementation-ready design closeout.

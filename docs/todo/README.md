@@ -7,6 +7,7 @@
 - [x] Agent harness scaffold
 - [x] GitHub workflow skills for the agent harness
 - [x] Megacu C++/CUDA layer design
+- [x] Implementation-ready device-native design
 - [ ] Minimal build and verification tooling
 - [ ] First executable persistent-kernel slice
 - [ ] Benchmark and profiling harness

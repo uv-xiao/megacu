@@ -32,6 +32,20 @@ Primary sources:
 - MPK repo: https://github.com/mirage-project/mirage
 - Event Tensor arXiv: https://arxiv.org/abs/2604.13327
 
+## MPK Source Boundary
+
+Correction recorded on 2026-04-24: do not treat the entire Mirage repository as
+MPK evidence. The repository still contains older Mirage code that is not part
+of the MPK design surface. For Megacu design decisions and examples, only these
+paths should be considered MPK-related unless a later source reading explicitly
+justifies a narrower exception:
+
+- `research/repos/mirage-mpk/src/kernel/`
+- `research/repos/mirage-mpk/python/mirage/mpk/`
+
+Older references in this note to other Mirage directories are historical
+context, not normative MPK evidence for the active design.
+
 ## One-Screen Takeaway
 
 MPK and Event Tensor both attack the same bottleneck: modern inference spends too
@@ -44,6 +58,37 @@ graph generator, generated CUDA, and an in-kernel runtime with worker and
 scheduler CTAs. Its key concrete idea is an SM-level task/event graph. The public
 repo confirms this design in code: `TaskDesc`, `EventDesc`, worker queues,
 scheduler queues, event counters, NVSHMEM support, and generated task variants.
+
+Follow-up reading on 2026-04-24 for the implementation-ready examples focused on
+the MPK-related source boundary above:
+
+- `src/kernel/graph.cc` registers concrete task names such as
+  `linear_cutlass_hopper`, `paged_attention_hopper`, `rmsnorm_hopper`,
+  `moe_w13_linear_sm90`, `mla_decode_sm100`, `mla_reduce_sm100`,
+  `nvshmem_allgather_strided_put`, and `nvshmem_tile_allreduce`.
+- `src/kernel/runtime.cc` constructs task/event graphs, assigns event ids,
+  handles NVSHMEM event cases, and emits/initializes persistent-kernel task
+  metadata.
+- `src/kernel/task_register.cc` registers CUDA task variants for RMSNorm,
+  paged attention, Hopper/SM100 linear paths, MLA decode/reduce, and NVSHMEM
+  allgather/tile-allreduce.
+- `src/kernel/cuda/*.cu` contains CUDA-side operator kernels such as matmul,
+  all-reduce, RMSNorm, reduction, input/output, and customized kernels.
+- `python/mirage/mpk/persistent_kernel.py` owns the MPK Python persistent-kernel
+  construction path, task registration calls, NVSHMEM compile flags, and
+  generation/launch/finalization flow.
+- `python/mirage/mpk/multigpu.py` registers MPK multi-GPU tasks such as
+  NVSHMEM allgather and tile allreduce.
+- `python/mirage/mpk/models/qwen3/builder.py` and
+  `python/mirage/mpk/models/deepseek_v3/builder.py` show MPK model-layer
+  construction using RMSNorm, linear, paged attention, MLA, MoE, and NVSHMEM
+  tensor paths.
+
+The active Megacu design uses this as evidence for a larger MPK-style example,
+but deliberately does not copy MPK's generated-CUDA path. Megacu should express
+the task/event/dependency structure and link CUDA-provided operator bodies; MPK
+shows why the operator set needs to include real serving tasks such as RMSNorm,
+linear, paged attention, split reduction, MoE, and NVSHMEM collectives.
 
 Event Tensor is closest to a compiler abstraction: it lifts events from
 individual synchronization objects into tensor-shaped, symbolic compiler IR
@@ -88,13 +133,15 @@ The graph is finer than a CUDA Graph. Instead of "kernel A before kernel B",
 MPK can encode "tile A[i] before tile B[i]". This allows downstream tasks to
 start as soon as their precise input tile is ready.
 
-In the repo, this maps to:
+In the MPK-related source boundary, this maps to:
 
-- `FullTaskDesc` and `TaskDesc` in
-  `include/mirage/persistent_kernel/runtime_header.h`
-- `EventDesc` with `num_triggers`, `first_task_id`, `last_task_id`
-- `all_tasks`, `all_events`, `all_event_counters` in `RuntimeConfig`
-- `generate_task_graph()` in `src/kernel/runtime.cc`
+- `src/kernel/runtime.cc`, which builds `all_tasks`, `all_events`,
+  `first_tasks`, event counters, and the persistent-kernel initialization path;
+- `src/kernel/task_register.cc`, which registers task variants and emits the
+  concrete CUDA task bodies used by the persistent runtime;
+- `python/mirage/mpk/persistent_kernel.py`, which constructs MPK persistent
+  kernels, registers tasks, compiles with CUDA/NVSHMEM flags, and launches the
+  persistent runtime.
 
 The task descriptor is intentionally low-level: task type, variant id, input
 and output pointers, one dependent event, one trigger event, and a small metadata
