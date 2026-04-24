@@ -13,4 +13,6 @@ Rules:
 
 ## Active Tasks
 
-No active task files after the implementation-ready design closeout.
+- `docs/in_progress/public_builder_surface.md` - implement the first
+  compile-only public Megacu builder, view, and `program_ir` surface for the
+  GEMM+AllReduce program descriptors.
