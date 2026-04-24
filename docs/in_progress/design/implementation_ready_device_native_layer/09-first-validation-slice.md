@@ -41,32 +41,29 @@ But the authored object is now the orchestrate program itself.
 Initial public API proof:
 
 ```cpp
+struct event_copy_program;
+struct workspace_slot;
+struct event_storage_slot;
+struct tiles_extent;
+
 void cuda_nvshmem_event_copy_orchestrate(
-    megacu::workspace_view workspace,
+    event_copy_workspace workspace,
     megacu::event_storage_view events,
     megacu::nvshmem_team_view team,
     std::int32_t tiles) {
-  megacu::orchestrator orch{workspace, events, team};
-
-  auto tile = orch.domain("tile", tiles);
-  auto ready = orch.event("ready", tile, megacu::remote_event{});
-
-  orch.submit(
-      ops::write_then_signal,
-      megacu::over(tile),
-      megacu::args().workspace(workspace).signal(ready.release()));
-
-  orch.submit(
-      ops::wait_then_check,
-      megacu::over(tile),
-      megacu::args().wait(ready.acquire()).workspace(workspace));
-
-  orch.run();
+  megacu::executor<event_copy_program> exec{team};
+  exec.bind<workspace_slot>(workspace);
+  exec.bind<event_storage_slot>(events);
+  exec.run(megacu::extent<tiles_extent>(tiles));
 }
 ```
 
+The matching program descriptor must declare the domains, participants, events,
+resources, and submissions shown in `03-program.md`.
+
 The example must compile without public task descriptors, raw resource ids,
-runtime scheduler objects, or string-based module loading.
+runtime scheduler objects, string-based module loading, or string-based event
+lookup.
 
 ## Runtime Path
 
@@ -83,7 +80,8 @@ strategy.
 ## Planned Paths
 
 - Public API headers:
-  - `include/megacu/orchestrator.h`
+  - `include/megacu/program.h`
+  - `include/megacu/executor.h`
   - `include/megacu/views.h`
   - `include/megacu/backends/nvshmem.h`
 - Build rules:

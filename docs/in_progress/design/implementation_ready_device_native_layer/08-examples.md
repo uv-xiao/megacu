@@ -6,56 +6,76 @@ These examples are written against the new lifecycle:
 
 ## Example 1: CUDA Kernel With Backend Primitive Inside
 
-Named kernels remain ordinary CUDA/C++ kernels. Fine-grained overlap can live
-inside them.
+Named kernels remain ordinary CUDA/C++ kernels, but Megacu passes a lowered
+kernel context when the kernel needs Megacu-managed event or peer resolution.
+Fine-grained overlap can live inside the kernel.
 
 ```cpp
 extern "C" __global__
-void reduce_then_signal_kernel(float *out, nvshmem_signal_handle sig) {
+void write_then_signal_kernel(
+    megacu::cuda::kernel_context ctx,
+    event_copy_workspace workspace) {
+  auto tile = ctx.domain_point<tile_domain>();
+  auto peer = ctx.peer<consumer_lane>(tile);
+  auto ready = ctx.event<ready_event>(tile, peer);
+
   // Native CUDA compute.
-  reduce_tile(out);
+  workspace.payload[tile.linear] = make_payload(tile.linear);
 
   // Native backend primitive inside the kernel body.
   if (threadIdx.x == 0) {
-    nvshmemx_signal_op(sig, 1);
+    megacu::nvshmem::signal(ctx, ready, 1);
   }
 }
 ```
 
 Feature shown: Megacu does not require a separate public "backend primitive op"
 or fragment taxonomy. A named kernel can contain fine-grained backend behavior
-directly.
+directly, while event and peer resolution still comes from lowered target
+metadata rather than raw strings.
 
 ## Example 2: Authored Orchestrate Program
 
 ```cpp
-void paged_attention_orchestrate(
-    workspace_view workspace,
-    event_storage_view events,
-    nvshmem_comm_handle nvshmem,
-    std::int32_t num_tiles,
-    std::int32_t num_tokens) {
-  megacu::orchestrator orch{workspace, events, nvshmem};
+struct tiles_extent;
+struct tile_domain;
+struct producer_lane;
+struct consumer_lane;
+struct ready_event;
+struct workspace_slot;
+struct event_storage_slot;
 
-  auto tile = orch.domain("tile", num_tiles);
-  auto ready = orch.event("payload_ready", tile, megacu::remote_event{});
+struct event_copy_program {
+  static void describe(megacu::program_builder &p) {
+    auto tiles = p.extent<tiles_extent>("tiles");
+    auto tile = p.domain<tile_domain>("tile", tiles);
+    auto producer = p.participant<producer_lane>("producer");
+    auto consumer = p.participant<consumer_lane>("consumer");
+    auto workspace = p.resource<workspace_slot, event_copy_workspace>("workspace");
+    auto events = p.resource<event_storage_slot, megacu::event_storage_view>("events");
+    auto ready = p.event<ready_event>(
+      "ready",
+      tile,
+      megacu::remote_event{.from = producer, .to = consumer, .storage = events});
 
-  orch.submit(
-      ops::reduce_then_signal,
-      over(tile),
-      args().out(workspace.partial()).signal(ready.release()));
+    p.submit(
+      ops::write_then_signal{},
+      megacu::over(tile),
+      megacu::place(producer),
+      megacu::args().payload(workspace.payload).signal(ready.release()));
 
-  orch.submit(
-      ops::wait_and_consume,
-      over(tile),
-      args().wait(ready.acquire()).inp(workspace.partial()).out(workspace.out()));
-
-  orch.run(run_spec{.tokens = num_tokens});
-}
+    p.submit(
+      ops::wait_then_check{},
+      megacu::over(tile),
+      megacu::place(consumer),
+      megacu::args().wait(ready.acquire()).payload(workspace.payload));
+  }
+};
 ```
 
-Feature shown: the authored object is the orchestrate program itself. There is
-no separate primary runtime wrapper to generate or call.
+Feature shown: the authored descriptor is the orchestrate program. Names such as
+`"tile"` and `"ready"` are labels; typed tags such as `tile_domain` and
+`ready_event` are lowered into slots.
 
 ## Example 3: CMake Builds Reusable Components And The Orchestrate Target
 
@@ -67,36 +87,59 @@ megacu_add_components(
   KERNEL_LOWERING persistent_stitch
   PLATFORM cuda
   BACKEND nvshmem
-  KERNELS reduce_then_signal.cu wait_and_consume.cu
 )
 
 megacu_add_orchestrate_target(
-  TARGET paged_attention_orchestrate
-  SOURCES paged_attention_orchestrate.cc
+  TARGET cuda_nvshmem_event_copy
+  PROGRAM event_copy_program
+  SOURCES event_copy_orchestrate.cc
+  KERNELS event_copy_kernels.cu
+  OPS
+    write_then_signal=write_then_signal_kernel
+    wait_then_check=wait_then_check_kernel
   COMPONENTS cuda_nvshmem_static
+  MAP producer_lane TO RANK 0
+  MAP consumer_lane TO RANK 1
 )
 ```
 
 Feature shown: CMake owns reusable component compilation and orchestrate-target
 compilation/linking. Ordinary user code just calls the compiled orchestration.
+The participant mapping resolves virtual ids to backend ranks for this target.
 
 ## Example 4: External Framework Wrapper Path
 
 ```cpp
-void torch_paged_attention(
+void torch_event_copy(
     torch_workspace_view workspace,
     torch_event_view events,
     dist_handle handle,
-    std::int32_t num_tiles,
-    std::int32_t num_tokens) {
-  paged_attention_orchestrate(
+    std::int32_t tiles) {
+  cuda_nvshmem_event_copy_orchestrate(
       wrapper_workspace(workspace),
       wrapper_events(events),
       wrapper_nvshmem(handle),
-      num_tiles,
-      num_tokens);
+      tiles);
 }
 ```
 
 Feature shown: Megacu itself stays C++ only, while external framework wrappers
 can call the compiled orchestrate program directly.
+
+## Example 5: What Runs
+
+For `cuda_nvshmem_event_copy_orchestrate`, the built target runs this sequence:
+
+1. runtime C++ calls
+   `cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles)`;
+2. the wrapper binds typed runtime views to lowered resource/event slots;
+3. `executor<event_copy_program>::run` launches the selected static persistent
+   CUDA/NVSHMEM path;
+4. the dispatcher metadata maps each `tile_domain` point to producer and
+   consumer backend peers;
+5. the producer kernel writes payload and signals `ready_event` through the
+   NVSHMEM adapter;
+6. the consumer kernel waits on the resolved `ready_event` endpoint and checks
+   payload visibility.
+
+No step parses `"ready"` or `"producer"` at runtime.

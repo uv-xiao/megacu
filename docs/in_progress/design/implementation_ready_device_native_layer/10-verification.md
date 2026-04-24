@@ -36,10 +36,13 @@
 
 - CMake/build tests that produce reusable component targets
 - CMake/build tests that produce one orchestrate target from those components
+- build evidence that `PROGRAM event_copy_program` metadata is produced by the
+  native C++ build path, not by Python or runtime parsing
 - native build checks that the artifact is produced by ordinary CUDA/C++
   compilation rather than runtime code generation
 - direct-call smoke tests for the compiled orchestrate program
-- generated-code inspection for the first CUDA/NVSHMEM target
+- generated-code or metadata inspection for the first CUDA/NVSHMEM target,
+  including domain, participant, event, dispatch, schedule, and backend slots
 - repeated-run tests showing the internal `run(...)` path stays cheap
 - integration tests showing CMake/build drive target creation while runtime C++
   only calls the compiled orchestration
@@ -56,7 +59,11 @@
 - Dispatcher, scheduler, and lowering contracts in
   `07-dispatcher-scheduler-kernel.md`:
   generated/lowered metadata inspection showing op, resource, event, dispatch,
-  schedule, kernel, and backend payload ownership.
+  participant, schedule, kernel, and backend payload ownership.
+- Kernel context and backend primitive examples in `03-program.md` and
+  `08-examples.md`:
+  compile-only checks showing kernels use typed `kernel_context` APIs instead
+  of string event lookup or hand-authored backend signal addresses.
 - First slice runtime behavior in `09-first-validation-slice.md`:
   two-rank CUDA/NVSHMEM test where hardware exists; explicit skip reason where
   local NVSHMEM multi-GPU execution is unavailable.

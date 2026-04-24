@@ -15,6 +15,7 @@ Inputs from the program model:
 
 - named op
 - logical work domain
+- virtual participant placement
 - resource usage
 - explicit event dependencies
 - optional mapping hints
@@ -35,6 +36,8 @@ First dispatcher contract:
 - input: lowered program facts from the public builder
 - output: dispatch table mapping logical domain instances to execution
   placements
+- output: participant table mapping virtual participants at each domain point
+  to backend-native peers, ranks, lanes, or CTAs
 - no ownership of event wait/signal semantics
 - no ownership of execution order
 - no public authoring API beyond optional placement hints
@@ -89,6 +92,7 @@ First kernel-lowering contract:
 
 - input: named op table, typed resource table, event table, dispatch table, and
   selected scheduler payload
+- input: participant table from dispatcher and backend event-layout rules
 - output: CUDA/NVSHMEM executable path plus inspection metadata
 - owns stitching and launch payload construction
 - does not invent public fragment-op APIs
@@ -120,6 +124,68 @@ then chosen and specialized during orchestrate-target lowering.
 
 Runtime orchestration must not choose among them.
 
+## Backend Resolution Contract
+
+Backend adapters own the final translation from Megacu slots to native backend
+objects.
+
+For CUDA/NVSHMEM first, `src/backends/nvshmem/` must provide:
+
+- `nvshmem_team_view`: typed runtime handle passed into the orchestrate program;
+- event-storage layout rules for `remote_event`;
+- peer resolution from dispatcher participant slots to NVSHMEM PE ids;
+- signal/wait helpers callable from lowered kernels;
+- host/runtime validation that the supplied team and event storage match the
+  target envelope.
+
+Initial device-side API shape:
+
+```cpp
+namespace megacu::nvshmem {
+struct event_endpoint;
+
+__device__ void signal(
+    megacu::cuda::kernel_context ctx,
+    event_endpoint endpoint,
+    std::uint64_t value);
+
+__device__ void wait(
+    megacu::cuda::kernel_context ctx,
+    event_endpoint endpoint,
+    std::uint64_t value);
+}
+```
+
+`event_endpoint` is created by lowering and accessed through
+`kernel_context::event<tag>(...)`. User kernels should not compute NVSHMEM
+signal addresses directly unless they intentionally bypass Megacu for a
+handwritten baseline.
+
+## Kernel Context Contract
+
+Lowered kernels receive a platform-specific context. For CUDA first:
+
+```cpp
+namespace megacu::cuda {
+struct kernel_context {
+  template <class DomainTag>
+  __device__ domain_point<DomainTag> domain_point() const;
+
+  template <class ParticipantTag, class DomainPoint>
+  __device__ backend_peer peer(DomainPoint point) const;
+
+  template <class EventTag, class DomainPoint>
+  __device__ megacu::nvshmem::event_endpoint event(
+      DomainPoint point,
+      backend_peer peer) const;
+};
+}
+```
+
+The context is target-specific. It may be a compact pointer to generated
+metadata, inline constants, or registers produced by lowering. Its observable
+contract is typed lookup by tag, not string lookup by name.
+
 ## Internal Records
 
 The orchestrate target lowering may create internal records, but those records
@@ -131,13 +197,14 @@ Minimum internal records for the first slice:
 - resource table: typed view slots used by lowered code
 - event table: event storage, scope, release/acquire dependencies
 - dispatch table: logical domain to execution placement
+- participant table: virtual participant to backend peer/rank/lane mapping
 - schedule payload: static persistent execution order
 - kernel payload: named kernel entrypoints and stitched execution metadata
 - backend payload: NVSHMEM handles and signal/wait metadata needed by kernels
 
 Each record must have one owner:
 
-- public orchestrator builders collect semantic facts;
+- public program builders collect semantic facts;
 - dispatcher owns placement;
 - scheduler owns execution order;
 - lowering owns kernel stitching and launch payloads;

@@ -377,3 +377,18 @@ were later promoted into `docs/design/`.
     evidence into the owning component chapters. The active design should make
     each implementable component concrete instead of centralizing all detail in
     a final implementation-contract appendix.
+
+- 2026-04-24 Asia/Shanghai - Explain orchestrator, operators, execution, and terms
+  > I found things /APIs are not concrete enough. Fundamentally, we need to make it clear what we program in orchestrator and kernels (operators), and how they will be runned. For example, when we write event (with a name) or call primitives in a kernel for communication with another kernel (identified by like a virtual id?), how they will be runned with backend things provided (like providing how virtual id is resolved and event names are resolved). Also, all implementation APIs are quite opaque still. Another problem is that we don't give enough explanation for concepts/terms yet. For example, I just cannot understand what the workspace or domain mean.
+  - Context: User reviewed the component-owned contracts and found that the
+    design still lacked a concrete execution model and term definitions.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: Define the vocabulary before APIs, distinguish
+    diagnostic labels from typed tags, specify what users program in the
+    orchestrator versus kernels, and document how lowering resolves domains,
+    virtual participants, event tags, workspace views, and backend handles into
+    runnable CUDA/NVSHMEM behavior.

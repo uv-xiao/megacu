@@ -58,6 +58,7 @@ What CMake/program compilation does:
 
 - run the chosen dispatcher logic on the concrete program
 - derive scheduler payloads and event/resource tables
+- assign compact slots to op, domain, participant, resource, and event tags
 - choose and parameterize the kernel-lowering engine
 - compile/link the user-authored orchestrate code with the chosen components
 - optionally emit inspection metadata if the selected backend needs it
@@ -65,14 +66,27 @@ What CMake/program compilation does:
 The important boundary is that this step should reuse existing component
 artifacts by default. It should not force recompilation of reusable engines.
 
+The first implementation should obtain program metadata from the explicit C++
+descriptor, not from a Python tool and not from runtime parsing. CMake can do
+that by compiling a small native materializer for `PROGRAM event_copy_program`
+or by instantiating C++ templates that emit target metadata during the native
+build. The exact mechanism is an implementation detail, but it must stay inside
+the native build graph and produce ordinary generated headers/objects.
+
 Initial CMake API shape:
 
 ```cmake
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_event_copy
+  PROGRAM event_copy_program
   SOURCES event_copy_orchestrate.cc
   KERNELS event_copy_kernels.cu
+  OPS
+    write_then_signal=write_then_signal_kernel
+    wait_then_check=wait_then_check_kernel
   COMPONENTS cuda_nvshmem_static
+  MAP producer_lane TO RANK 0
+  MAP consumer_lane TO RANK 1
 )
 ```
 
@@ -81,9 +95,29 @@ Required properties:
 - component targets are reusable build artifacts;
 - orchestrate targets depend on component targets;
 - strategy choice happens in CMake/native build metadata;
+- virtual participant mappings are resolved into target metadata;
 - runtime C++ cannot choose a different dispatcher, scheduler, lowering,
   platform, or backend for that target;
 - the build can emit inspection metadata for generated or lowered code.
+
+## Resolution Pipeline
+
+The design has three resolution stages:
+
+1. **Authoring**: users write typed tags and labels:
+   `event_copy_program`, `tile_domain`, `ready_event`, `producer_lane`,
+   `"ready"`.
+2. **Target lowering**: CMake-selected components turn tags into compact target
+   metadata:
+   domain slot, event slot, participant slot, dispatch table, schedule payload,
+   backend event layout.
+3. **Runtime binding**: the compiled orchestrate function receives typed
+   runtime values:
+   workspace views, event storage, NVSHMEM team, and dynamic extents inside the
+   target envelope. These values fill the already-lowered slots.
+
+Labels never drive runtime lookup. They appear in diagnostics, metadata dumps,
+and verification output.
 
 ## Runtime Surface
 
@@ -101,11 +135,30 @@ The runtime should not re-decide strategy.
 Runtime code should link the orchestrate target and call an explicit function:
 
 ```cpp
+event_copy_workspace workspace{scratch, payload};
+megacu::event_storage_view events{event_buffer, event_bytes};
+megacu::nvshmem_team_view team{nvshmem_team};
+
 cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles);
 ```
 
 There is no primary runtime API for loading a module by path or passing an
 untyped environment bag.
+
+The direct function can be a small wrapper around the compiled executor:
+
+```cpp
+void cuda_nvshmem_event_copy_orchestrate(
+    event_copy_workspace workspace,
+    megacu::event_storage_view events,
+    megacu::nvshmem_team_view team,
+    std::int32_t tiles) {
+  megacu::executor<event_copy_program> exec{team};
+  exec.bind<workspace_slot>(workspace);
+  exec.bind<event_storage_slot>(events);
+  exec.run(megacu::extent<tiles_extent>(tiles));
+}
+```
 
 ## Orchestrate
 
@@ -139,6 +192,22 @@ program.
 
 If a structural property changes, the target may need to be rebuilt by the
 build graph. `run` must not absorb that work.
+
+For the first static persistent CUDA/NVSHMEM target, `run` should do only:
+
+1. validate runtime extents against the target envelope;
+2. bind explicit runtime views and backend handles to lowered slots;
+3. launch the selected persistent CUDA path or direct launch sequence;
+4. return status or propagate platform/backend errors.
+
+`run` must not:
+
+- parse names;
+- allocate the workspace;
+- choose participant mappings;
+- choose dispatcher/scheduler/lowering/backend;
+- create CMake targets;
+- compile or link code.
 
 ## What Changed From The Previous Model
 
