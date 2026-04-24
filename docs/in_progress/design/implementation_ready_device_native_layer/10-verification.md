@@ -67,6 +67,8 @@
 - checks proving kernel lowering and target lowering select/link existing
   implementations and materialize metadata rather than emit new C++/CUDA source
 - direct-call smoke tests for the compiled orchestrate program
+- direct-call smoke tests proving compiled targets return `megacu::status` for
+  validation, launch, and backend errors rather than throwing from the core ABI
 - linked-artifact or metadata inspection for the first CUDA/NVSHMEM target,
   including domain, participant, event, dispatch, schedule, and backend slots
 - metadata inspection proving the phased target uses `progress_model::phased`
@@ -91,6 +93,8 @@
   id/count before kernel launch
 - tests proving symmetric event and partial buffers are required when the
   backend plan requires remote NVSHMEM access
+- tests proving symmetric event and partial buffers carry backend/session
+  identities matching the launched `team_view`
 
 ## Concrete Metadata Checks
 
@@ -117,12 +121,21 @@ The first metadata JSON must be checked for these facts:
   worker;
 - for the overlap target: blocking acquires only wait on events produced by the
   same residency group or by a completed earlier phase;
+- event-use metadata names `event_wait_mode` for each acquire, and any
+  `blocking_device_wait` acquire is covered by the overlap guard;
+- schedule entries include phase, residency group, participant role, and wait
+  mode fields;
+- the overlap `schedule_plan` includes a `cuda_residency_envelope` with
+  persistent grid blocks, threads per block, minimum SM count, blocks per SM,
+  and cooperative-launch requirement;
 - a backend plan that names event storage size, event offsets, team size, and
-  whether multimem reduce is enabled.
+  whether multimem reduce is enabled;
 - a platform launch slot for `megacu::cuda::launch_view`;
 - a backend target envelope with `TEAM_SIZE 2` for the first proof;
 - resource metadata marking `partial` and `events` as requiring symmetric
-  NVSHMEM-accessible storage.
+  NVSHMEM-accessible storage;
+- runtime view metadata or adapter tests prove event and partial symmetric views
+  carry the same backend/session identity as the launched `team_view`.
 
 Any missing item means the design has not become implementation-ready.
 

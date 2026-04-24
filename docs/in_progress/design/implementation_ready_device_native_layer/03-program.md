@@ -153,10 +153,17 @@ struct event_decl {
 
 enum class event_use_kind : std::uint8_t { acquire_one, acquire_all, release };
 
+enum class event_wait_mode : std::uint8_t {
+  none,
+  blocking_device_wait,
+  phase_satisfied
+};
+
 struct event_use {
   slot_index event_slot;
   event_use_kind kind;
   slot_index over_domain_slot;
+  event_wait_mode wait_mode;
 };
 
 struct arg_binding {
@@ -170,6 +177,7 @@ struct submission_decl {
   std::string_view op_name;
   slot_index work_domain_slot;
   slot_index participant_slot;
+  std::uint16_t phase;
   std::span<const arg_binding> args;
   std::span<const event_use> events;
 };
@@ -191,6 +199,12 @@ the public API.
 
 The first implementation can use owning `std::vector` storage behind the spans.
 The important contract is the field set above, not the container choice.
+
+`event_wait_mode` is not a public scheduler API. It records whether a lowered
+event acquire may block in device code. The first builder can infer it from the
+event argument helper used by the target or from a CMake op requirement. Target
+lowering needs this bit so the overlap scheduler can reject blocking waits that
+do not have a co-residency or completed-phase proof.
 
 ## First Implementation Shape
 
@@ -266,7 +280,7 @@ struct gemm_allreduce_overlap_program {
   }
 };
 
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -351,12 +365,39 @@ Initial API shape:
 ```cpp
 namespace megacu {
 struct workspace_view;
-struct event_storage_view {
+enum class status_code : std::uint8_t {
+  ok,
+  invalid_argument,
+  backend_error
+};
+struct status {
+  status_code code;
+  std::string_view message;
+};
+struct backend_id {
+  std::uint16_t value;
+};
+struct session_id {
+  std::uint64_t value;
+};
+struct symmetric_buffer_view {
   void *data;
   std::int64_t bytes;
-  bool symmetric;
+  backend_id backend;
+  session_id session;
 };
-struct tensor_view;
+struct event_storage_view {
+  symmetric_buffer_view buffer;
+};
+struct tensor_view {
+  void *data;
+  std::int64_t bytes;
+  dtype type;
+};
+struct symmetric_tensor_view {
+  symmetric_buffer_view buffer;
+  dtype type;
+};
 }
 ```
 
@@ -371,7 +412,7 @@ provided storage:
 struct gemm_ar_workspace {
   megacu::tensor_view a;
   megacu::tensor_view b;
-  megacu::tensor_view partial;
+  megacu::symmetric_tensor_view partial;
   megacu::tensor_view c;
   megacu::span<std::byte> scratch;
 };
@@ -392,7 +433,8 @@ The workspace is not where Megacu stores event state. Event state lives in the
 separate `event_storage_view` so the design can reason about payload storage
 and synchronization storage independently.
 
-For remote CUDA+NVSHMEM events, `event_storage_view::symmetric` must be true.
+For remote CUDA+NVSHMEM events, `event_storage_view::buffer` must carry
+backend/session identity matching the `team_view` passed to the compiled target.
 The launch adapter or caller owns allocation; the compiled target owns
 validation before launch.
 

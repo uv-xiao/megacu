@@ -116,8 +116,9 @@ artifacts by default. It should not force recompilation of reusable engines.
 
 The first implementation should obtain program metadata from the explicit C++
 descriptor, not from a Python tool and not from runtime parsing. CMake can do
-that by compiling a small native materializer for
-`PROGRAM gemm_allreduce_overlap_program` or by instantiating C++ templates that
+that by compiling small native materializers for
+`PROGRAM gemm_allreduce_phased_program` and
+`PROGRAM gemm_allreduce_overlap_program`, or by instantiating C++ templates that
 materialize target metadata during the native build. The exact mechanism is an
 implementation detail, but it must stay inside the native build graph and must
 not emit new C++/CUDA source as the normal lowering mechanism.
@@ -125,15 +126,19 @@ not emit new C++/CUDA source as the normal lowering mechanism.
 For the first implementation, choose the materializer executable path because it
 is easiest to test:
 
-1. CMake compiles a tiny host executable
-   `megacu_materialize_cuda_nvshmem_gemm_allreduce`.
+1. CMake compiles tiny host executables
+   `megacu_materialize_cuda_nvshmem_gemm_allreduce_phased` and
+   `megacu_materialize_cuda_nvshmem_gemm_allreduce_overlap`.
 2. That executable links the user descriptor source and Megacu host lowering
    libraries.
-3. At build time, it calls
-   `megacu::detail::materialize_program<gemm_allreduce_overlap_program>()`.
-4. It writes:
-   - `cuda_nvshmem_gemm_allreduce.megacu.json` for inspection tests;
-   - `cuda_nvshmem_gemm_allreduce.megacu.bin` for compact runtime metadata.
+3. At build time, each executable calls the matching
+   `megacu::detail::materialize_program<...>()`.
+4. They write:
+   - `cuda_nvshmem_gemm_allreduce_phased.megacu.json` and
+     `cuda_nvshmem_gemm_allreduce_overlap.megacu.json` for inspection tests;
+   - `cuda_nvshmem_gemm_allreduce_phased.megacu.bin` and
+     `cuda_nvshmem_gemm_allreduce_overlap.megacu.bin` for compact runtime
+     metadata.
 5. The orchestrate target embeds or links the binary metadata as data.
 
 This is metadata generation, not source generation. The materializer must not
@@ -142,6 +147,20 @@ write `.cc`, `.cu`, `.cuh`, `.ptx`, or `.cubin` files for the program.
 Initial CMake API shape:
 
 ```cmake
+megacu_add_orchestrate_target(
+  TARGET cuda_nvshmem_gemm_allreduce_phased
+  PROGRAM gemm_allreduce_phased_program
+  SOURCES gemm_allreduce_orchestrate.cc
+  KERNELS gemm_allreduce_kernels.cu
+  OPS
+    gemm_tile_produce=gemm_tile_produce_kernel
+    allreduce_tile_consume=allreduce_tile_consume_kernel
+  COMPONENTS cuda_nvshmem_static
+  SCHEDULER_MODE phased
+  BACKEND_ENVELOPE
+    TEAM_SIZE 2
+)
+
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
   PROGRAM gemm_allreduce_overlap_program
@@ -185,7 +204,8 @@ The first implementation should fail CMake configure or build if:
 The design has three resolution stages:
 
 1. **Authoring**: users write typed tags and labels:
-   `gemm_allreduce_overlap_program`, `output_tile_domain`,
+   `gemm_allreduce_phased_program`, `gemm_allreduce_overlap_program`,
+   `output_tile_domain`,
    `partial_ready_event`, `compute_lane`, `"partial_ready"`.
 2. **Target lowering**: CMake-selected components turn tags into compact target
    metadata:
@@ -247,7 +267,7 @@ The parameterized function fills those slots internally. It gives users one
 ordinary C++ call:
 
 ```cpp
-cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     workspace, events, launch, team, problem);
 ```
 
@@ -290,14 +310,20 @@ The runtime should not re-decide strategy.
 Runtime code should link the orchestrate target and call an explicit function:
 
 ```cpp
-gemm_ar_workspace workspace{a, b, partial, c, scratch};
-megacu::event_storage_view events{event_buffer, event_bytes, true};
+megacu::symmetric_buffer_view partial_buffer =
+    session.symmetric_alloc(partial_bytes, 128);
+gemm_ar_workspace workspace{a, b, typed_symmetric(partial_buffer, dtype), c,
+                            scratch};
+megacu::symmetric_buffer_view event_buffer =
+    session.symmetric_alloc(event_bytes, alignof(std::uint64_t));
+megacu::event_storage_view events{event_buffer};
 megacu::cuda::launch_view launch{stream, device_ordinal};
 megacu::nvshmem::team_view team{nvshmem_team, my_pe, n_pes, world_pe, world_n_pes,
-                                device_ordinal, megacu::nvshmem::ownership::external};
+                                device_ordinal, backend, session,
+                                megacu::nvshmem::ownership::external};
 gemm_ar_problem problem{M, N, K, strides, tile_shape};
 
-cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     workspace, events, launch, team, problem);
 ```
 
@@ -307,7 +333,7 @@ untyped environment bag.
 The direct function is the compiled target ABI:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -355,7 +381,7 @@ For the first static persistent CUDA/NVSHMEM target, `run` should do only:
 1. validate runtime extents against the target envelope;
 2. map explicit runtime views and backend handles to lowered slots;
 3. launch the selected persistent CUDA path or direct launch sequence;
-4. return status or propagate platform/backend errors.
+4. return `megacu::status` for validation, launch, or backend errors.
 
 `run` must not:
 

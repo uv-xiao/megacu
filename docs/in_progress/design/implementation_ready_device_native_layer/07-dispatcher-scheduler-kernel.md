@@ -150,14 +150,22 @@ enum class residency_role : std::uint8_t {
   comm
 };
 
+enum class event_wait_mode : std::uint8_t {
+  none,
+  blocking_device_wait,
+  phase_satisfied
+};
+
 struct schedule_entry {
   std::uint32_t order;
   std::uint32_t dispatch_entry_index;
   schedule_action action;
   std::uint16_t required_event_slot;
   std::uint16_t released_event_slot;
+  std::uint16_t phase;
   std::uint16_t residency_group;
   residency_role role;
+  event_wait_mode wait_mode;
 };
 
 struct residency_group {
@@ -167,11 +175,20 @@ struct residency_group {
   bool all_workers_must_be_launched_together;
 };
 
+struct cuda_residency_envelope {
+  std::uint16_t persistent_grid_blocks;
+  std::uint16_t threads_per_block;
+  std::uint16_t min_sm_count;
+  std::uint16_t max_blocks_per_sm;
+  bool requires_cooperative_launch;
+};
+
 struct schedule_plan {
   progress_model progress;
   std::uint16_t num_compute_workers;
   std::uint16_t num_comm_workers;
   std::span<const residency_group> residency_groups;
+  cuda_residency_envelope residency;
   std::span<const schedule_entry> entries;
 };
 }
@@ -204,8 +221,11 @@ For `progress_model::co_resident_persistent`, the schedule plan must prove:
   `residency_group`;
 - the group has at least one compute worker and one communication worker;
 - all workers in the group are launched by the same persistent entrypoint;
-- the persistent grid size is bounded so those workers are resident worker loops,
+- `cuda_residency_envelope::persistent_grid_blocks` is no larger than
+  `min_sm_count * max_blocks_per_sm`, so those workers are resident worker loops,
   not unbounded CUDA blocks waiting for blocks that may never be scheduled;
+- runtime CUDA validation checks the current device has at least `min_sm_count`
+  SMs and supports cooperative launch when `requires_cooperative_launch` is true;
 - no blocking wait crosses to a different residency group unless that wait is
   known to be satisfied by a completed earlier phase.
 
@@ -374,11 +394,16 @@ Runtime validation for this plan must check:
 - `team.team_n_pes` matches the rank-domain extent used by target lowering;
 - `launch.device_ordinal` matches the CUDA device selected before NVSHMEM
   initialization;
-- `events.bytes` is large enough for every `event_layout_entry`;
-- `events` is symmetric when any lowered event has remote scope;
-- `workspace.partial` is symmetric or otherwise acceptable to the selected
-  NVSHMEM primitive;
+- `events.buffer.bytes` is large enough for every `event_layout_entry`;
+- `events.buffer.backend` and `events.buffer.session` match the launched
+  `team_view`;
+- `events.buffer` is symmetric when any lowered event has remote scope;
+- `workspace.partial.buffer.backend` and `workspace.partial.buffer.session`
+  match the launched `team_view` when the selected NVSHMEM primitive requires
+  remote access;
 - multimem-specific paths are only enabled when the backend reports support.
+- overlap schedules only launch when the current CUDA device satisfies the
+  materialized `cuda_residency_envelope`.
 
 ## Kernel Context Contract
 

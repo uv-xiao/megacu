@@ -30,10 +30,23 @@ struct launch_view {
 }
 
 namespace megacu {
-struct event_storage_view {
+struct backend_id {
+  std::uint16_t value;
+};
+
+struct session_id {
+  std::uint64_t value;
+};
+
+struct symmetric_buffer_view {
   void *data;
   std::int64_t bytes;
-  bool symmetric;
+  backend_id backend;
+  session_id session;
+};
+
+struct event_storage_view {
+  symmetric_buffer_view buffer;
 };
 }
 
@@ -50,6 +63,8 @@ struct team_view {
   int world_pe;
   int world_n_pes;
   int cuda_device_ordinal;
+  megacu::backend_id backend;
+  megacu::session_id session;
   ownership lifetime;
 };
 }
@@ -58,7 +73,7 @@ struct team_view {
 The first compiled target ABI should therefore be:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -69,6 +84,10 @@ void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
 `launch` is platform state. `team` is backend state. Keeping both explicit avoids
 putting CUDA stream/device policy into the NVSHMEM handle and lets framework
 wrappers pass their current stream without changing backend semantics.
+
+`backend_id` and `session_id` are runtime validation identities, not global
+registry lookups. They let the compiled target reject a team, event buffer, and
+symmetric workspace buffer that were not created by the same backend session.
 
 ## Target Team-Size Envelope
 
@@ -131,8 +150,10 @@ class mpi_nvshmem_session {
   megacu::cuda::launch_view launch(cudaStream_t stream) const;
   megacu::nvshmem::team_view team() const;
 
-  void *symmetric_alloc(std::size_t bytes, std::size_t alignment);
-  void symmetric_free(void *ptr);
+  megacu::symmetric_buffer_view symmetric_alloc(
+      std::size_t bytes,
+      std::size_t alignment);
+  void symmetric_free(megacu::symmetric_buffer_view buffer);
 };
 }
 ```
@@ -208,7 +229,8 @@ Adapter creation responsibilities:
 7. call `nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, ...)` with the current
    rank and world size;
 8. validate NVSHMEM PE id/count against Torch rank/world size;
-9. expose `team_view` and `launch_view` to the C++ extension.
+9. expose `team_view`, `launch_view`, and session-owned symmetric buffer views
+   to the C++ extension.
 
 The adapter may use NCCL, Gloo, or another Torch process-group backend only for
 control-plane operations. It must not implement the target's device
@@ -218,8 +240,7 @@ Torch wrapper responsibilities before calling the compiled target:
 
 - check all tensors are CUDA tensors on the current device;
 - check `a`, `b`, and `c` meet the target's dtype and layout envelope;
-- check `partial` and `events` are symmetric NVSHMEM allocations from the same
-  `NvshmemSession`;
+- check `partial`, `events`, and `team` share the same backend/session identity;
 - use the current PyTorch CUDA stream to fill `megacu::cuda::launch_view`;
 - call the compiled target directly through the extension binding.
 
@@ -240,16 +261,17 @@ For the first GEMM+AllReduce target:
 
 - `workspace.a`, `workspace.b`, and `workspace.c` may be ordinary local CUDA
   tensor views if the selected kernels only access the local PE's storage.
-- `workspace.partial` must be symmetric or otherwise peer-addressable by the
-  selected NVSHMEM reduction primitive.
-- `events.data` must be symmetric NVSHMEM-accessible storage because remote PEs
-  signal and wait on per-tile readiness.
+- `workspace.partial` must be a `symmetric_buffer_view` or a typed tensor view
+  backed by a `symmetric_buffer_view` from the same session as `team`.
+- `events.buffer` must be symmetric NVSHMEM-accessible storage from the same
+  session as `team` because remote PEs signal and wait on per-tile readiness.
 - the adapter that allocates symmetric memory must also free it after all kernels
   using it are complete.
 
-The backend plan must name which resource slots require symmetric allocation.
-The runtime target must reject a nonsymmetric view when the selected backend plan
-requires symmetry.
+The backend plan must name which resource slots require symmetric allocation and
+which backend/session identity each slot must match. The runtime target must
+reject ordinary local CUDA views when the selected backend plan requires
+symmetric NVSHMEM-accessible storage.
 
 ## Runtime Validation
 
@@ -258,16 +280,18 @@ Before `run_static_persistent(...)`, the compiled target must validate:
 - `launch.device_ordinal == team.cuda_device_ordinal`;
 - `team.team_n_pes` matches the target `TEAM_SIZE` envelope;
 - `team.team_my_pe` is in `[0, team.team_n_pes)`;
-- `events.bytes` is at least the backend-plan event-storage requirement;
-- `events.symmetric == true` for remote events;
-- every workspace field required to be symmetric is marked symmetric or is
-  represented by an adapter-owned symmetric view;
+- `events.buffer.bytes` is at least the backend-plan event-storage requirement;
+- `events.buffer.backend == team.backend`;
+- `events.buffer.session == team.session`;
+- every workspace field required to be symmetric is represented by a symmetric
+  buffer view with `backend/session` matching `team`;
 - all CUDA tensor pointers belong to `launch.device_ordinal`;
 - the target is called after NVSHMEM initialization and before finalization.
 
-Validation failures should return or throw host-side errors before kernel
-launch. Device assertions are not an acceptable primary validation mechanism for
-these conditions.
+Validation failures must return a non-OK `megacu::status` before kernel launch.
+Framework adapters may translate that status into Python exceptions. Device
+assertions are not an acceptable primary validation mechanism for these
+conditions.
 
 ## Failure Modes
 

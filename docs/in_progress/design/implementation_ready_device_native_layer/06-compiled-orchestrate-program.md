@@ -21,7 +21,7 @@ struct n_tiles_extent;
 
 // Ordinary parameterized function exported by the compiled orchestrate target.
 // It is the user/framework call surface; there is no public executor object.
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -75,20 +75,55 @@ struct gemm_ar_problem {
 struct gemm_ar_workspace {
   megacu::tensor_view a;
   megacu::tensor_view b;
-  megacu::tensor_view partial;
+  megacu::symmetric_tensor_view partial;
   megacu::tensor_view c;
   megacu::span<std::byte> scratch;
 };
 ```
 
-The first `tensor_view` only needs:
+The first view types only need:
 
 ```cpp
 namespace megacu {
+enum class status_code : std::uint8_t {
+  ok,
+  invalid_argument,
+  backend_error
+};
+
+struct status {
+  status_code code;
+  std::string_view message;
+};
+
 struct tensor_view {
   void *data;
   std::int64_t bytes;
   dtype type;
+};
+
+struct backend_id {
+  std::uint16_t value;
+};
+
+struct session_id {
+  std::uint64_t value;
+};
+
+struct symmetric_buffer_view {
+  void *data;
+  std::int64_t bytes;
+  backend_id backend;
+  session_id session;
+};
+
+struct symmetric_tensor_view {
+  symmetric_buffer_view buffer;
+  dtype type;
+};
+
+struct event_storage_view {
+  symmetric_buffer_view buffer;
 };
 }
 ```
@@ -116,7 +151,7 @@ The orchestrate function is ordinary C++ in the target. It may be handwritten in
 `examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_orchestrate.cc`:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -135,7 +170,7 @@ void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
   slots.set_extent<n_tiles_extent>(ceil_div(problem.n, problem.tile_n));
   slots.set_problem(problem);
 
-  megacu::detail::run_static_persistent(metadata, slots);
+  return megacu::detail::run_static_persistent(metadata, slots);
 }
 ```
 
@@ -146,6 +181,7 @@ The invariants are:
 - it fills slots by typed tags;
 - it computes dynamic extents from `problem`;
 - it calls one linked execution entrypoint;
+- it returns `megacu::status` for validation, launch, and backend failures;
 - it does not choose strategy, parse names, compile, or load plugins.
 
 ## Why This Is Better
@@ -176,7 +212,8 @@ At runtime:
    `megacu::nvshmem::team_view`, and `gemm_ar_problem`;
 3. linked target code and metadata attach those values to pre-lowered slots and
    enter the selected CUDA/NVSHMEM execution path;
-4. internal fast-path execution launches the selected kernels;
+4. internal fast-path execution launches the selected kernels and returns
+   `megacu::status`;
 5. kernels use `kernel_context` to resolve current output-tile points, virtual
    participants, rank/team participants, and event endpoints.
 

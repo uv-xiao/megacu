@@ -58,14 +58,14 @@ struct event_storage_slot;
 struct m_tiles_extent;
 struct n_tiles_extent;
 
-void cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_phased_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -143,6 +143,9 @@ Required evidence:
   component artifacts;
 - compile-only checks for the orchestrate target ABI;
 - direct-call smoke test API checks;
+- smoke tests proving invalid runtime resources return non-OK
+  `megacu::status` and framework adapters translate that status only at the
+  framework boundary;
 - linked-artifact and metadata inspection for the built CUDA/NVSHMEM target;
 - inspection proving kernel lowering selected/linked existing implementations
   rather than emitting new CUDA/C++ source;
@@ -150,6 +153,11 @@ Required evidence:
 - metadata inspection proving the overlap target uses
   `progress_model::co_resident_persistent` and contains a residency group with
   both compute and communication workers;
+- metadata inspection proving blocking event acquires carry
+  `event_wait_mode::blocking_device_wait` and are guarded by either same-group
+  residency or an earlier completed phase;
+- runtime validation proving symmetric event and partial buffers carry the same
+  backend/session identity as the launched NVSHMEM team;
 - a negative build or materializer test proving a blocking communication wait
   without a valid co-residency guard fails target lowering;
 - MPI-launched two-rank output-correctness test where environment permits;

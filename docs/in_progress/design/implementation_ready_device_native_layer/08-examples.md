@@ -103,14 +103,14 @@ struct gemm_allreduce_overlap_program {
 The compiled target ABI is explicit:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_phased_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
     gemm_ar_problem problem);
 
-void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -296,7 +296,7 @@ policy, a launch adapter owns process/rank/bootstrap state, then the wrapper
 calls the compiled target directly.
 
 ```cpp
-void torch_gemm_allreduce(
+megacu::status torch_gemm_allreduce(
     torch_tensor a,
     torch_tensor b,
     torch_tensor c,
@@ -307,13 +307,13 @@ void torch_gemm_allreduce(
   auto launch = session.current_cuda_launch_view();
   auto team = session.team_view();
 
-  cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+  return cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
       gemm_ar_workspace{
           .a = wrapper_tensor(a),
           .b = wrapper_tensor(b),
-          .partial = wrapper_tensor(partial),
+          .partial = wrapper_symmetric_tensor(partial),
           .c = wrapper_tensor(c)},
-      wrapper_events(events),
+      wrapper_event_storage(events),
       launch,
       team,
       problem);
@@ -322,7 +322,9 @@ void torch_gemm_allreduce(
 
 The wrapper may cache workspace allocation or event buffers. It does not choose
 the scheduler or backend at runtime. It must check that `partial` and `events`
-come from the same NVSHMEM session and are symmetric allocations.
+come from the same NVSHMEM session and are symmetric allocations. The wrapper
+returns the compiled target `megacu::status`; a Python binding may translate a
+non-OK status into a Python exception at the framework boundary.
 
 The first Torch launch path should look like:
 
@@ -354,11 +356,17 @@ auto session = megacu::launch::mpi_nvshmem_session::create({
 
 auto launch = session.launch(stream);
 auto team = session.team();
-auto partial = session.symmetric_alloc(partial_bytes, 128);
-auto events = session.symmetric_alloc(event_bytes, alignof(std::uint64_t));
+megacu::symmetric_buffer_view partial_buffer =
+    session.symmetric_alloc(partial_bytes, 128);
+megacu::symmetric_buffer_view event_buffer =
+    session.symmetric_alloc(event_bytes, alignof(std::uint64_t));
 
-cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-    workspace, event_view(events), launch, team, problem);
+gemm_ar_workspace workspace{a, b, typed_symmetric(partial_buffer, dtype), c,
+                            scratch};
+megacu::event_storage_view events{event_buffer};
+
+auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+    workspace, events, launch, team, problem);
 ```
 
 Run it with:

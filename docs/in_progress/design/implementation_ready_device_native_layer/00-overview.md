@@ -85,5 +85,7 @@ stack.
   are organized as reusable CMake build targets.
 - Backend primitives remain callable inside native kernels.
 - Runtime C++ calls the compiled orchestrate program directly.
-- Megacu itself is C++/CUDA only; framework wrappers may exist outside the core
-  project boundary.
+- Megacu core records and lowering paths are C++/CUDA only. Reference framework
+  adapters may live in this repository, but no framework tensor, process-group,
+  or Python object may appear in `program_ir`, dispatcher plans, schedule plans,
+  kernel plans, backend plans, or compiled target ABI records.
