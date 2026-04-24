@@ -52,14 +52,24 @@ void cuda_nvshmem_event_copy_orchestrate(
     megacu::nvshmem_team_view team,
     std::int32_t tiles) {
   megacu::executor<event_copy_program> exec{team};
+
+  // `workspace` is payload/scratch storage supplied by the caller.
   exec.bind<workspace_slot>(workspace);
+
+  // `events` is synchronization storage used by lowered ready_event endpoints.
   exec.bind<event_storage_slot>(events);
+
+  // `tiles` is the runtime size of tile_domain for this run.
   exec.run(megacu::extent<tiles_extent>(tiles));
 }
 ```
 
 The matching program descriptor must declare the domains, participants, events,
 resources, and submissions shown in `03-program.md`.
+
+The first proof must show that changing `tiles` changes the number of logical
+tile points executed, while the target structure and backend mapping stay fixed
+by the build graph.
 
 The example must compile without public task descriptors, raw resource ids,
 runtime scheduler objects, string-based module loading, or string-based event

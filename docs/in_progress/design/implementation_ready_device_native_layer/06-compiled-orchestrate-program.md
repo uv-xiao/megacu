@@ -26,11 +26,24 @@ void cuda_nvshmem_event_copy_orchestrate(
     megacu::nvshmem_team_view team,
     std::int32_t tiles) {
   megacu::executor<event_copy_program> exec{team};
+
+  // Resource bindings: connect runtime values to descriptor slots.
   exec.bind<workspace_slot>(workspace);
   exec.bind<event_storage_slot>(events);
+
+  // Extent binding: this run has `tiles` tile-domain points.
   exec.run(megacu::extent<tiles_extent>(tiles));
 }
 ```
+
+`exec.bind<slot>(value)` does not perform string lookup. `slot` is a typed
+resource identity declared in `event_copy_program::describe(...)`; `value` is
+the concrete runtime view for this call.
+
+`megacu::extent<tiles_extent>(tiles)` does not allocate work. It supplies the
+runtime count for the domain extent declared by
+`p.extent<tiles_extent>("tiles")`. Lowered dispatcher and scheduler metadata
+use that count to decide which tile points run.
 
 The descriptor compiled into that target looks like:
 

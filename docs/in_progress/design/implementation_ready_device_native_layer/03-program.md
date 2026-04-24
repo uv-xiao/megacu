@@ -34,6 +34,12 @@ generic runtime-loaded module.
 - **Kernel context**: the lowered device-side context passed to operators so a
   kernel can resolve its current domain point, virtual peers, event endpoints,
   workspace slices, and backend primitives without string lookup.
+- **Extent**: the runtime size of a domain. In the first example,
+  `megacu::extent<tiles_extent>(tiles)` says how many tile domain points exist
+  for this run.
+- **Resource slot**: a typed program-declared input to the compiled target.
+  `workspace_slot` and `event_storage_slot` are not allocation ids; they are
+  typed binding points that `exec.bind<slot>(value)` fills at runtime.
 
 Names are labels. They are useful for diagnostics and generated metadata, but
 they are not runtime lookup keys. The implementation must use typed tags and
@@ -72,16 +78,45 @@ to inspect arbitrary C++ function bodies. Users write a C++ program descriptor
 with an explicit `describe(...)` method, then expose an ordinary runtime
 function that calls the compiled executor.
 
+For the first validation target:
+
+- `tiles` is a runtime integer count: how many independent payload copies to
+  run.
+- `tile` is the logical domain over those copies. If `tiles == 128`, the
+  domain has points `tile 0` through `tile 127`.
+- a producer task and a consumer task are submitted for each tile point.
+- `workspace` is caller-provided storage containing payload buffers and scratch
+  used by those tasks.
+- `events` is caller-provided event storage where the backend adapter can place
+  the concrete signal/wait state for `ready_event`.
+- `exec.bind<workspace_slot>(workspace)` binds the runtime workspace view to
+  the resource slot declared by `p.resource<workspace_slot, ...>()`.
+- `exec.bind<event_storage_slot>(events)` binds the runtime event-storage view
+  to the event storage slot used by `p.event<ready_event>(...)`.
+- `exec.run(megacu::extent<tiles_extent>(tiles))` supplies the runtime extent
+  for the `tiles_extent` declared by `p.extent<tiles_extent>("tiles")` and then
+  runs the lowered target.
+
 ```cpp
 struct event_copy_program {
   static void describe(megacu::program_builder &p) {
+    // Runtime value supplied by exec.run(megacu::extent<tiles_extent>(tiles)).
     auto tiles = p.extent<tiles_extent>("tiles");
+
+    // Logical work domain: one domain point per payload copy.
     auto tile = p.domain<tile_domain>("tile", tiles);
+
+    // Virtual communication endpoints. Target configuration maps them to
+    // backend-native ranks or lanes.
     auto producer = p.participant<producer_lane>("producer");
     auto consumer = p.participant<consumer_lane>("consumer");
+
+    // Typed runtime resources. Values are supplied by exec.bind<slot>(...).
     auto workspace = p.resource<workspace_slot, event_copy_workspace>("workspace");
     auto events = p.resource<event_storage_slot, megacu::event_storage_view>("events");
 
+    // Logical event family: one ready event per tile point from producer to
+    // consumer, backed by the event storage resource.
     auto ready = p.event<ready_event>(
         "ready",
         tile,
@@ -107,8 +142,12 @@ void cuda_nvshmem_event_copy_orchestrate(
     megacu::nvshmem_team_view team,
     std::int32_t tiles) {
   megacu::executor<event_copy_program> exec{team};
+
+  // Bind caller-provided storage to resource slots declared in describe(...).
   exec.bind<workspace_slot>(workspace);
   exec.bind<event_storage_slot>(events);
+
+  // Supply the runtime size of the tile domain and launch the lowered target.
   exec.run(megacu::extent<tiles_extent>(tiles));
 }
 ```
@@ -212,6 +251,15 @@ The orchestrate program receives this view, passes typed slices to submissions,
 and lowering records which resource slots kernels need. Allocation remains with
 the caller or framework wrapper.
 
+For `cuda_nvshmem_event_copy`, the workspace is deliberately small:
+
+- `payload`: the buffer written by producer tasks and checked by consumer tasks;
+- `scratch`: optional temporary storage for backend or kernel bookkeeping.
+
+The workspace is not where Megacu stores event state. Event state lives in the
+separate `event_storage_view` so the design can reason about payload storage
+and synchronization storage independently.
+
 ## Events
 
 Events remain first-class because they are the visible coordination mechanism
@@ -233,7 +281,7 @@ Initial API shape:
 ```cpp
 struct ready_event;
 
-auto ready = orch.event<ready_event>(
+auto ready = p.event<ready_event>(
     "ready",
     tile,
     megacu::remote_event{
@@ -255,6 +303,16 @@ stable program identity. Lowering turns `ready_event` into an event slot and an
 event-storage layout. At runtime, the backend adapter resolves that slot plus
 the current domain point and virtual participants into the concrete NVSHMEM
 signal address or equivalent backend object.
+
+For `cuda_nvshmem_event_copy`, `ready_event` means:
+
+- for each tile point, producer releases one ready event after writing payload;
+- for the same tile point, consumer acquires that ready event before reading
+  payload;
+- the event-storage resource gives the backend adapter memory where concrete
+  signal/wait state can live;
+- the event label `"ready"` may appear in logs or metadata dumps, but kernels
+  resolve the event through `ctx.event<ready_event>(tile, peer)`.
 
 ## Logical Work Domain
 
@@ -288,8 +346,9 @@ Initial API shape:
 ```cpp
 struct tile_domain;
 
-auto tile = orch.domain<tile_domain>("tile", tiles);
-orch.submit(ops::write_then_signal, megacu::over(tile), args);
+auto tiles = p.extent<tiles_extent>("tiles");
+auto tile = p.domain<tile_domain>("tile", tiles);
+p.submit(ops::write_then_signal{}, megacu::over(tile), args);
 ```
 
 The domain name is for authoring and diagnostics. Lowering may replace it with
@@ -297,6 +356,18 @@ compact ids in generated metadata, but those ids are not public authoring API.
 
 The first implementation only needs one-dimensional domains. Multi-dimensional
 helpers can be added later only if examples need them.
+
+In `cuda_nvshmem_event_copy`, the domain relation is:
+
+```text
+tiles_extent = runtime count, for example 128
+tile_domain  = logical set {0, 1, ..., 127}
+tile point   = one element of tile_domain, for example tile 17
+```
+
+The dispatcher decides how tile points map to CUDA blocks, persistent-worker
+lanes, ranks, or other backend-native execution coordinates. User code should
+not assume `tile 17` means CUDA block 17 or rank 17.
 
 ## Virtual Participants
 
@@ -309,17 +380,21 @@ Initial API shape:
 struct producer_lane;
 struct consumer_lane;
 
-auto producer = orch.participant<producer_lane>("producer");
-auto consumer = orch.participant<consumer_lane>("consumer");
-
-orch.map(producer, megacu::placement::rank(0));
-orch.map(consumer, megacu::placement::rank(1));
+auto producer = p.participant<producer_lane>("producer");
+auto consumer = p.participant<consumer_lane>("consumer");
 ```
 
-For static examples, the mapping may be stated in the orchestrate program or in
-the CMake target configuration. Either way, runtime kernels do not use these
-names as strings. Lowering creates a placement table that maps virtual
-participants and domain points to backend-native ids.
+For the first static example, the mapping is stated in the CMake target
+configuration:
+
+```cmake
+MAP producer_lane TO RANK 0
+MAP consumer_lane TO RANK 1
+```
+
+Runtime kernels do not use participant names as strings. Lowering creates a
+placement table that maps virtual participants and domain points to backend-
+native ids.
 
 Virtual participants are allowed only when they remove raw rank/worker ids from
 the public program. They must not become a second scheduler API.
@@ -332,12 +407,12 @@ typed arguments and dependencies.
 Initial API shape:
 
 ```cpp
-orch.submit(
+p.submit(
     ops::write_then_signal{},
     megacu::over(tile),
     megacu::place(producer),
     megacu::args()
-        .workspace(workspace)
+        .payload(workspace.payload)
         .signal(ready.release()));
 ```
 

@@ -47,12 +47,22 @@ struct event_storage_slot;
 
 struct event_copy_program {
   static void describe(megacu::program_builder &p) {
+    // `tiles` is a runtime count. It is supplied later by
+    // exec.run(megacu::extent<tiles_extent>(tiles)).
     auto tiles = p.extent<tiles_extent>("tiles");
+
+    // `tile` is the logical set of work items, one point per payload copy.
     auto tile = p.domain<tile_domain>("tile", tiles);
+
+    // These are virtual endpoints. CMake target metadata maps them to ranks.
     auto producer = p.participant<producer_lane>("producer");
     auto consumer = p.participant<consumer_lane>("consumer");
+
+    // Runtime resources. The direct wrapper fills them with exec.bind.
     auto workspace = p.resource<workspace_slot, event_copy_workspace>("workspace");
     auto events = p.resource<event_storage_slot, megacu::event_storage_view>("events");
+
+    // One logical event per tile point, backed by the events resource.
     auto ready = p.event<ready_event>(
       "ready",
       tile,
@@ -143,3 +153,13 @@ For `cuda_nvshmem_event_copy_orchestrate`, the built target runs this sequence:
    payload visibility.
 
 No step parses `"ready"` or `"producer"` at runtime.
+
+Term meanings in this example:
+
+- `tiles`: runtime count, such as `128`.
+- `tile`: logical domain created from that count, with points `0..127`.
+- `workspace`: caller-owned payload/scratch storage used by kernels.
+- `events`: caller-owned synchronization storage used by backend event
+  endpoints.
+- `exec.bind`: typed runtime resource binding, from slot tag to value.
+- `megacu::extent`: typed runtime extent binding, from extent tag to count.

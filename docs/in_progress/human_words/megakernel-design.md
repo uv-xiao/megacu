@@ -392,3 +392,16 @@ were later promoted into `docs/design/`.
     orchestrator versus kernels, and document how lowering resolves domains,
     virtual participants, event tags, workspace views, and backend handles into
     runnable CUDA/NVSHMEM behavior.
+
+- 2026-04-24 Asia/Shanghai - Clarify tiles, tile, workspace, events, bind, and extent
+  > You should make it more cler about that is tiles, tile, workspace, events, and what exec.bind , megacu::extent are.
+  - Context: User reviewed the descriptor/executor model and called out
+    specific opaque terms in the first API example.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`
+  - Agent interpretation: Explain `tiles` as runtime extent count, `tile` as
+    logical domain, `workspace` as caller-owned payload/scratch storage,
+    `events` as caller-owned synchronization storage, `exec.bind` as typed slot
+    binding, and `megacu::extent` as typed runtime extent binding.
