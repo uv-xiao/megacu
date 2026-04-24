@@ -43,6 +43,13 @@ for the phased and overlap GEMM+AllReduce targets.
   - overlap schedules require a co-residency guard;
   - direct orchestrate ABI validates typed runtime views and returns
     `megacu::status`;
+  - CUDA runtime tests exercise a real device stream, device allocation,
+    async device operation, and direct orchestrate calls;
+  - CUDA multi-card tests exercise two visible GPUs on one host, peer-copy
+    runtime plumbing, and one logical PE/orchestrate call per device;
+  - Docker NVSHMEM tests exercise two single-host PEs, NVSHMEM host bootstrap,
+    symmetric allocation, CUDA stream/device setup, and the direct orchestrate
+    ABI with NVSHMEM-backed symmetric views;
   - target creation uses CMake/native build plumbing without generated CUDA.
 
 ## Scope Checklist
@@ -54,9 +61,13 @@ for the phased and overlap GEMM+AllReduce targets.
 - [x] Implement materialization and target metadata sections
 - [x] Implement CMake component/orchestrate target plumbing
 - [x] Implement direct GEMM+AllReduce orchestrate ABI smoke path
+- [x] Add real CUDA single-device runtime smoke coverage
+- [x] Add single-host two-card CUDA runtime smoke coverage
 - [x] Add negative overlap-guard and metadata validation tests
-- [x] Verify locally across build, materialization, metadata, and ABI tests
-- [ ] Sync `docs/todo/` and `docs/in_progress/`
+- [x] Verify locally across build, materialization, metadata, ABI, CUDA device,
+  and CUDA two-card tests
+- [x] Add Docker-provisioned two-card NVSHMEM runtime validation
+- [x] Sync `docs/todo/` and `docs/in_progress/`
 
 ## Verification
 
@@ -70,16 +81,42 @@ for the phased and overlap GEMM+AllReduce targets.
   and no co-residency guard fails.
 - Direct ABI tests prove invalid runtime resources return non-OK
   `megacu::status` before any launch path.
+- CUDA runtime smoke tests prove the local build can touch a real CUDA device
+  through `CUDA::cudart`, create a stream, allocate device buffers, perform an
+  async device operation, and pass CUDA-backed views through the compiled
+  orchestrate ABI.
+- CUDA multi-card smoke tests prove the local build can touch two GPUs on the
+  same host, perform a peer copy between them, and pass one logical two-PE team
+  view per device through the compiled orchestrate ABI.
 - Static or grep check proves no runtime strategy selection, string event
   lookup, generated CUDA source, or generic `runtime_env` surface is introduced.
+- Host inspection currently finds CUDA, Open MPI, Docker, and two idle A100s,
+  but no host NVSHMEM headers, libraries, or launcher. Two-rank NVSHMEM
+  validation is therefore provided by a CUDA/NVSHMEM Docker environment.
+- Docker NVSHMEM smoke tests prove the packaged NVSHMEM host runtime can
+  bootstrap two PEs on one host, allocate symmetric buffers, synchronize both
+  PEs, and pass NVSHMEM-backed symmetric views into the compiled orchestrate
+  ABI on two visible GPUs.
 
 ## Tests
 
 - Add a focused build/compile-only test target for the two program descriptors.
 - Add materialization, metadata validation, CMake, and direct ABI smoke tests.
+- Add CUDA runtime smoke tests for one device and single-host two-card plumbing.
 - Run the repository CMake build and CTest suite.
-- If full CUDA/NVSHMEM tooling is unavailable locally, skip only the runtime
-  execution checks and record the reason.
+- If CUDA runtime is unavailable, skip only CUDA tests by absence of
+  `CUDAToolkit`; if fewer than two GPUs are visible, skip only the two-card
+  smoke with CTest skip code `77`.
+- If host NVSHMEM tooling is unavailable, use a Docker-provisioned NVSHMEM
+  environment for the two-rank single-host validation and record any remaining
+  skip reason explicitly.
+
+Current local evidence:
+
+```sh
+MEGACU_TEST_CUDA_DEVICES=5,6 ctest --test-dir build --output-on-failure
+tools/run_nvshmem_two_card_docker.sh
+```
 
 ## Docs
 

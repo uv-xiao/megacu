@@ -606,3 +606,17 @@ were later promoted into `docs/design/`.
     Hardware-dependent CUDA+NVSHMEM execution may still be skipped with an
     explicit reason when unavailable, but the implementation cannot stop at a
     non-verifiable public API slice.
+
+- 2026-04-24 Asia/Shanghai - Validate available CUDA hardware before NVSHMEM Docker
+  > This server has CUDA runtime, why we cannot validate on real device?
+
+  > We can first do single-device multi-card validation. And then we can use docker to setup nvshmem and run it on our single host, two-card.
+  - Context: User corrected the first implementation PR verification strategy
+    after local inspection showed CUDA runtime, multiple A100 GPUs, Open MPI,
+    and Docker were available, while host NVSHMEM tooling was not installed.
+  - Related: `docs/in_progress/public_builder_surface.md`, PR #3.
+  - Agent interpretation: The implementation PR should not skip hardware
+    validation just because host NVSHMEM is missing. It should first validate
+    CUDA on real devices, including a single-host two-card CUDA smoke path, and
+    then add Docker-provisioned CUDA+NVSHMEM validation for a two-card single
+    host run.

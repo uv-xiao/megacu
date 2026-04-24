@@ -2,6 +2,7 @@ research/
 .references/
 .repositories/
 /build/
+/build-*/
 /cmake-build-*/
 *.o
 *.a
