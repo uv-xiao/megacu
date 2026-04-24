@@ -21,6 +21,11 @@ Reasons:
 - generated runtime entrypoints were still too indirect compared with simply
   compiling and calling the authored orchestration.
 
+Megacu compilation must mean native compile and link, not translation into a
+new generated CUDA/C++/Triton/etc. program. The build may materialize compact
+target metadata, but the executable code comes from user-authored C++/CUDA
+kernels and reusable Megacu/backend/platform implementations.
+
 ## Thin Core Principle
 
 The thin core owns only what must remain visible in the authored orchestration:
@@ -114,7 +119,7 @@ The design should therefore assume:
 
 - reusable component compilation and orchestrate-program compilation/linking are
   driven by CMake/native build rules;
-- C++/CUDA is used for kernel authoring, build-time generation, and runtime
+- C++/CUDA is used for kernel authoring, metadata materialization, and runtime
   execution, but not for invoking build steps through the runtime API;
 - deployment-side C++ code links the compiled orchestrate program and calls it.
 

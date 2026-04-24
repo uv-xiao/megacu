@@ -32,7 +32,8 @@ They are the right place for:
 - compiling reusable dispatcher/scheduler/kernel-lowering targets
 - compiling reusable kernels and helper code
 - compiling/linking the authored orchestrate program target
-- executing any lowering/codegen needed by the chosen backend
+- materializing target metadata and selecting the required low-level
+  implementations
 - linking platform/backend adapters
 - producing optional inspection metadata
 
@@ -52,7 +53,7 @@ C++/CUDA is the right place for:
 - backend primitive headers and device calls
 - platform adapters
 - backend adapters
-- generated lowering code emitted during the build
+- reusable lowering implementations and linked target metadata
 - the authored orchestrate program
 - the internal `run(...)` path
 
@@ -96,13 +97,14 @@ For the first implementation, the cleanest split is:
 - **CMake/native build rules**
   - reusable component-target hooks
   - orchestrate-target hooks
-  - execution of any lowering/codegen needed by the backend
+  - target metadata materialization
+  - selection/linking of required backend-provided low-level implementations
   - CUDA/C++ compilation and linking
 
 - **C++/CUDA**
   - orchestrate-program authoring
   - kernels
-  - generated lowering code
+  - reusable dispatcher/scheduler/lowering/platform/backend implementations
   - `run(...)`
 
 This aligns the implementation path with the design goal of compile-time

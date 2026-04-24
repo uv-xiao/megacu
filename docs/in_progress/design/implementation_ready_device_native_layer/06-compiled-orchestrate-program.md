@@ -34,8 +34,8 @@ The function parameters fill the descriptor slots by type:
 - `team` fills the backend handle slot;
 - `tiles` fills `tiles_extent`.
 
-That binding is generated or linked into the compiled target. It is not a
-public `exec.bind(...)` step.
+That binding is linked/materialized inside the compiled target. It is not a
+public `exec.bind(...)` step and does not require emitted C++/CUDA source.
 
 The descriptor compiled into that target looks like:
 
@@ -100,16 +100,16 @@ The compiled-orchestrate-program path is better because it:
 
 ## What Runs
 
-The compiled target contains both the user-authored orchestrate function and
-Megacu-generated or Megacu-linked target metadata.
+The compiled target contains the user-authored orchestrate function, linked
+Megacu/backend implementations, and compact target metadata.
 
 At runtime:
 
 1. deployment code calls `cuda_nvshmem_event_copy_orchestrate(...)`;
 2. the compiled target receives explicit runtime values such as workspace
    views, event storage, `nvshmem_team_view`, and tile count;
-3. generated or linked target code attaches those values to pre-lowered slots
-   and enters the selected CUDA/NVSHMEM execution path;
+3. linked target code and metadata attach those values to pre-lowered slots and
+   enter the selected CUDA/NVSHMEM execution path;
 4. internal fast-path execution launches the selected kernels;
 5. kernels use `kernel_context` to resolve current domain points, virtual
    participants, and event endpoints.
@@ -119,7 +119,7 @@ does not choose a new backend or schedule at runtime.
 
 ## Internal Lowering And Metadata
 
-The build graph may still emit internal prepared data such as:
+The build graph may still materialize internal prepared data such as:
 
 - lowered submission records
 - resource/view tables

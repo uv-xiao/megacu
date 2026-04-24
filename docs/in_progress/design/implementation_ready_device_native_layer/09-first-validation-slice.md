@@ -104,7 +104,7 @@ Required evidence:
   artifacts
 - compile-only checks for the orchestrate target ABI
 - direct-call smoke test API checks
-- generated-code inspection for the built CUDA/NVSHMEM target
+- linked-artifact and metadata inspection for the built CUDA/NVSHMEM target
 - two-rank payload visibility test where environment permits
 - explicit skip reason where local NVSHMEM multi-GPU execution is unavailable
 
@@ -112,6 +112,6 @@ Ready-to-implement criteria:
 
 - the public API proof above can be written using only the planned headers;
 - the CMake proof can be written using only the two planned CMake functions;
-- each generated/lowered record has a single owner from
+- each materialized/lowered record has a single owner from
   `07-dispatcher-scheduler-kernel.md`;
 - `run` has no path to build logic or runtime strategy selection.

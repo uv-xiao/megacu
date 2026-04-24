@@ -40,7 +40,7 @@ generic runtime-loaded module.
   internal binding points that the compiled orchestrate function fills from its
   typed parameters.
 
-Names are labels. They are useful for diagnostics and generated metadata, but
+Names are labels. They are useful for diagnostics and materialized metadata, but
 they are not runtime lookup keys. The implementation must use typed tags and
 lowered metadata for event, domain, operator, and virtual-participant
 resolution.
@@ -66,7 +66,7 @@ with explicit coordination while preserving a thin runtime path.
 
 The removable parts are labels such as `"tile"`, `"ready"`, `"producer"`, and
 `"workspace"`. They are not semantic requirements; they exist for diagnostics
-and generated metadata. The required identities are the typed tags and lowered
+and materialized metadata. The required identities are the typed tags and lowered
 slots.
 
 This is why the first design keeps `domain`, `event`, `resource slot`,
@@ -370,7 +370,8 @@ p.submit(ops::write_then_signal{}, megacu::over(tile), args);
 ```
 
 The domain name is for authoring and diagnostics. Lowering may replace it with
-compact ids in generated metadata, but those ids are not public authoring API.
+compact ids in materialized metadata, but those ids are not public authoring
+API.
 
 The first implementation only needs one-dimensional domains. Multi-dimensional
 helpers can be added later only if examples need them.
@@ -568,6 +569,6 @@ Program-model evidence:
 - no public task-trait field filling
 - no string resource lookup
 - no device-side event-name lookup
-- generated metadata showing domain, participant, and event tags resolved to
+- materialized metadata showing domain, participant, and event tags resolved to
   compact slots
 - direct call of the compiled orchestrate function from runtime C++

@@ -445,3 +445,20 @@ were later promoted into `docs/design/`.
     the public compiled target a normal parameterized orchestrate function.
     Runtime parameter binding and fast-path `run` are generated/linked target
     internals, not public post-compile APIs.
+
+- 2026-04-24 Asia/Shanghai - Lowering links existing implementations
+  > We need to make sure things like kernel-lowering and target-lowering doesn't emit/generate new code. Instead, it mainly link the required low-level implementation to the high-level APIs as the backend provides.
+  > We need to specify it very clear about what megacu's compilation do (compile, link) and not do (translation into new CUDA or other language code).
+  - Context: User clarified that target/kernel lowering should not be a source
+    generation or translation pipeline.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/02-principles-and-naming.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-language-responsibilities.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-compiled-orchestrate-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: Megacu compilation means native compile/link plus
+    compact metadata materialization. Kernel lowering and target lowering must
+    select and link reusable dispatcher, scheduler, lowering, platform,
+    backend, and kernel implementations; they must not emit new C++/CUDA or
+    translate the orchestrate program into another language.

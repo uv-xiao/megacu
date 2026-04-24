@@ -46,8 +46,10 @@
   strategy
 - native build checks that the artifact is produced by ordinary CUDA/C++
   compilation rather than runtime code generation
+- checks proving kernel lowering and target lowering select/link existing
+  implementations and materialize metadata rather than emit new C++/CUDA source
 - direct-call smoke tests for the compiled orchestrate program
-- generated-code or metadata inspection for the first CUDA/NVSHMEM target,
+- linked-artifact or metadata inspection for the first CUDA/NVSHMEM target,
   including domain, participant, event, dispatch, schedule, and backend slots
 - repeated-run tests showing the internal `run(...)` path stays cheap
 - integration tests showing CMake/build drive target creation while runtime C++
@@ -64,8 +66,8 @@
   linkage.
 - Dispatcher, scheduler, and lowering contracts in
   `07-dispatcher-scheduler-kernel.md`:
-  generated/lowered metadata inspection showing op, resource, event, dispatch,
-  participant, schedule, kernel, and backend payload ownership.
+  linked-artifact and metadata inspection showing op, resource, event,
+  dispatch, participant, schedule, kernel, and backend payload ownership.
 - Kernel context and backend primitive examples in `03-program.md` and
   `08-examples.md`:
   compile-only checks showing kernels use typed `kernel_context` APIs instead

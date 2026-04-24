@@ -142,7 +142,7 @@ For `cuda_nvshmem_event_copy_orchestrate`, the built target runs this sequence:
 
 1. runtime C++ calls
    `cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles)`;
-2. generated or linked target code binds function parameters to lowered slots;
+2. linked target code and metadata bind function parameters to lowered slots;
 3. internal fast-path execution launches the selected static persistent
    CUDA/NVSHMEM path;
 4. the dispatcher metadata maps each `tile_domain` point to producer and

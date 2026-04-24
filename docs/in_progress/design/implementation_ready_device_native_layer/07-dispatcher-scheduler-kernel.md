@@ -99,7 +99,7 @@ Examples:
 - keep named kernels as separate launches inside the orchestrate-controlled
   execution path
 - stitch several named kernels into one persistent kernel
-- generate helper glue around backend/platform interaction
+- link helper implementations around backend/platform interaction
 
 This is also where fine-grained overlap needs careful treatment.
 
@@ -113,6 +113,7 @@ First kernel-lowering contract:
 - output: CUDA/NVSHMEM executable path plus inspection metadata
 - owns stitching and launch payload construction
 - does not invent public fragment-op APIs
+- does not emit new C++/CUDA source in the normal path
 
 ## Fine-Grained Compute/Communication Overlap
 
@@ -199,9 +200,10 @@ struct kernel_context {
 }
 ```
 
-The context is target-specific. It may be a compact pointer to generated
-metadata, inline constants, or registers produced by lowering. Its observable
-contract is typed lookup by tag, not string lookup by name.
+The context is target-specific. It may be a compact pointer to materialized
+metadata, inline constants, or registers populated by linked lowering
+implementations. Its observable contract is typed lookup by tag, not string
+lookup by name.
 
 ## Internal Records
 

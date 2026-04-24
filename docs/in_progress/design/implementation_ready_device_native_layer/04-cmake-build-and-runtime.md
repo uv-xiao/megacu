@@ -54,14 +54,45 @@ targets should link implementation code from `src/dispatcher/`,
 An authored orchestrate program should become a normal CMake target that reuses
 those compiled artifacts.
 
+## What Megacu Compilation Means
+
+Megacu compilation is ordinary native build work:
+
+- compile user-authored C++ orchestrate descriptor and wrapper sources;
+- compile user-authored CUDA/C++ kernel sources;
+- compile reusable Megacu dispatcher, scheduler, kernel-lowering, platform, and
+  backend implementation targets;
+- link the orchestrate target against the selected reusable implementations;
+- materialize compact target metadata such as op slots, resource slots, event
+  slots, dispatch tables, schedule payloads, participant tables, and backend
+  layouts;
+- optionally write inspection metadata for humans and tests.
+
+Megacu compilation must not:
+
+- translate the orchestrate descriptor into new CUDA source;
+- translate kernels into another programming language or DSL;
+- emit per-program C++/CUDA source as the normal lowering mechanism;
+- generate a new runtime wrapper that becomes the primary public API;
+- run CMake/build logic from runtime C++;
+- choose dispatcher, scheduler, kernel lowering, platform, or backend at
+  runtime.
+
+The key implementation rule is: **target lowering selects and links existing
+low-level implementations provided by Megacu/platform/backend components, then
+materializes data needed by those implementations. It does not synthesize new
+kernel code.**
+
 What CMake/program compilation does:
 
 - run the chosen dispatcher logic on the concrete program
 - derive scheduler payloads and event/resource tables
 - assign compact slots to op, domain, participant, resource, and event tags
-- choose and parameterize the kernel-lowering engine
+- choose and parameterize the kernel-lowering implementation
+- link the required dispatcher, scheduler, lowering, platform, backend, and
+  kernel implementations
 - compile/link the user-authored orchestrate code with the chosen components
-- optionally emit inspection metadata if the selected backend needs it
+- optionally write inspection metadata if the selected backend needs it
 
 The important boundary is that this step should reuse existing component
 artifacts by default. It should not force recompilation of reusable engines.
@@ -69,9 +100,10 @@ artifacts by default. It should not force recompilation of reusable engines.
 The first implementation should obtain program metadata from the explicit C++
 descriptor, not from a Python tool and not from runtime parsing. CMake can do
 that by compiling a small native materializer for `PROGRAM event_copy_program`
-or by instantiating C++ templates that emit target metadata during the native
-build. The exact mechanism is an implementation detail, but it must stay inside
-the native build graph and produce ordinary generated headers/objects.
+or by instantiating C++ templates that materialize target metadata during the
+native build. The exact mechanism is an implementation detail, but it must stay
+inside the native build graph and must not emit new C++/CUDA source as the
+normal lowering mechanism.
 
 Initial CMake API shape:
 
@@ -97,7 +129,8 @@ Required properties:
   virtual participant placement and emits participant mapping metadata;
 - runtime C++ cannot choose a different dispatcher, scheduler, lowering,
   platform, or backend for that target;
-- the build can emit inspection metadata for generated or lowered code.
+- the build can write inspection metadata for selected linked implementations
+  and materialized target metadata.
 
 ## Resolution Pipeline
 
@@ -109,7 +142,8 @@ The design has three resolution stages:
 2. **Target lowering**: CMake-selected components turn tags into compact target
    metadata:
    domain slot, event slot, participant slot, dispatch table, schedule payload,
-   backend event layout.
+   backend event layout. This is data materialization and linking, not source
+   generation.
 3. **Parameterized call**: the compiled orchestrate function receives typed
    runtime values:
    workspace views, event storage, NVSHMEM team, and dynamic extents inside the
@@ -147,7 +181,7 @@ This is preferable to exposing the slots directly:
 | --- | --- |
 | Public `exec.bind(...)` plus `exec.run(...)` | Exposes an implementation mechanism after the target is already compiled and makes the runtime surface look like a two-phase mini-runtime. |
 | Generic `runtime_env` bag | Reintroduces stringly lookup and hides required resources from the C++ signature. |
-| Positional argument array | Compact but brittle; generated metadata and user code can disagree silently. |
+| Positional argument array | Compact but brittle; materialized metadata and user code can disagree silently. |
 | Rebuild for every shape | Defeats repeated-run use cases and makes dynamic tile/token counts expensive. |
 | Let kernels receive all raw pointers/handles manually | Pushes lowering details into every kernel and prevents scheduler/backend inspection. |
 | Megacu-owned allocator/event pool | Makes Megacu responsible for allocation policy and framework integration decisions. |
