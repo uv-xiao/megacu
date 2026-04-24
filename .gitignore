@@ -1,8 +1,8 @@
 research/
 .references/
 .repositories/
-build/
-cmake-build-*/
+/build/
+/cmake-build-*/
 *.o
 *.a
 *.so
@@ -17,4 +17,3 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
-

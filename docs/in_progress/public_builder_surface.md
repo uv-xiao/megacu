@@ -35,10 +35,10 @@ needed by the GEMM+AllReduce phased and overlap program descriptors.
 ## Scope Checklist
 
 - [x] Define input, output, and verification criteria
-- [ ] Implement public builder and typed view headers
-- [ ] Implement minimal internal `program_ir` record declarations
-- [ ] Add compile-only GEMM+AllReduce descriptor coverage
-- [ ] Verify locally
+- [x] Implement public builder and typed view headers
+- [x] Implement minimal internal `program_ir` record declarations
+- [x] Add compile-only GEMM+AllReduce descriptor coverage
+- [x] Verify locally
 - [ ] Sync `docs/todo/` and `docs/in_progress/`
 
 ## Verification
