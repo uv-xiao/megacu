@@ -117,7 +117,7 @@ artifacts by default. It should not force recompilation of reusable engines.
 The first implementation should obtain program metadata from the explicit C++
 descriptor, not from a Python tool and not from runtime parsing. CMake can do
 that by compiling a small native materializer for
-`PROGRAM gemm_allreduce_program` or by instantiating C++ templates that
+`PROGRAM gemm_allreduce_overlap_program` or by instantiating C++ templates that
 materialize target metadata during the native build. The exact mechanism is an
 implementation detail, but it must stay inside the native build graph and must
 not emit new C++/CUDA source as the normal lowering mechanism.
@@ -130,7 +130,7 @@ is easiest to test:
 2. That executable links the user descriptor source and Megacu host lowering
    libraries.
 3. At build time, it calls
-   `megacu::detail::materialize_program<gemm_allreduce_program>()`.
+   `megacu::detail::materialize_program<gemm_allreduce_overlap_program>()`.
 4. It writes:
    - `cuda_nvshmem_gemm_allreduce.megacu.json` for inspection tests;
    - `cuda_nvshmem_gemm_allreduce.megacu.bin` for compact runtime metadata.
@@ -143,14 +143,15 @@ Initial CMake API shape:
 
 ```cmake
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce
-  PROGRAM gemm_allreduce_program
+  TARGET cuda_nvshmem_gemm_allreduce_overlap
+  PROGRAM gemm_allreduce_overlap_program
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce=gemm_tile_produce_kernel
     allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
+  SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
     TEAM_SIZE 2
 )
@@ -184,7 +185,7 @@ The first implementation should fail CMake configure or build if:
 The design has three resolution stages:
 
 1. **Authoring**: users write typed tags and labels:
-   `gemm_allreduce_program`, `output_tile_domain`,
+   `gemm_allreduce_overlap_program`, `output_tile_domain`,
    `partial_ready_event`, `compute_lane`, `"partial_ready"`.
 2. **Target lowering**: CMake-selected components turn tags into compact target
    metadata:
@@ -246,7 +247,8 @@ The parameterized function fills those slots internally. It gives users one
 ordinary C++ call:
 
 ```cpp
-cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem);
+cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+    workspace, events, launch, team, problem);
 ```
 
 This is preferable to exposing the slots directly:
@@ -260,7 +262,7 @@ This is preferable to exposing the slots directly:
 | Let kernels receive all raw pointers/handles manually | Pushes lowering details into every kernel and prevents scheduler/backend inspection. |
 | Megacu-owned allocator/event pool | Makes Megacu responsible for allocation policy and framework integration decisions. |
 
-For `cuda_nvshmem_gemm_allreduce`:
+For `cuda_nvshmem_gemm_allreduce_overlap`:
 
 - `workspace` fills tensor, partial-output, final-output, and scratch storage
   slots;
@@ -295,7 +297,8 @@ megacu::nvshmem::team_view team{nvshmem_team, my_pe, n_pes, world_pe, world_n_pe
                                 device_ordinal, megacu::nvshmem::ownership::external};
 gemm_ar_problem problem{M, N, K, strides, tile_shape};
 
-cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem);
+cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+    workspace, events, launch, team, problem);
 ```
 
 There is no primary runtime API for loading a module by path or passing an
@@ -304,7 +307,7 @@ untyped environment bag.
 The direct function is the compiled target ABI:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,

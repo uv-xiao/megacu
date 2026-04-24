@@ -140,17 +140,38 @@ enum class schedule_action : std::uint8_t {
   launch_allreduce_tile_consume
 };
 
+enum class progress_model : std::uint8_t {
+  phased,
+  co_resident_persistent
+};
+
+enum class residency_role : std::uint8_t {
+  compute,
+  comm
+};
+
 struct schedule_entry {
   std::uint32_t order;
   std::uint32_t dispatch_entry_index;
   schedule_action action;
   std::uint16_t required_event_slot;
   std::uint16_t released_event_slot;
+  std::uint16_t residency_group;
+  residency_role role;
+};
+
+struct residency_group {
+  std::uint16_t group;
+  std::uint16_t min_compute_workers;
+  std::uint16_t min_comm_workers;
+  bool all_workers_must_be_launched_together;
 };
 
 struct schedule_plan {
+  progress_model progress;
   std::uint16_t num_compute_workers;
   std::uint16_t num_comm_workers;
+  std::span<const residency_group> residency_groups;
   std::span<const schedule_entry> entries;
 };
 }
@@ -160,6 +181,43 @@ For the first static persistent scheduler, `entries` may describe deterministic
 loops rather than every tile instance. It must still be inspectable: tests
 should be able to see that GEMM tile production releases `partial_ready_event`
 and AllReduce tile consumption acquires it.
+
+## Communication Progress Guard
+
+Not every communication edge requires compute/communication co-residency. Megacu
+must distinguish two cases:
+
+- **phased progress**: producers finish a phase, then consumers run a later phase;
+  correctness does not require producer and consumer CTAs to be resident at the
+  same time.
+- **co-resident progress**: a consumer may wait while a producer is expected to
+  keep making progress in the same launch; correctness requires both roles to be
+  resident together.
+
+The scheduler owns this distinction. It must materialize a progress model in
+`schedule_plan`, and kernel lowering must reject a target that uses a blocking
+wait without a valid progress guard.
+
+For `progress_model::co_resident_persistent`, the schedule plan must prove:
+
+- every blocking acquire has a producer role and consumer role in the same
+  `residency_group`;
+- the group has at least one compute worker and one communication worker;
+- all workers in the group are launched by the same persistent entrypoint;
+- the persistent grid size is bounded so those workers are resident worker loops,
+  not unbounded CUDA blocks waiting for blocks that may never be scheduled;
+- no blocking wait crosses to a different residency group unless that wait is
+  known to be satisfied by a completed earlier phase.
+
+This is the guard against deadlock in overlap kernels. A consumer task must not
+spin on an event whose producer task is merely queued behind it in the same CUDA
+grid or in a later launch. If the scheduler cannot prove co-residency, it must
+choose `progress_model::phased` or fail target lowering.
+
+For `progress_model::phased`, the scheduler may use separate launches or
+persistent phases. The event dependency is still present for metadata and
+validation, but the runtime does not rely on simultaneous producer/consumer
+progress.
 
 ## Kernel Lowering
 

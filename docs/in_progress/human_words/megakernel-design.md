@@ -524,3 +524,18 @@ were later promoted into `docs/design/`.
     process models construct CUDA launch views, NVSHMEM team views, symmetric
     allocations, and validation evidence before the compiled orchestrate target
     runs.
+
+- 2026-04-24 Asia/Shanghai - Separate phased and overlap GEMM+AllReduce
+  > Another problem is that, should we support two version of gemm-ar? One is just like MPK, where, in my mind, omit compute-comm overlap. The other one is the overlapping version. Especially for the overlapping one, I'm worried that we don't have the guard mechanism for two communicating tasks must run simultaneously when the communication happens.
+  - Context: User identified that the GEMM+AllReduce example was mixing a simple
+    correctness baseline with a true compute/communication overlap proof, and
+    noted the deadlock risk when communicating tasks are not simultaneously
+    resident.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/08-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: The design should support both phased and overlapping
+    GEMM+AllReduce targets. Blocking communication in the overlap target requires
+    scheduler/kernel-lowering metadata that proves producer and consumer workers
+    are co-resident, or target lowering must reject the program.

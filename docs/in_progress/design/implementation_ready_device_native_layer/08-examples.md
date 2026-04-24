@@ -7,12 +7,25 @@ These examples are written against the active lifecycle:
 The examples are source-informed but not copied implementations. They are meant
 to define what Megacu must make implementable.
 
-## Example 1: GEMM + AllReduce Fusion Kernel
+## Example 1: GEMM + AllReduce Variants
 
-This is the first serious validation example. It mirrors the useful shape in
-Triton-distributed's `gemm_allreduce.py`: GEMM workers produce output tiles,
-communication workers wait for tile readiness, then reduce the produced tiles
-across ranks with NVSHMEM/multimem-style primitives.
+The first serious validation family should have two concrete targets with the
+same public resource and problem shape:
+
+| Target | Progress model | Purpose |
+| --- | --- | --- |
+| `cuda_nvshmem_gemm_allreduce_phased` | phased | MPK-style correctness baseline: compute partial tiles, finish the compute phase, then run reduction. |
+| `cuda_nvshmem_gemm_allreduce_overlap` | co-resident persistent | overlap proof: GEMM workers and communication workers are live together, tile readiness lets reduction start before all GEMM work is complete. |
+
+Both targets are useful. The phased target is simpler and should be the first
+correctness baseline. The overlap target is the performance-oriented proof that
+Megacu can express fine-grained compute/communication fusion without generated
+CUDA source.
+
+The overlap target mirrors the useful shape in Triton-distributed's
+`gemm_allreduce.py`: GEMM workers produce output tiles, communication workers
+wait for tile readiness, then reduce the produced tiles across ranks with
+NVSHMEM/multimem-style primitives.
 
 Program intent:
 
@@ -42,7 +55,7 @@ struct partial_ready_event;
 struct gemm_ar_workspace_slot;
 struct event_storage_slot;
 
-struct gemm_allreduce_program {
+struct gemm_allreduce_overlap_program {
   static void describe(megacu::program_builder &p) {
     auto m_tiles = p.extent<m_tiles_extent>("m_tiles");
     auto n_tiles = p.extent<n_tiles_extent>("n_tiles");
@@ -90,7 +103,14 @@ struct gemm_allreduce_program {
 The compiled target ABI is explicit:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+    gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
+    gemm_ar_problem problem);
+
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -102,6 +122,23 @@ void cuda_nvshmem_gemm_allreduce_orchestrate(
 tile sizes. These values fill lowered extent and parameter slots inside the
 compiled target; they do not select a new dispatcher, scheduler, backend, or
 kernel-lowering strategy.
+
+For the phased target, the descriptor may use the same logical event and
+submission shape, but the selected scheduler materializes
+`progress_model::phased`. For the overlap target, the selected scheduler must
+materialize `progress_model::co_resident_persistent` and a residency group that
+contains both `compute_lane` and `reduce_lane`.
+
+The overlap target is invalid unless target lowering can prove the communication
+guard:
+
+- GEMM producers and AllReduce consumers are in the same persistent launch;
+- at least one compute worker and one communication worker are resident for the
+  lifetime of the overlapped region;
+- communication workers only perform blocking waits on events whose producers
+  are in the same residency group or in a completed earlier phase.
+
+This guard is general scheduler metadata, not a GEMM-specific rule.
 
 ## Example 2: Native CUDA Operator Bodies
 
@@ -170,14 +207,29 @@ megacu_add_components(
 )
 
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce
-  PROGRAM gemm_allreduce_program
+  TARGET cuda_nvshmem_gemm_allreduce_phased
+  PROGRAM gemm_allreduce_phased_program
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce=gemm_tile_produce_kernel
     allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
+  SCHEDULER_MODE phased
+  BACKEND_ENVELOPE
+    TEAM_SIZE 2
+)
+
+megacu_add_orchestrate_target(
+  TARGET cuda_nvshmem_gemm_allreduce_overlap
+  PROGRAM gemm_allreduce_overlap_program
+  SOURCES gemm_allreduce_orchestrate.cc
+  KERNELS gemm_allreduce_kernels.cu
+  OPS
+    gemm_tile_produce=gemm_tile_produce_kernel
+    allreduce_tile_consume=allreduce_tile_consume_kernel
+  COMPONENTS cuda_nvshmem_static
+  SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
     TEAM_SIZE 2
 )
@@ -190,22 +242,42 @@ to a two-PE CUDA+NVSHMEM team, but the dispatcher still owns the mapping from
 CMake file does not contain ad hoc rank mapping rules such as
 `compute_lane -> rank 0`.
 
+`SCHEDULER_MODE` selects a reusable scheduler mode for one target. It is not a
+runtime choice. The overlap mode must emit a co-residency guard in
+`schedule_plan`; if it cannot, the build fails.
+
 ## Example 4: What Runs
 
-For `cuda_nvshmem_gemm_allreduce_orchestrate`, the built target runs this
+For `cuda_nvshmem_gemm_allreduce_phased_orchestrate`, the built target runs this
 sequence:
 
+1. runtime C++ calls the compiled target with explicit `workspace`, `events`,
+   `launch`, `team`, and `problem`;
+2. the compiled function validates the problem envelope and fills lowered slots;
+3. internal `run(...)` computes all local partial tiles for the current phase;
+4. the phase boundary guarantees producers have completed;
+5. reduction workers reduce tiles through the linked NVSHMEM/multimem or
+   load-reduce-store primitive and write final output tiles.
+
+For `cuda_nvshmem_gemm_allreduce_overlap_orchestrate`, the built target runs
+this sequence:
+
 1. runtime C++ calls
-   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem)`;
+   `cuda_nvshmem_gemm_allreduce_overlap_orchestrate(workspace, events, launch, team, problem)`;
 2. the compiled function validates the problem envelope and fills lowered
    resource, extent, CUDA launch, and backend handle slots;
-3. internal `run(...)` launches the linked CUDA/NVSHMEM execution path;
+3. internal `run(...)` launches one co-resident persistent CUDA/NVSHMEM execution
+   path with compute and communication workers in the same residency group;
 4. the dispatcher payload maps `output_tile_domain` points to compute and
    communication placements;
 5. GEMM workers compute partial output tiles and release `partial_ready_event`;
 6. communication workers acquire the per-rank tile events, reduce the tile
    through the linked NVSHMEM/multimem or load-reduce-store primitive, and write
    the final output tile.
+
+The overlap sequence is valid only because the schedule plan contains a
+co-residency guard. A blocking communication worker must never depend on a GEMM
+worker that might be a non-resident CUDA block waiting behind it.
 
 Term meanings in this example:
 
@@ -235,7 +307,7 @@ void torch_gemm_allreduce(
   auto launch = session.current_cuda_launch_view();
   auto team = session.team_view();
 
-  cuda_nvshmem_gemm_allreduce_orchestrate(
+  cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
       gemm_ar_workspace{
           .a = wrapper_tensor(a),
           .b = wrapper_tensor(b),
@@ -285,7 +357,7 @@ auto team = session.team();
 auto partial = session.symmetric_alloc(partial_bytes, 128);
 auto events = session.symmetric_alloc(event_bytes, alignof(std::uint64_t));
 
-cuda_nvshmem_gemm_allreduce_orchestrate(
+cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     workspace, event_view(events), launch, team, problem);
 ```
 

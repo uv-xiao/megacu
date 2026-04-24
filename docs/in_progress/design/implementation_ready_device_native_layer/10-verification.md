@@ -39,13 +39,18 @@
   exchange for NVSHMEM bootstrap.
 - Team-size ambiguity: a target compiled for one team-size envelope is launched
   with a different NVSHMEM PE count.
+- Unsafe overlap: a communication task performs a blocking wait while the
+  producer task is not guaranteed to be co-resident and making progress. This can
+  deadlock even if the logical event graph is correct.
 
 ## Verification Requirements
 
 - CMake/build tests that produce reusable component targets
-- CMake/build tests that produce one orchestrate target from those components
-- build evidence that `PROGRAM gemm_allreduce_program` metadata is produced by
-  the native C++ build path, not by Python or runtime parsing
+- CMake/build tests that produce phased and overlap orchestrate targets from
+  those components
+- build evidence that `PROGRAM gemm_allreduce_phased_program` and
+  `PROGRAM gemm_allreduce_overlap_program` metadata are produced by the native
+  C++ build path, not by Python or runtime parsing
 - inspection evidence that `program_ir` contains the expected extents, domains,
   participants, resources, events, and submissions for GEMM+AllReduce
 - inspection evidence that `dispatch_plan`, `schedule_plan`, `kernel_plan`, and
@@ -64,6 +69,11 @@
 - direct-call smoke tests for the compiled orchestrate program
 - linked-artifact or metadata inspection for the first CUDA/NVSHMEM target,
   including domain, participant, event, dispatch, schedule, and backend slots
+- metadata inspection proving the phased target uses `progress_model::phased`
+- metadata inspection proving the overlap target uses
+  `progress_model::co_resident_persistent`, includes a residency group with both
+  compute and communication workers, and rejects blocking waits without a valid
+  guard
 - repeated-run tests showing the internal `run(...)` path stays cheap
 - integration tests showing CMake/build drive target creation while runtime C++
   only calls the compiled orchestration
@@ -101,6 +111,12 @@ The first metadata JSON must be checked for these facts:
 - a dispatch plan with compute and communication placements;
 - a schedule plan where GEMM production precedes AllReduce consumption through
   the event dependency, not a full-kernel implicit barrier;
+- for the phased target: `progress_model::phased`;
+- for the overlap target: `progress_model::co_resident_persistent` with one
+  residency group containing at least one compute worker and one communication
+  worker;
+- for the overlap target: blocking acquires only wait on events produced by the
+  same residency group or by a completed earlier phase;
 - a backend plan that names event storage size, event offsets, team size, and
   whether multimem reduce is enabled.
 - a platform launch slot for `megacu::cuda::launch_view`;

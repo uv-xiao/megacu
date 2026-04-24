@@ -13,7 +13,7 @@ That is the normal path. It is not a plugin loader story.
 The normal runtime surface should look like:
 
 ```cpp
-struct gemm_allreduce_program;
+struct gemm_allreduce_overlap_program;
 struct gemm_ar_workspace_slot;
 struct event_storage_slot;
 struct m_tiles_extent;
@@ -21,7 +21,7 @@ struct n_tiles_extent;
 
 // Ordinary parameterized function exported by the compiled orchestrate target.
 // It is the user/framework call surface; there is no public executor object.
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -116,14 +116,14 @@ The orchestrate function is ordinary C++ in the target. It may be handwritten in
 `examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_orchestrate.cc`:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
     gemm_ar_problem problem) {
   auto *metadata = megacu::detail::target_metadata_for<
-      gemm_allreduce_program,
+      gemm_allreduce_overlap_program,
       cuda_nvshmem_static_components>();
 
   megacu::detail::runtime_slots slots;
@@ -170,7 +170,7 @@ Megacu/backend implementations, and compact target metadata.
 
 At runtime:
 
-1. deployment code calls `cuda_nvshmem_gemm_allreduce_orchestrate(...)`;
+1. deployment code calls `cuda_nvshmem_gemm_allreduce_overlap_orchestrate(...)`;
 2. the compiled target receives explicit runtime values such as workspace
    views, event storage, `megacu::cuda::launch_view`,
    `megacu::nvshmem::team_view`, and `gemm_ar_problem`;

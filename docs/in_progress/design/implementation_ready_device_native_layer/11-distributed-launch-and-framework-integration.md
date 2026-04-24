@@ -58,7 +58,7 @@ struct team_view {
 The first compiled target ABI should therefore be:
 
 ```cpp
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -76,14 +76,15 @@ The first GEMM+AllReduce proof should compile for an exact two-PE target:
 
 ```cmake
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce
-  PROGRAM gemm_allreduce_program
+  TARGET cuda_nvshmem_gemm_allreduce_overlap
+  PROGRAM gemm_allreduce_overlap_program
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce=gemm_tile_produce_kernel
     allreduce_tile_consume=allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
+  SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
     TEAM_SIZE 2
 )

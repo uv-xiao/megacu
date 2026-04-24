@@ -199,7 +199,7 @@ to inspect arbitrary C++ function bodies. Users write a C++ program descriptor
 with an explicit `describe(...)` method. CMake lowers that descriptor into an
 ordinary parameterized orchestrate function.
 
-For the first validation target:
+For the first validation target family:
 
 - `problem` is a runtime descriptor containing `M`, `N`, `K`, strides, datatype
   envelope, and tile shape.
@@ -219,7 +219,7 @@ For the first validation target:
   and determines how many logical output tile points run.
 
 ```cpp
-struct gemm_allreduce_program {
+struct gemm_allreduce_overlap_program {
   static void describe(megacu::program_builder &p) {
     // Runtime values supplied by the compiled function's `problem` parameter.
     auto m_tiles = p.extent<m_tiles_extent>("m_tiles");
@@ -266,7 +266,7 @@ struct gemm_allreduce_program {
   }
 };
 
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -276,7 +276,7 @@ void cuda_nvshmem_gemm_allreduce_orchestrate(
 
 `describe(...)` is the concrete program surface that CMake/native build tooling
 can compile into metadata. The parameterized
-`cuda_nvshmem_gemm_allreduce_orchestrate` function is the direct call surface
+`cuda_nvshmem_gemm_allreduce_overlap_orchestrate` function is the direct call surface
 used by applications and framework wrappers. This keeps build work out of
 runtime C++ while avoiding a hidden parser for arbitrary C++.
 
@@ -316,8 +316,8 @@ The CMake target maps op tags to implementation symbols:
 
 ```cmake
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce
-  PROGRAM gemm_allreduce_program
+  TARGET cuda_nvshmem_gemm_allreduce_overlap
+  PROGRAM gemm_allreduce_overlap_program
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
@@ -604,7 +604,7 @@ struct partial_ready_event;
 struct gemm_ar_workspace_slot;
 struct event_storage_slot;
 
-struct gemm_allreduce_program {
+struct gemm_allreduce_overlap_program {
   static void describe(megacu::program_builder &p);
 };
 ```
@@ -628,7 +628,7 @@ For the first implementation, the required public surface is:
 - `megacu::args()`
 - `megacu::program_builder::submit(...)`
 - declared or exported parameterized orchestrate function, such as
-  `cuda_nvshmem_gemm_allreduce_orchestrate(...)`
+  `cuda_nvshmem_gemm_allreduce_overlap_orchestrate(...)`
 
 Anything else must justify why event, task/submission, schedule, or kernel
 contracts cannot work without it.

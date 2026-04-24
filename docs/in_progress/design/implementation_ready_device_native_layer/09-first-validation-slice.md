@@ -16,24 +16,30 @@ Prove all of the following with the smallest useful system:
 - fine-grained GEMM/AllReduce overlap can be expressed without public fragment
   APIs or generated CUDA source.
 
-## Chosen Target
+## Chosen Targets
 
-The first proof should build one target:
+The first proof should build two GEMM+AllReduce targets with the same resource
+shape and different progress contracts:
 
-- program: `gemm_allreduce_program`;
+- baseline program: `gemm_allreduce_phased_program`;
+- overlap program: `gemm_allreduce_overlap_program`;
 - platform: CUDA;
 - backend: NVSHMEM;
 - dispatcher: tiled compute/communication placement;
-- scheduler: one static persistent strategy;
+- baseline scheduler: phased static strategy;
+- overlap scheduler: co-resident persistent strategy with a communication
+  progress guard;
 - kernel lowering: one persistent lowering path that links existing CUDA
   kernels and backend primitives.
 
-This target is narrow enough to implement first, but strong enough to prove the
-architecture. A payload-copy example would only prove signaling plumbing.
+The phased target is the first correctness baseline. The overlap target is the
+first proof that blocking communication can be made safe by scheduler metadata
+that proves producer/consumer co-residency. A payload-copy example would only
+prove signaling plumbing.
 
 ## Program
 
-The logical program is `cuda_nvshmem_gemm_allreduce`:
+The logical program family is `cuda_nvshmem_gemm_allreduce`:
 
 - compute GEMM partial output tiles;
 - signal per-tile readiness;
@@ -45,13 +51,21 @@ The logical program is `cuda_nvshmem_gemm_allreduce`:
 Initial public API proof:
 
 ```cpp
-struct gemm_allreduce_program;
+struct gemm_allreduce_phased_program;
+struct gemm_allreduce_overlap_program;
 struct gemm_ar_workspace_slot;
 struct event_storage_slot;
 struct m_tiles_extent;
 struct n_tiles_extent;
 
-void cuda_nvshmem_gemm_allreduce_orchestrate(
+void cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+    gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
+    gemm_ar_problem problem);
+
+void cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
@@ -59,7 +73,7 @@ void cuda_nvshmem_gemm_allreduce_orchestrate(
     gemm_ar_problem problem);
 ```
 
-The matching program descriptor must declare the domains, participants, events,
+The matching program descriptors must declare the domains, participants, events,
 resources, and submissions shown in `08-examples.md`.
 
 The first proof must show that changing `problem.M`, `problem.N`, and
@@ -75,9 +89,9 @@ lookup, or generated per-program CUDA source.
 The runtime proof should look like:
 
 1. build the reusable component target set;
-2. build the concrete GEMM+AllReduce orchestrate target;
+2. build the concrete phased and overlap GEMM+AllReduce orchestrate targets;
 3. construct either an MPI/NVSHMEM session or a Torch/NVSHMEM session;
-4. call the compiled orchestrate program on two ranks/GPUs with explicit
+4. call both compiled orchestrate programs on two ranks/GPUs with explicit
    `launch` and `team` views;
 5. verify the output against a native baseline for one or more small matrix
    shapes;
@@ -132,6 +146,12 @@ Required evidence:
 - linked-artifact and metadata inspection for the built CUDA/NVSHMEM target;
 - inspection proving kernel lowering selected/linked existing implementations
   rather than emitting new CUDA/C++ source;
+- metadata inspection proving the phased target uses `progress_model::phased`;
+- metadata inspection proving the overlap target uses
+  `progress_model::co_resident_persistent` and contains a residency group with
+  both compute and communication workers;
+- a negative build or materializer test proving a blocking communication wait
+  without a valid co-residency guard fails target lowering;
 - MPI-launched two-rank output-correctness test where environment permits;
 - Torch-launched two-rank output-correctness test where environment permits;
 - explicit skip reason for each unavailable launcher or local NVSHMEM multi-GPU
@@ -153,26 +173,33 @@ The implementation should land in this order:
 
 1. Public builder compile-only surface:
    `program_builder`, tags, domains, participants, resources, events, and
-   submissions compile for `gemm_allreduce_program`.
+   submissions compile for `gemm_allreduce_phased_program` and
+   `gemm_allreduce_overlap_program`.
 2. Host materializer:
-   `materialize_program<gemm_allreduce_program>()` produces `program_ir` and a
-   JSON dump with extents, domains, participants, resources, events, and
+   `materialize_program<gemm_allreduce_phased_program>()` and
+   `materialize_program<gemm_allreduce_overlap_program>()` produce `program_ir`
+   and JSON dumps with extents, domains, participants, resources, events, and
    submissions.
 3. CMake target plumbing:
    `megacu_add_components(...)` and `megacu_add_orchestrate_target(...)` build
    component targets and run the materializer without generating C++/CUDA.
 4. Dispatcher/scheduler/backend metadata:
    the materializer output includes dispatch, schedule, kernel, and backend
-   plans for the static CUDA/NVSHMEM target.
+   plans for the phased and overlap CUDA/NVSHMEM targets.
 5. Direct ABI smoke test:
    deployment code can call
-   `cuda_nvshmem_gemm_allreduce_orchestrate(workspace, events, launch, team, problem)`
+   `cuda_nvshmem_gemm_allreduce_phased_orchestrate(...)` and
+   `cuda_nvshmem_gemm_allreduce_overlap_orchestrate(...)`
    without constructing an executor or runtime environment.
-6. MPI/NVSHMEM launch proof:
+6. Co-residency guard proof:
+   metadata inspection proves the overlap schedule launches compute and
+   communication workers in the same residency group, and a negative test proves
+   unsafe blocking waits are rejected.
+7. MPI/NVSHMEM launch proof:
    `mpirun -np 2 ./cuda_nvshmem_gemm_allreduce_mpi ...` constructs a
    `mpi_nvshmem_session`, validates the two-PE team, and runs correctness where
    hardware exists.
-7. Torch/NVSHMEM launch proof:
+8. Torch/NVSHMEM launch proof:
    `torchrun --standalone --nnodes=1 --nproc-per-node=2 ...` constructs a
    fixed-world `NvshmemSession`, validates Torch rank/world against NVSHMEM
    PE/count, and runs correctness where hardware exists.
