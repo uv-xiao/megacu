@@ -31,6 +31,24 @@ CMake should compile reusable targets for:
 
 These are ordinary native build artifacts. They are not runtime API concepts.
 
+Initial CMake API shape:
+
+```cmake
+megacu_add_components(
+  NAME cuda_nvshmem_static
+  DISPATCHER tile_dispatch
+  SCHEDULER static_persistent
+  KERNEL_LOWERING persistent_stitch
+  PLATFORM cuda
+  BACKEND nvshmem
+)
+```
+
+The implementation owner should be `cmake/MegacuTargets.cmake`. Component
+targets should link implementation code from `src/dispatcher/`,
+`src/scheduler/`, `src/lowering/`, `src/platform/cuda/`, and
+`src/backends/nvshmem/`.
+
 ## Orchestrate-Program Targets
 
 An authored orchestrate program should become a normal CMake target that reuses
@@ -47,6 +65,26 @@ What CMake/program compilation does:
 The important boundary is that this step should reuse existing component
 artifacts by default. It should not force recompilation of reusable engines.
 
+Initial CMake API shape:
+
+```cmake
+megacu_add_orchestrate_target(
+  TARGET cuda_nvshmem_event_copy
+  SOURCES event_copy_orchestrate.cc
+  KERNELS event_copy_kernels.cu
+  COMPONENTS cuda_nvshmem_static
+)
+```
+
+Required properties:
+
+- component targets are reusable build artifacts;
+- orchestrate targets depend on component targets;
+- strategy choice happens in CMake/native build metadata;
+- runtime C++ cannot choose a different dispatcher, scheduler, lowering,
+  platform, or backend for that target;
+- the build can emit inspection metadata for generated or lowered code.
+
 ## Runtime Surface
 
 The normal runtime path should look like ordinary linked C++ code.
@@ -59,6 +97,15 @@ That means:
   itself can be compiled and called
 
 The runtime should not re-decide strategy.
+
+Runtime code should link the orchestrate target and call an explicit function:
+
+```cpp
+cuda_nvshmem_event_copy_orchestrate(workspace, events, team, tiles);
+```
+
+There is no primary runtime API for loading a module by path or passing an
+untyped environment bag.
 
 ## Orchestrate
 
@@ -128,3 +175,14 @@ The intended working path is:
 3. use CMake to build reusable component targets
 4. use CMake to compile/link the orchestrate target against them
 5. run the compiled program
+
+## Build And Runtime Evidence
+
+The first implementation must include:
+
+- a configure/build test proving `megacu_add_components(...)` creates a
+  reusable target;
+- a configure/build test proving `megacu_add_orchestrate_target(...)` links
+  against that reusable target;
+- a direct-call smoke test or compile check proving deployment code does not
+  invoke CMake, build, or strategy-selection APIs at runtime.

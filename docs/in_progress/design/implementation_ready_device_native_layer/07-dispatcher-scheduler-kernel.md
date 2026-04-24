@@ -28,6 +28,17 @@ Dispatcher responsibilities:
 The dispatcher is independent from the scheduler. This matches the user's point:
 mapping strategy and scheduling strategy are not the same thing.
 
+Implementation owner: `src/dispatcher/`.
+
+First dispatcher contract:
+
+- input: lowered program facts from the public builder
+- output: dispatch table mapping logical domain instances to execution
+  placements
+- no ownership of event wait/signal semantics
+- no ownership of execution order
+- no public authoring API beyond optional placement hints
+
 ## Scheduler
 
 The scheduler also has two build-graph parts:
@@ -45,6 +56,16 @@ Examples:
 - scheduler-CTA model
 - cluster-synchronous model
 
+Implementation owner: `src/scheduler/`.
+
+First scheduler contract:
+
+- input: dispatcher output plus explicit event dependencies
+- output: schedule payload for the selected execution strategy
+- no public scheduler base class
+- no runtime scheduler selection
+- static persistent scheduling is the first implemented strategy
+
 ## Kernel Lowering
 
 Kernel lowering also splits into reusable compiled logic plus orchestrate-target
@@ -61,6 +82,16 @@ Examples:
 - generate helper glue around backend/platform interaction
 
 This is also where fine-grained overlap needs careful treatment.
+
+Implementation owner: `src/lowering/`.
+
+First kernel-lowering contract:
+
+- input: named op table, typed resource table, event table, dispatch table, and
+  selected scheduler payload
+- output: CUDA/NVSHMEM executable path plus inspection metadata
+- owns stitching and launch payload construction
+- does not invent public fragment-op APIs
 
 ## Fine-Grained Compute/Communication Overlap
 
@@ -89,6 +120,31 @@ then chosen and specialized during orchestrate-target lowering.
 
 Runtime orchestration must not choose among them.
 
+## Internal Records
+
+The orchestrate target lowering may create internal records, but those records
+are not public authoring APIs.
+
+Minimum internal records for the first slice:
+
+- op table: named op symbol, implementation symbol, domain reference
+- resource table: typed view slots used by lowered code
+- event table: event storage, scope, release/acquire dependencies
+- dispatch table: logical domain to execution placement
+- schedule payload: static persistent execution order
+- kernel payload: named kernel entrypoints and stitched execution metadata
+- backend payload: NVSHMEM handles and signal/wait metadata needed by kernels
+
+Each record must have one owner:
+
+- public orchestrator builders collect semantic facts;
+- dispatcher owns placement;
+- scheduler owns execution order;
+- lowering owns kernel stitching and launch payloads;
+- platform/backend adapters own native handles and primitive calls.
+
+No record should duplicate a concept already owned by another layer.
+
 ## Implementation Architecture
 
 The implementation should likely organize these as separate internal components:
@@ -97,6 +153,8 @@ The implementation should likely organize these as separate internal components:
 - scheduler implementation
 - kernel-lowering implementation
 - target-lowering driver that applies them to one concrete orchestrate program
+- CUDA platform adapter under `src/platform/cuda/`
+- NVSHMEM backend adapter under `src/backends/nvshmem/`
 
 But they are not separate public authoring layers. Their composition is part of
 the CMake-managed build graph that produces one compiled orchestrate target.

@@ -39,10 +39,8 @@ fill a generic environment bag.
 - `09-first-validation-slice.md`: first narrow proof slice under the new
   boundary.
 - `10-verification.md`: contracts, failure modes, and verification evidence.
-- `11-implementation-contracts.md`: concrete public surfaces, planned paths,
-  first slice, and example-to-evidence mapping.
 
-Files `00` through `11` are the current active draft. They should be refined in
+Files `00` through `10` are the current active draft. They should be refined in
 place until each contract, example, planned path, and verification requirement
 is implementation-ready.
 

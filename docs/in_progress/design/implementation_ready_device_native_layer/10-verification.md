@@ -45,6 +45,36 @@
   only calls the compiled orchestration
 - two-rank runtime smoke tests for the first target where hardware is available
 
+## Example-To-Evidence Mapping
+
+- Program API example in `03-program.md` and
+  `09-first-validation-slice.md`:
+  compile-only test under `tests/build/` plus direct-call smoke test.
+- CMake examples in `04-cmake-build-and-runtime.md`:
+  configure/build test proving component target reuse and orchestrate target
+  linkage.
+- Dispatcher, scheduler, and lowering contracts in
+  `07-dispatcher-scheduler-kernel.md`:
+  generated/lowered metadata inspection showing op, resource, event, dispatch,
+  schedule, kernel, and backend payload ownership.
+- First slice runtime behavior in `09-first-validation-slice.md`:
+  two-rank CUDA/NVSHMEM test where hardware exists; explicit skip reason where
+  local NVSHMEM multi-GPU execution is unavailable.
+- No runtime strategy selection:
+  code inspection or test hook proving `run` does not call build, CMake,
+  dispatcher selection, scheduler selection, backend selection, or string-based
+  module loading.
+
+## Ready-To-Promote Criteria
+
+This active design is ready to merge back into `docs/design/` only when:
+
+- every public surface has a planned owner and file path in the owning chapter;
+- every example has a corresponding test, inspection, or skip rule;
+- no stable doc points at unfinished draft content as implemented behavior;
+- the first implementation slice can be built from the component contracts
+  without introducing new public concepts.
+
 ## Out Of Scope
 
 - Runtime compilation through the C++ API

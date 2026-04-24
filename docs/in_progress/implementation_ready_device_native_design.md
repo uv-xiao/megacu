@@ -31,7 +31,7 @@ design without treating unfinished architecture as stable implemented behavior.
 
 - [x] Define input, output, and verification criteria
 - [x] Move unfinished detailed design chapters out of `docs/design/`
-- [ ] Make event, task, schedule, kernel, shared, platform, and backend
+- [x] Make event, task, schedule, kernel, shared, platform, and backend
   contracts implementation-ready
 - [x] Map initial concrete design examples to tests, generated-code inspection, or
   explicit manual evidence
@@ -58,6 +58,14 @@ No automated tests are required for this documentation-only PR slice.
 - Stable picked direction: `docs/design/megacu_cpp_cuda_layer.md`
 - Active draft:
   `docs/in_progress/design/implementation_ready_device_native_layer/`
+- Component-owned concrete contracts:
+  - `03-program.md` for core authoring APIs: resources, events, domains, tasks,
+    submissions, and `run`
+  - `04-cmake-build-and-runtime.md` for CMake and runtime contracts
+  - `07-dispatcher-scheduler-kernel.md` for dispatcher, scheduler, kernel
+    lowering, platform, backend, and internal records
+  - `09-first-validation-slice.md` for first implementation paths
+  - `10-verification.md` for evidence mapping and promotion criteria
 
 ## Closeout
 

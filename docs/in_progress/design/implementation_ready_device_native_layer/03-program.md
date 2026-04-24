@@ -15,10 +15,17 @@ build-graph lowering:
 - resources
 - explicit events
 - logical work domains
+- tasks/submissions
 - orchestration order and control flow
 - optional mapping hints for the dispatcher
 
 That is the whole user-visible model.
+
+The first public header should be `include/megacu/orchestrator.h`. It owns the
+authoring builders for domains, events, tasks/submissions, and `run`. Typed
+resource views should live in `include/megacu/views.h`; backend-specific typed
+views, starting with NVSHMEM, should live under
+`include/megacu/backends/`.
 
 ## Named Ops
 
@@ -34,6 +41,18 @@ system. That kernel may be:
 
 The orchestrate program does not distinguish these as different public op
 kinds.
+
+Initial API shape:
+
+```cpp
+namespace ops {
+struct write_then_signal;
+struct wait_then_check;
+}
+```
+
+A named op is a type or symbol known to the native build graph. The user should
+not construct an op descriptor manually.
 
 ## Resources
 
@@ -51,6 +70,20 @@ Example shapes:
 Build-time lowering may map them to flat resource indices inside target
 internals.
 
+Initial API shape:
+
+```cpp
+namespace megacu {
+struct workspace_view;
+struct event_storage_view;
+struct tensor_view;
+}
+```
+
+Resource views are explicit C++ arguments to the orchestrate function. There is
+no generic resource map, no string lookup, and no public resource id plumbing in
+normal examples.
+
 ## Events
 
 Events remain first-class because they are the visible coordination mechanism
@@ -66,6 +99,20 @@ The orchestrate program should expose:
 Rich coordinate-heavy event spaces are allowed as builder helpers, but they
 should not become the dominant public mental model. The dispatcher and lowering
 can flatten them into compact target metadata.
+
+Initial API shape:
+
+```cpp
+auto ready = orch.event("ready", tile, megacu::remote_event{});
+
+args()
+    .signal(ready.release())
+    .wait(ready.acquire());
+```
+
+Event handles own logical coordination only. Backend signal objects, event
+storage offsets, memory-order details, and remote-rank mappings are target
+internals owned by lowering and backend adapters.
 
 ## Logical Work Domain
 
@@ -93,6 +140,51 @@ This is the information the dispatcher needs from the program model:
 - optional placement hints
 
 It does not need the user to pre-assign worker ids or scheduler lanes.
+
+Initial API shape:
+
+```cpp
+auto tile = orch.domain("tile", tiles);
+orch.submit(ops::write_then_signal, megacu::over(tile), args);
+```
+
+The domain name is for authoring and diagnostics. Lowering may replace it with
+compact ids in generated metadata, but those ids are not public authoring API.
+
+## Tasks And Submissions
+
+The public task concept is `submit`: one named op over one logical workset with
+typed arguments and dependencies.
+
+Initial API shape:
+
+```cpp
+orch.submit(
+    ops::write_then_signal,
+    megacu::over(tile),
+    megacu::args()
+        .workspace(workspace)
+        .signal(ready.release()));
+```
+
+`submit` records:
+
+- named op
+- logical workset
+- typed resource arguments
+- event acquire/release dependencies
+- optional placement hints when required by a target
+
+`submit` must not expose:
+
+- public `task_kind`
+- public `task_desc`
+- raw packed descriptor fields
+- scheduler lane ids
+- final rank/worker ids
+
+The implementation may lower submissions into compact task records, but those
+records are target internals.
 
 ## How Users Author Orchestrate Programs
 
@@ -137,6 +229,19 @@ The exact syntax is not fixed, but the structure is:
 - attach resources/events/domains through small builders
 - let the build graph lower the internals later
 
+For the first implementation, the required public surface is:
+
+- `megacu::orchestrator`
+- `megacu::domain`
+- `megacu::event`
+- `megacu::over(domain)`
+- `megacu::args()`
+- `megacu::orchestrator::submit(...)`
+- `megacu::orchestrator::run(...)`
+
+Anything else must justify why event, task/submission, schedule, or kernel
+contracts cannot work without it.
+
 ## Fine-Grained Overlap
 
 The program model supports fine-grained compute/communication overlap in two
@@ -164,3 +269,16 @@ The orchestrate program should not contain:
 - final worker/rank/resource indices
 
 Those belong to build-graph lowering and to target internals.
+
+## Program Implementation Target
+
+The first code slice should prove the program model through
+`examples/cuda_nvshmem_event_copy/` and compile checks under `tests/build/`.
+
+Program-model evidence:
+
+- a compile-only example using the public builder APIs above
+- no user-authored packed descriptors
+- no public task-trait field filling
+- no string resource lookup
+- direct call of the compiled orchestrate function from runtime C++

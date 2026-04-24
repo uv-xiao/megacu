@@ -363,3 +363,17 @@ were later promoted into `docs/design/`.
     snapshot, remove unfinished detailed chapters from stable design docs, do
     concrete refinement only under `docs/in_progress/design/`, and merge
     accepted documents back into `docs/design/` at PR closeout.
+
+- 2026-04-24 Asia/Shanghai - Component-owned implementation contracts
+  > We shouldn't put every thing in 11-implemented-contracts.md. Instead, we need to make very component of the design concrete, including the core abstraction APIs (event, task, ...) and all needs to be implemented.
+  - Context: User reviewed the first PR slice and rejected concentrating
+    implementation detail in one catch-all contract chapter.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/03-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/04-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/07-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/09-first-validation-slice.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-verification.md`
+  - Agent interpretation: Move concrete APIs, planned paths, records, and
+    evidence into the owning component chapters. The active design should make
+    each implementable component concrete instead of centralizing all detail in
+    a final implementation-contract appendix.

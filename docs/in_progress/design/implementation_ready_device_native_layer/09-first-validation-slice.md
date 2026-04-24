@@ -38,6 +38,36 @@ The logical program should still be the `cuda_nvshmem_event_copy` shape:
 
 But the authored object is now the orchestrate program itself.
 
+Initial public API proof:
+
+```cpp
+void cuda_nvshmem_event_copy_orchestrate(
+    megacu::workspace_view workspace,
+    megacu::event_storage_view events,
+    megacu::nvshmem_team_view team,
+    std::int32_t tiles) {
+  megacu::orchestrator orch{workspace, events, team};
+
+  auto tile = orch.domain("tile", tiles);
+  auto ready = orch.event("ready", tile, megacu::remote_event{});
+
+  orch.submit(
+      ops::write_then_signal,
+      megacu::over(tile),
+      megacu::args().workspace(workspace).signal(ready.release()));
+
+  orch.submit(
+      ops::wait_then_check,
+      megacu::over(tile),
+      megacu::args().wait(ready.acquire()).workspace(workspace));
+
+  orch.run();
+}
+```
+
+The example must compile without public task descriptors, raw resource ids,
+runtime scheduler objects, or string-based module loading.
+
 ## Runtime Path
 
 The runtime proof should look like:
@@ -49,6 +79,25 @@ The runtime proof should look like:
 
 The runtime should not call CMake/build logic or select scheduler/backend
 strategy.
+
+## Planned Paths
+
+- Public API headers:
+  - `include/megacu/orchestrator.h`
+  - `include/megacu/views.h`
+  - `include/megacu/backends/nvshmem.h`
+- Build rules:
+  - `cmake/MegacuTargets.cmake`
+- Internal implementation:
+  - `src/dispatcher/`
+  - `src/scheduler/`
+  - `src/lowering/`
+  - `src/platform/cuda/`
+  - `src/backends/nvshmem/`
+- Proof:
+  - `examples/cuda_nvshmem_event_copy/`
+  - `tests/build/`
+  - `tests/runtime/`
 
 ## Acceptance Evidence
 
@@ -62,3 +111,11 @@ Required evidence:
 - generated-code inspection for the built CUDA/NVSHMEM target
 - two-rank payload visibility test where environment permits
 - explicit skip reason where local NVSHMEM multi-GPU execution is unavailable
+
+Ready-to-implement criteria:
+
+- the public API proof above can be written using only the planned headers;
+- the CMake proof can be written using only the two planned CMake functions;
+- each generated/lowered record has a single owner from
+  `07-dispatcher-scheduler-kernel.md`;
+- `run` has no path to build logic or runtime strategy selection.
