@@ -275,7 +275,9 @@ First kernel-lowering output shape, planned path
 namespace megacu::detail {
 struct kernel_symbol {
   std::string_view op_name;
-  void const *host_stub;
+  std::uint16_t op_slot;
+  std::uint16_t host_symbol_id;
+  std::uint16_t device_symbol_id;
 };
 
 struct cuda_launch_shape {
@@ -294,9 +296,12 @@ struct kernel_plan {
 ```
 
 The first persistent lowering may launch one stitched persistent entrypoint
-implemented by Megacu and call linked op bodies through a small op table. It may
-also temporarily use separate launches while the persistent engine is being
-built. In both cases, the normal path links existing C++/CUDA symbols and
+implemented by Megacu and call linked op bodies through a small op table. The
+op table is built from CMake `OPS` entries and follows the op implementation ABI
+in `10-implementation-architecture.md`.
+
+It may also temporarily use separate launches while the persistent engine is
+being built. In both cases, the normal path links existing C++/CUDA symbols and
 metadata; it does not emit a new program-specific `.cu` file.
 
 ## Fine-Grained Compute/Communication Overlap
@@ -378,7 +383,7 @@ struct event_layout_entry {
   std::uint16_t event_slot;
   std::uint16_t domain_rank;
   std::uint32_t byte_offset;
-  memory_scope scope;
+  megacu::memory_scope scope;
 };
 
 struct nvshmem_backend_plan {
@@ -404,6 +409,8 @@ Runtime validation for this plan must check:
 - multimem-specific paths are only enabled when the backend reports support.
 - overlap schedules only launch when the current CUDA device satisfies the
   materialized `cuda_residency_envelope`.
+- linked runtime metadata passes magic, version, size, checksum, and table
+  presence validation before backend plans are read.
 
 ## Kernel Context Contract
 
@@ -411,6 +418,14 @@ Lowered kernels receive a platform-specific context. For CUDA first:
 
 ```cpp
 namespace megacu::cuda {
+enum class capability : std::uint8_t {
+  multimem_reduce
+};
+
+struct backend_capabilities {
+  __device__ bool supports(capability capability) const;
+};
+
 struct kernel_context {
   template <class DomainTag>
   __device__ domain_point<DomainTag> domain_point() const;
@@ -427,6 +442,8 @@ struct kernel_context {
   __device__ megacu::nvshmem::event_endpoint event(
       DomainPoint point,
       backend_peer peer) const;
+
+  __device__ backend_capabilities backend() const;
 };
 }
 ```

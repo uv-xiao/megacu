@@ -76,7 +76,7 @@ struct gemm_allreduce_overlap_program {
             .from = compute,
             .to = reduce,
             .storage = events,
-            .scope = megacu::memory_scope::device});
+            .scope = megacu::memory_scope::remote_team});
 
     p.submit(
         ops::gemm_tile_produce{},
@@ -95,7 +95,9 @@ struct gemm_allreduce_overlap_program {
         megacu::args()
             .partial(ws.partial)
             .out(ws.c)
-            .acquire(partial_ready.acquire_all(rank)));
+            .acquire(partial_ready.acquire_all(
+                rank,
+                megacu::event_wait::blocking_device())));
   }
 };
 ```
@@ -175,7 +177,7 @@ void allreduce_tile_consume_kernel(
     megacu::nvshmem::wait(ctx, ready, 1);
   }
 
-  if (ctx.backend().supports(megacu::capability::multimem_reduce)) {
+  if (ctx.backend().supports(megacu::cuda::capability::multimem_reduce)) {
     megacu::nvshmem::multimem_reduce_tile(ctx, ws.partial, ws.c, problem, tile);
   } else {
     megacu::nvshmem::load_reduce_store_tile(ctx, ws.partial, ws.c, problem, tile);
@@ -212,8 +214,12 @@ megacu_add_orchestrate_target(
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
-    gemm_tile_produce=gemm_tile_produce_kernel
-    allreduce_tile_consume=allreduce_tile_consume_kernel
+    gemm_tile_produce
+      HOST gemm_tile_produce_kernel
+      DEVICE gemm_tile_produce_body
+    allreduce_tile_consume
+      HOST allreduce_tile_consume_kernel
+      DEVICE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE phased
   BACKEND_ENVELOPE
@@ -226,8 +232,12 @@ megacu_add_orchestrate_target(
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
-    gemm_tile_produce=gemm_tile_produce_kernel
-    allreduce_tile_consume=allreduce_tile_consume_kernel
+    gemm_tile_produce
+      HOST gemm_tile_produce_kernel
+      DEVICE gemm_tile_produce_body
+    allreduce_tile_consume
+      HOST allreduce_tile_consume_kernel
+      DEVICE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
@@ -326,7 +336,8 @@ come from the same NVSHMEM session and are symmetric allocations. The wrapper
 returns the compiled target `megacu::status`; a Python binding may translate a
 non-OK status into a Python exception at the framework boundary.
 
-The first Torch launch path should look like:
+An external Torch wrapper or integration test can expose a Python-facing shape
+like this without making Python part of Megacu core:
 
 ```python
 session = megacu.torch.NvshmemSession.from_torch_distributed()

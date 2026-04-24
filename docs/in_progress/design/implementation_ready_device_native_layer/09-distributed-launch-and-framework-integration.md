@@ -100,8 +100,12 @@ megacu_add_orchestrate_target(
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
-    gemm_tile_produce=gemm_tile_produce_kernel
-    allreduce_tile_consume=allreduce_tile_consume_kernel
+    gemm_tile_produce
+      HOST gemm_tile_produce_kernel
+      DEVICE gemm_tile_produce_body
+    allreduce_tile_consume
+      HOST allreduce_tile_consume_kernel
+      DEVICE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
@@ -185,20 +189,24 @@ First MPI launcher command:
 mpirun -np 2 ./cuda_nvshmem_gemm_allreduce_mpi --m 128 --n 128 --k 128
 ```
 
-## Torch Distributed Adapter
+## Torch Distributed Integration
 
-Torch integration should not require MPI. It should use `torchrun` as the
-process launcher and `torch.distributed` as a control plane for rank/world-size
-and UID exchange. CUDA/NVSHMEM remains the device communication backend.
+Torch integration should not require MPI. It may use `torchrun` as the process
+launcher and `torch.distributed` as a control plane for rank/world-size and UID
+exchange. CUDA/NVSHMEM remains the device communication backend.
+
+Megacu core remains C++/CUDA. Any Python-facing Torch package is an optional
+external framework adapter or test harness. It must depend on the compiled
+C++/CUDA target rather than introduce Python into Megacu's core authoring,
+lowering, metadata, or runtime ABI.
 
 Planned paths:
 
-- `python/megacu/torch/nvshmem.py`
-- `python/megacu/torch/gemm_allreduce.py`
-- `src/integrations/torch/`
+- `src/integrations/torch/` for optional C++ extension glue;
+- `examples/cuda_nvshmem_gemm_allreduce/torch/` for reference wrapper code;
 - `tests/integration/torch/`
 
-Initial Python-facing shape:
+Reference Python-facing shape for the optional wrapper:
 
 ```python
 session = megacu.torch.NvshmemSession.from_torch_distributed()

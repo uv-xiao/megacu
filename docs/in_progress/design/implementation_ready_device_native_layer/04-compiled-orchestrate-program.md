@@ -88,12 +88,16 @@ namespace megacu {
 enum class status_code : std::uint8_t {
   ok,
   invalid_argument,
-  backend_error
+  unsupported,
+  backend_error,
+  launch_error,
+  metadata_error
 };
 
 struct status {
   status_code code;
-  std::string_view message;
+  std::uint16_t detail;
+  char const *message;
 };
 
 struct tensor_view {
@@ -157,7 +161,7 @@ megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
     gemm_ar_problem problem) {
-  auto *metadata = megacu::detail::target_metadata_for<
+  auto metadata = megacu::detail::target_metadata_for<
       gemm_allreduce_overlap_program,
       cuda_nvshmem_static_components>();
 
@@ -180,6 +184,7 @@ The invariants are:
 - the function receives all runtime values through typed parameters;
 - it fills slots by typed tags;
 - it computes dynamic extents from `problem`;
+- it validates linked metadata before using tables from the metadata blob;
 - it calls one linked execution entrypoint;
 - it returns `megacu::status` for validation, launch, and backend failures;
 - it does not choose strategy, parse names, compile, or load plugins.
@@ -219,3 +224,5 @@ The build graph may still materialize internal prepared data such as:
 - backend/platform payload.
 
 Those are target internals. They are not the normal user authoring surface.
+The runtime copy of this metadata must use the serializable blob format from
+`10-implementation-architecture.md`, not process-local C++ record objects.

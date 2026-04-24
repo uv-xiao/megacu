@@ -45,6 +45,8 @@ only when they are necessary to understand an implementation contract.
 - `09-distributed-launch-and-framework-integration.md`: CUDA+NVSHMEM
   multi-process launch, Torch Distributed integration, MPI integration, and
   symmetric allocation contracts.
+- `10-implementation-architecture.md`: cross-cutting implementation guardrails
+  for metadata, status, op symbols, dependencies, and error boundaries.
 
 These chapters should be refined in place until each contract, example, planned
 path, and verification requirement is implementation-ready.

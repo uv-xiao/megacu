@@ -91,8 +91,10 @@ For the first implementation, the cleanest split is:
   - `run(...)`
 
 - **Framework integration**
-  - Torch Distributed adapter code that reads rank/world state, exchanges the
-    NVSHMEM UID, owns symmetric allocation wrappers, and calls the compiled C++
-    target through an extension binding
+  - optional Torch Distributed adapter code outside Megacu core that reads
+    rank/world state, exchanges the NVSHMEM UID, owns symmetric allocation
+    wrappers, and calls the compiled C++ target through an extension binding
   - no framework types in `program_ir`, dispatcher, scheduler, kernel, or
     backend-plan records
+  - no Python dependency in public program headers, materializers, metadata,
+    lowering, backend adapters, or compiled target ABI

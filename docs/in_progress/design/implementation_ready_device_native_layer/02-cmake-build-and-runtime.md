@@ -139,10 +139,16 @@ is easiest to test:
    - `cuda_nvshmem_gemm_allreduce_phased.megacu.bin` and
      `cuda_nvshmem_gemm_allreduce_overlap.megacu.bin` for compact runtime
      metadata.
-5. The orchestrate target embeds or links the binary metadata as data.
+5. CMake turns each `.megacu.bin` into a linked binary-object target or
+   equivalent native data section.
+6. The orchestrate target links that metadata object and accesses it through
+   `megacu::detail::linked_target_metadata(...)`.
 
 This is metadata generation, not source generation. The materializer must not
 write `.cc`, `.cu`, `.cuh`, `.ptx`, or `.cubin` files for the program.
+The linked binary object must not contain raw C++ pointers, spans, string views,
+type indexes, or allocator-owned state; see
+`10-implementation-architecture.md`.
 
 Initial CMake API shape:
 
@@ -153,8 +159,12 @@ megacu_add_orchestrate_target(
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
-    gemm_tile_produce=gemm_tile_produce_kernel
-    allreduce_tile_consume=allreduce_tile_consume_kernel
+    gemm_tile_produce
+      HOST gemm_tile_produce_kernel
+      DEVICE gemm_tile_produce_body
+    allreduce_tile_consume
+      HOST allreduce_tile_consume_kernel
+      DEVICE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE phased
   BACKEND_ENVELOPE
@@ -167,8 +177,12 @@ megacu_add_orchestrate_target(
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
-    gemm_tile_produce=gemm_tile_produce_kernel
-    allreduce_tile_consume=allreduce_tile_consume_kernel
+    gemm_tile_produce
+      HOST gemm_tile_produce_kernel
+      DEVICE gemm_tile_produce_body
+    allreduce_tile_consume
+      HOST allreduce_tile_consume_kernel
+      DEVICE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
@@ -192,6 +206,8 @@ The first implementation should fail CMake configure or build if:
 
 - an `OPS` key in CMake has no matching op tag in `program_ir`;
 - a program op has no implementation symbol in `OPS`;
+- the selected lowering mode requires a `HOST` or `DEVICE` symbol that the
+  `OPS` entry does not provide;
 - a resource slot in the program has no matching parameter in the declared
   orchestrate ABI;
 - the selected backend cannot provide a required event scope or primitive;
@@ -230,6 +246,7 @@ program_builder
   -> schedule_plan
   -> kernel_plan + backend_plan
   -> target_metadata(.json/.bin)
+  -> linked metadata object
   -> compiled orchestrate target
 ```
 
@@ -245,6 +262,8 @@ Owner by stage:
   `include/megacu/backends/nvshmem.h`, and
   `docs/in_progress/design/implementation_ready_device_native_layer/09-distributed-launch-and-framework-integration.md`;
 - metadata writer/reader: `src/target/metadata.*`.
+- metadata ABI and embedding guardrails:
+  `docs/in_progress/design/implementation_ready_device_native_layer/10-implementation-architecture.md`.
 
 ## Parameterized Orchestrate Slot Fill
 

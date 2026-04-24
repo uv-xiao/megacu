@@ -66,9 +66,17 @@
   compilation rather than runtime code generation
 - checks proving kernel lowering and target lowering select/link existing
   implementations and materialize metadata rather than emit new C++/CUDA source
+- checks proving `.megacu.bin` runtime metadata is a serializable data blob with
+  no process-local C++ fields and is linked as data, not generated source
+- checks proving linked metadata validation rejects bad magic, version, size,
+  checksum, or missing required tables before any kernel launch
+- checks proving CMake `OPS` entries resolve to the host/device symbols required
+  by the selected lowering mode
 - direct-call smoke tests for the compiled orchestrate program
 - direct-call smoke tests proving compiled targets return `megacu::status` for
   validation, launch, and backend errors rather than throwing from the core ABI
+- status ABI tests proving returned status messages point to static storage or
+  null, not temporary strings
 - linked-artifact or metadata inspection for the first CUDA/NVSHMEM target,
   including domain, participant, event, dispatch, schedule, and backend slots
 - metadata inspection proving the phased target uses `progress_model::phased`
@@ -95,6 +103,8 @@
   backend plan requires remote NVSHMEM access
 - tests proving symmetric event and partial buffers carry backend/session
   identities matching the launched `team_view`
+- checks proving optional Torch integration stays outside Megacu core and does
+  not introduce Python into public program, metadata, lowering, or runtime ABI
 
 ## Concrete Metadata Checks
 
@@ -131,6 +141,10 @@ The first metadata JSON must be checked for these facts:
 - a backend plan that names event storage size, event offsets, team size, and
   whether multimem reduce is enabled;
 - a platform launch slot for `megacu::cuda::launch_view`;
+- metadata header fields for magic, metadata ABI version, target id, component
+  ids, table offsets/counts, and total size/checksum;
+- op implementation metadata for each op slot naming the symbol ids required by
+  the selected lowering mode;
 - a backend target envelope with `TEAM_SIZE 2` for the first proof;
 - resource metadata marking `partial` and `events` as requiring symmetric
   NVSHMEM-accessible storage;
@@ -171,6 +185,9 @@ Any missing item means the design has not become implementation-ready.
   code inspection or test hook proving `run` does not call build, CMake,
   dispatcher selection, scheduler selection, backend selection, or string-based
   module loading.
+- Implementation architecture guardrails in `10-implementation-architecture.md`:
+  metadata ABI tests, dependency-boundary inspection, status ABI tests, and
+  linked-op-symbol inspection.
 
 ## Ready-To-Promote Criteria
 

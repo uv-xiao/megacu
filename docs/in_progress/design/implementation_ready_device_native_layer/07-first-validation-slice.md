@@ -130,6 +130,7 @@ strategy.
   - `src/target/`
 - Proof:
   - `examples/cuda_nvshmem_gemm_allreduce/`
+  - `examples/cuda_nvshmem_gemm_allreduce/torch/`
   - `tests/build/`
   - `tests/runtime/`
   - `tests/integration/torch/`
@@ -149,6 +150,13 @@ Required evidence:
 - linked-artifact and metadata inspection for the built CUDA/NVSHMEM target;
 - inspection proving kernel lowering selected/linked existing implementations
   rather than emitting new CUDA/C++ source;
+- inspection proving runtime metadata comes from a linked `.megacu.bin` data
+  object and contains no raw pointers, spans, string views, type indexes, or
+  allocator-owned state;
+- linked-symbol inspection proving each CMake `OPS` entry resolved to the
+  host/device symbols required by the selected lowering mode;
+- smoke tests proving invalid linked metadata returns
+  `status_code::metadata_error` before any kernel launch;
 - metadata inspection proving the phased target uses `progress_model::phased`;
 - metadata inspection proving the overlap target uses
   `progress_model::co_resident_persistent` and contains a residency group with
@@ -194,23 +202,28 @@ The implementation should land in this order:
 4. Dispatcher/scheduler/backend metadata:
    the materializer output includes dispatch, schedule, kernel, and backend
    plans for the phased and overlap CUDA/NVSHMEM targets.
-5. Direct ABI smoke test:
+5. Linked metadata object:
+   CMake embeds each `.megacu.bin` as linked data, and runtime metadata
+   validation rejects malformed magic, version, size, checksum, or missing table
+   fields.
+6. Direct ABI smoke test:
    deployment code can call
    `cuda_nvshmem_gemm_allreduce_phased_orchestrate(...)` and
    `cuda_nvshmem_gemm_allreduce_overlap_orchestrate(...)`
    without constructing an executor or runtime environment.
-6. Co-residency guard proof:
+7. Co-residency guard proof:
    metadata inspection proves the overlap schedule launches compute and
    communication workers in the same residency group, and a negative test proves
    unsafe blocking waits are rejected.
-7. MPI/NVSHMEM launch proof:
+8. MPI/NVSHMEM launch proof:
    `mpirun -np 2 ./cuda_nvshmem_gemm_allreduce_mpi ...` constructs a
    `mpi_nvshmem_session`, validates the two-PE team, and runs correctness where
    hardware exists.
-8. Torch/NVSHMEM launch proof:
+9. Torch/NVSHMEM launch proof:
    `torchrun --standalone --nnodes=1 --nproc-per-node=2 ...` constructs a
-   fixed-world `NvshmemSession`, validates Torch rank/world against NVSHMEM
-   PE/count, and runs correctness where hardware exists.
+   fixed-world optional Torch wrapper, validates Torch rank/world against
+   NVSHMEM PE/count, and runs correctness where hardware exists without adding
+   Python to Megacu core.
 
 Each milestone should have a small test or inspection artifact before moving to
 the next one. The first implementation should not start with the MPK-style

@@ -551,3 +551,14 @@ were later promoted into `docs/design/`.
     decisions in `docs/design/`. The active implementation-ready draft should
     retain only implementation surfaces, records, owner paths, runtime paths,
     examples, failure checks, and verification evidence.
+
+- 2026-04-24 Asia/Shanghai - Re-review implementation design for architecture health
+  > Review and check if the documents are complete and concrete enough, and also check if it meets the high-level architecture requirements or story. Also, you need to do good architecting again to make sure the implementation is robust, healthy, maintainable.
+  - Context: User asked for another architecture-quality pass after the active
+    implementation docs were made more concise.
+  - Related: `docs/design/megacu_cpp_cuda_layer.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`
+  - Agent interpretation: Re-check completeness against the high-level lifecycle
+    and C++-only story, then tighten implementation contracts that would affect
+    robustness, maintainability, metadata safety, runtime ABI stability, and
+    component ownership.

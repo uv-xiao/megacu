@@ -79,6 +79,13 @@ enough that an implementer can write it directly.
 Planned internal path: `include/megacu/detail/program_ir.h`.
 
 ```cpp
+namespace megacu {
+enum class memory_scope : std::uint8_t {
+  local_device,
+  remote_team
+};
+}
+
 namespace megacu::detail {
 using slot_index = std::uint16_t;
 
@@ -119,7 +126,7 @@ struct event_decl {
   slot_index from_participant;
   slot_index to_participant;
   slot_index storage_resource;
-  memory_scope scope;
+  megacu::memory_scope scope;
 };
 
 enum class event_use_kind : std::uint8_t { acquire_one, acquire_all, release };
@@ -169,13 +176,40 @@ orchestrate target. They are not stable across targets and must not appear in
 the public API.
 
 The first implementation can use owning `std::vector` storage behind the spans.
-The important contract is the field set above, not the container choice.
+The important contract is the field set above, not the container choice. This
+record is build-time-only. Before it is linked into a target, it must be lowered
+to the serializable runtime metadata format described in
+`10-implementation-architecture.md`; runtime metadata must not contain
+`std::span`, `std::string_view`, `std::type_index`, raw pointers, or allocator
+state.
 
 `event_wait_mode` is not a public scheduler API. It records whether a lowered
-event acquire may block in device code. The first builder can infer it from the
-event argument helper used by the target or from a CMake op requirement. Target
-lowering needs this bit so the overlap scheduler can reject blocking waits that
-do not have a co-residency or completed-phase proof.
+event acquire may block in device code. The first implementation should record
+it explicitly from the event helper:
+
+```cpp
+.acquire(partial_ready.acquire_all(
+    rank,
+    megacu::event_wait::blocking_device()))
+```
+
+If an op implementation performs an internal backend wait not represented by an
+event acquire, the CMake `OPS` entry must mark that op as requiring blocking
+device progress. Target lowering needs this bit so the overlap scheduler can
+reject blocking waits that do not have a co-residency or completed-phase proof.
+
+The public helper can be minimal:
+
+```cpp
+namespace megacu::event_wait {
+struct spec {
+  event_wait_mode mode;
+};
+
+constexpr spec blocking_device();
+constexpr spec phase_satisfied();
+}
+```
 
 ## First Implementation Shape
 
@@ -228,7 +262,11 @@ struct gemm_allreduce_overlap_program {
     auto partial_ready = p.event<partial_ready_event>(
         "partial_ready",
         megacu::over(tile, rank),
-        megacu::remote_event{.from = compute, .to = reduce, .storage = events});
+        megacu::remote_event{
+            .from = compute,
+            .to = reduce,
+            .storage = events,
+            .scope = megacu::memory_scope::remote_team});
 
     p.submit(
         ops::gemm_tile_produce{},
@@ -247,7 +285,9 @@ struct gemm_allreduce_overlap_program {
         megacu::args()
             .partial(workspace.partial)
             .out(workspace.c)
-            .acquire(partial_ready.acquire_all(rank)));
+            .acquire(partial_ready.acquire_all(
+                rank,
+                megacu::event_wait::blocking_device())));
   }
 };
 
@@ -306,14 +346,20 @@ megacu_add_orchestrate_target(
   SOURCES gemm_allreduce_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
-    gemm_tile_produce=gemm_tile_produce_kernel
-    allreduce_tile_consume=allreduce_tile_consume_kernel
+    gemm_tile_produce
+      HOST gemm_tile_produce_kernel
+      DEVICE gemm_tile_produce_body
+    allreduce_tile_consume
+      HOST allreduce_tile_consume_kernel
+      DEVICE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
 )
 ```
 
-The op keys in `OPS` are build-time names that must match the op tags'
-`name`. They are not runtime lookup keys.
+The op keys in `OPS` are build-time names that must match the op tags' `name`.
+They are not runtime lookup keys. `HOST` symbols are required for separate
+kernel-launch lowering. `DEVICE` symbols or lowering-provided trampolines are
+required for stitched persistent lowering.
 
 ## Resources
 
@@ -339,11 +385,15 @@ struct workspace_view;
 enum class status_code : std::uint8_t {
   ok,
   invalid_argument,
-  backend_error
+  unsupported,
+  backend_error,
+  launch_error,
+  metadata_error
 };
 struct status {
   status_code code;
-  std::string_view message;
+  std::uint16_t detail;
+  char const *message;
 };
 struct backend_id {
   std::uint16_t value;
@@ -436,11 +486,14 @@ auto partial_ready = p.event<partial_ready_event>(
     megacu::remote_event{
         .from = compute,
         .to = reduce,
-        .storage = events});
+        .storage = events,
+        .scope = megacu::memory_scope::remote_team});
 
 args()
     .release(partial_ready.release())
-    .acquire(partial_ready.acquire_all(rank));
+    .acquire(partial_ready.acquire_all(
+        rank,
+        megacu::event_wait::blocking_device()));
 ```
 
 Event handles own logical coordination only. Backend signal objects, event
