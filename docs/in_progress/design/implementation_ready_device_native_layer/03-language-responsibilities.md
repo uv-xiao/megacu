@@ -13,13 +13,6 @@ Authoring C++ is the right place for:
 - registering named kernels and native adapters
 - expressing the orchestration through a small builder surface
 
-This is the natural place for the current design because:
-
-- the project should stay C++ only
-- CMake should own build graph work outside the runtime API
-- the program model should stay close to ordinary native code rather than a
-  template-heavy metaprogramming layer
-
 This authoring code is the thing that gets compiled and run.
 
 ## CMake And Native Build Layer
@@ -79,22 +72,6 @@ It should not:
 
 That is the core boundary for implementation.
 
-## What About Pure C++ Users?
-
-Pure C++ users are the primary path, but still through an offline CMake/native
-build path, not through a runtime build API.
-
-Possible working paths:
-
-- use CMake helper functions such as `megacu_add_components(...)` and
-  `megacu_add_orchestrate_target(...)`
-- use Bazel rules that mirror the same separation
-- check in prebuilt runtime artifacts when deployment needs that
-- link the resulting target and call the orchestrate function from C++
-
-So the absence of runtime build APIs does not mean C++ users are excluded. It
-only means strategy selection stays outside the runtime process.
-
 ## First Implementation Recommendation
 
 For the first implementation, the cleanest split is:
@@ -119,6 +96,3 @@ For the first implementation, the cleanest split is:
     target through an extension binding
   - no framework types in `program_ir`, dispatcher, scheduler, kernel, or
     backend-plan records
-
-This aligns the implementation path with the design goal of compile-time
-strategy selection and runtime minimal overhead.

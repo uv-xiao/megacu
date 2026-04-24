@@ -41,7 +41,7 @@ That binding is linked/materialized inside the compiled target. It is not a
 public `exec.bind(...)` step and does not require emitted C++/CUDA source.
 
 The descriptor compiled into that target is the GEMM+AllReduce descriptor shown
-in `03-program.md` and `08-examples.md`. The important properties are:
+in `01-program.md` and `06-examples.md`. The important properties are:
 
 - no string path loading;
 - no generic `runtime_env`;
@@ -184,21 +184,6 @@ The invariants are:
 - it returns `megacu::status` for validation, launch, and backend failures;
 - it does not choose strategy, parse names, compile, or load plugins.
 
-## Why This Is Better
-
-A generic runtime loader weakens the zero-overhead story because it:
-
-- hides what resources are actually required;
-- shifts mistakes toward runtime checking;
-- makes the primary API look like a plugin system.
-
-The compiled-orchestrate-program path is better because it:
-
-- makes requirements explicit in ordinary C++ signatures;
-- lets normal code use ordinary CMake linking;
-- keeps the orchestration code close to the real resources it needs;
-- gives lowering typed identities for event and participant resolution.
-
 ## What Runs
 
 The compiled target contains the user-authored orchestrate function, linked
@@ -234,9 +219,3 @@ The build graph may still materialize internal prepared data such as:
 - backend/platform payload.
 
 Those are target internals. They are not the normal user authoring surface.
-
-## Optional Advanced Deployment Path
-
-If the project later needs plugin-style deployment or late-bound artifacts, that
-can exist as an optional lower-layer ABI. It should not be the primary design
-path or the primary example path.

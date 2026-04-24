@@ -243,18 +243,13 @@ Owner by stage:
 - `backend_plan`: `src/backends/nvshmem/lowering.*`;
 - `launch/runtime views`: `include/megacu/platform/cuda.h`,
   `include/megacu/backends/nvshmem.h`, and
-  `docs/in_progress/design/implementation_ready_device_native_layer/11-distributed-launch-and-framework-integration.md`;
+  `docs/in_progress/design/implementation_ready_device_native_layer/09-distributed-launch-and-framework-integration.md`;
 - metadata writer/reader: `src/target/metadata.*`.
 
-## Parameterized Orchestrate Necessity
+## Parameterized Orchestrate Slot Fill
 
-The public runtime boundary should be a parameterized compiled orchestrate
-function, not `exec.bind(...)` plus `exec.run(...)`.
-
-The split that is still necessary is not a public API split. The build graph can
-know the program structure, but it cannot know every runtime pointer, buffer
-size, team handle, or tile count. The compiled target therefore has internal
-typed slots:
+The compiled target has internal typed slots for runtime values the build graph
+cannot know:
 
 - resource slots for values such as workspace and event storage;
 - extent slots for dynamic domain sizes such as matrix tile counts;
@@ -270,17 +265,6 @@ ordinary C++ call:
 auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     workspace, events, launch, team, problem);
 ```
-
-This is preferable to exposing the slots directly:
-
-| Alternative | Why not primary |
-| --- | --- |
-| Public `exec.bind(...)` plus `exec.run(...)` | Exposes an implementation mechanism after the target is already compiled and makes the runtime surface look like a two-phase mini-runtime. |
-| Generic `runtime_env` bag | Reintroduces stringly lookup and hides required resources from the C++ signature. |
-| Positional argument array | Compact but brittle; materialized metadata and user code can disagree silently. |
-| Rebuild for every shape | Defeats repeated-run use cases and makes dynamic tile/token counts expensive. |
-| Let kernels receive all raw pointers/handles manually | Pushes lowering details into every kernel and prevents scheduler/backend inspection. |
-| Megacu-owned allocator/event pool | Makes Megacu responsible for allocation policy and framework integration decisions. |
 
 For `cuda_nvshmem_gemm_allreduce_overlap`:
 
@@ -392,32 +376,11 @@ For the first static persistent CUDA/NVSHMEM target, `run` should do only:
 - create CMake targets;
 - compile or link code.
 
-## What Changed From The Previous Model
-
-The earlier redesign still looked too much like a plugin runtime, and then too
-much like a generated-wrapper system.
-
-The new design removes that ambiguity:
-
-- CMake component targets own reusable engine compilation
-- the user's compiled orchestrate program is the primary runtime surface
-- `run` remains the repeated fast-path execution inside that program
-
-There is no runtime phase that still secretly chooses scheduler or lowering.
-
 ## Dynamic Behavior
 
-The lifecycle handles dynamic behavior at two public levels:
-
-- **component-target structure**: which reusable dispatcher/scheduler/lowering
-  engines exist
-- **compiled orchestrate function**: how one concrete orchestrate program is
-  compiled/linked against those engines, including which parameters remain
-  dynamic at call time
-
-Runtime dynamics are just parameters of the compiled orchestrate function. This
-avoids turning `run` into a hidden graph builder or runtime compiler while also
-avoiding a public bind/run layer after compilation.
+Runtime dynamics are parameters of the compiled orchestrate function. Target
+structure is fixed by the build graph; `run` must not become a graph builder or
+runtime compiler.
 
 ## Working Path
 

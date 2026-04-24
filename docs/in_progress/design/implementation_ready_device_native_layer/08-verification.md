@@ -55,9 +55,9 @@
   participants, resources, events, and submissions for GEMM+AllReduce
 - inspection evidence that `dispatch_plan`, `schedule_plan`, `kernel_plan`, and
   `backend_plan` are materialized with the ownership described in
-  `07-dispatcher-scheduler-kernel.md`
+  `05-dispatcher-scheduler-kernel.md`
 - design or compile evidence that each public concept in
-  `03-program.md` is required by either scheduling, lowering, backend
+  `01-program.md` is required by either scheduling, lowering, backend
   resolution, or runtime parameterization
 - tests or inspection proving compiled function parameters fill pre-lowered
   slots and do not select dispatcher, scheduler, lowering, platform, or backend
@@ -141,29 +141,29 @@ Any missing item means the design has not become implementation-ready.
 
 ## Example-To-Evidence Mapping
 
-- Program API example in `03-program.md` and
-  `09-first-validation-slice.md`:
+- Program API example in `01-program.md` and
+  `07-first-validation-slice.md`:
   compile-only test under `tests/build/` plus direct-call smoke test.
-- CMake examples in `04-cmake-build-and-runtime.md`:
+- CMake examples in `02-cmake-build-and-runtime.md`:
   configure/build test proving component target reuse and orchestrate target
   linkage.
 - Dispatcher, scheduler, and lowering contracts in
-  `07-dispatcher-scheduler-kernel.md`:
+  `05-dispatcher-scheduler-kernel.md`:
   linked-artifact and metadata inspection showing op, resource, event,
   dispatch, participant, schedule, kernel, and backend payload ownership.
-- Kernel context and backend primitive examples in `03-program.md` and
-  `08-examples.md`:
+- Kernel context and backend primitive examples in `01-program.md` and
+  `06-examples.md`:
   compile-only checks showing kernels use typed `kernel_context` APIs instead
   of string event lookup or hand-authored backend signal addresses.
-- First slice runtime behavior in `09-first-validation-slice.md`:
+- First slice runtime behavior in `07-first-validation-slice.md`:
   two-rank CUDA/NVSHMEM GEMM+AllReduce correctness tests through both MPI and
   Torch launch paths where hardware exists; explicit skip reason for each
   unavailable launcher or local NVSHMEM multi-GPU environment.
 - Distributed launch contract in
-  `11-distributed-launch-and-framework-integration.md`:
+  `09-distributed-launch-and-framework-integration.md`:
   adapter unit tests for team construction, device selection, symmetric
   allocation checks, and rank/world mismatch failures.
-- Larger MPK-style example in `08-examples.md`:
+- Larger MPK-style example in `06-examples.md`:
   design/compile evidence that a serving-layer program can link CUDA-provided
   RMSNorm, linear, paged-attention, split-reduce, and residual-output operator
   bodies without changing the public program model.
@@ -181,11 +181,3 @@ This active design is ready to merge back into `docs/design/` only when:
 - no stable doc points at unfinished draft content as implemented behavior;
 - the first implementation slice can be built from the component contracts
   without introducing new public concepts.
-
-## Out Of Scope
-
-- Runtime compilation through the C++ API
-- String-path plugin loading as the primary API
-- Public fragment-op taxonomies
-- Public multiple scheduler APIs in the thin core
-- Reimplementing NVSHMEM, MSCCL++, or other transport runtimes

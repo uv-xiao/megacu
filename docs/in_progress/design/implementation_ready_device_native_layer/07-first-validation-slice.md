@@ -74,7 +74,7 @@ megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
 ```
 
 The matching program descriptors must declare the domains, participants, events,
-resources, and submissions shown in `08-examples.md`.
+resources, and submissions shown in `06-examples.md`.
 
 The first proof must show that changing `problem.M`, `problem.N`, and
 `problem.K` changes runtime extents inside the precompiled envelope while the
@@ -170,7 +170,7 @@ Ready-to-implement criteria:
 - the public API proof above can be written using only the planned headers;
 - the CMake proof can be written using only the two planned CMake functions;
 - each materialized/lowered record has a single owner from
-  `07-dispatcher-scheduler-kernel.md`;
+  `05-dispatcher-scheduler-kernel.md`;
 - `run` has no path to build logic or runtime strategy selection;
 - the GEMM+AllReduce example has a handwritten CUDA/NVSHMEM baseline or source
   inspection target for comparing the linked execution path.
@@ -220,7 +220,7 @@ records and direct ABI are working.
 ## Second Validation Example
 
 After the first proof, the larger example is an MPK-style decode-layer target
-from `08-examples.md`. It validates that Megacu can express a real serving
+from `06-examples.md`. It validates that Megacu can express a real serving
 iteration with CUDA-provided tasks such as RMSNorm, linear, paged attention,
 split reduction, and residual output without importing MPK's generated-CUDA
 pipeline as Megacu's lowering model.
