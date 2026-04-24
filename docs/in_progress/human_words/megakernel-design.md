@@ -562,3 +562,19 @@ were later promoted into `docs/design/`.
     and C++-only story, then tighten implementation contracts that would affect
     robustness, maintainability, metadata safety, runtime ABI stability, and
     component ownership.
+
+- 2026-04-24 Asia/Shanghai - Do not force host/device op symbol pairs
+  > Why we need both host_symbol and device_symbol. Although for simpler (pto runtime), host (orch) and device (chip) is separated, in CUDA, we prefer to have everything as kernel. That is, we don't always have host. Will the explicit seperation of host_symbol and device_symbol harm the generalithy?
+  - Context: User reviewed the op implementation ABI added during the
+    architecture-hardening pass and questioned whether explicit host/device
+    symbol fields overfit PTO Runtime or harm CUDA generality.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/01-program.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/02-cmake-build-and-runtime.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/05-dispatcher-scheduler-kernel.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/06-examples.md`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/10-implementation-architecture.md`
+  - Agent interpretation: Model op implementation entrypoints by capabilities
+    required by the selected lowering mode, not mandatory host/device pairs.
+    A CUDA `__global__` launchable kernel is a valid op implementation without a
+    separate device-callable body; a callable body is only required when a
+    stitched lowering needs to call the op from within another kernel.

@@ -215,11 +215,9 @@ megacu_add_orchestrate_target(
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce
-      HOST gemm_tile_produce_kernel
-      DEVICE gemm_tile_produce_body
+      LAUNCH gemm_tile_produce_kernel
     allreduce_tile_consume
-      HOST allreduce_tile_consume_kernel
-      DEVICE allreduce_tile_consume_body
+      LAUNCH allreduce_tile_consume_kernel
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE phased
   BACKEND_ENVELOPE
@@ -233,11 +231,11 @@ megacu_add_orchestrate_target(
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce
-      HOST gemm_tile_produce_kernel
-      DEVICE gemm_tile_produce_body
+      LAUNCH gemm_tile_produce_kernel
+      CALLABLE gemm_tile_produce_body
     allreduce_tile_consume
-      HOST allreduce_tile_consume_kernel
-      DEVICE allreduce_tile_consume_body
+      LAUNCH allreduce_tile_consume_kernel
+      CALLABLE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE
@@ -255,6 +253,11 @@ CMake file does not contain ad hoc rank mapping rules such as
 `SCHEDULER_MODE` selects a reusable scheduler mode for one target. It is not a
 runtime choice. The overlap mode must emit a co-residency guard in
 `schedule_plan`; if it cannot, the build fails.
+
+`LAUNCH` names a launchable kernel entrypoint. `CALLABLE` is only listed for the
+overlap target because the selected `persistent_stitch` lowering may need
+device-callable bodies. A CUDA target that keeps each op as a launchable kernel
+does not need `CALLABLE`.
 
 ## Example 4: What Runs
 

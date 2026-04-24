@@ -70,8 +70,8 @@
   no process-local C++ fields and is linked as data, not generated source
 - checks proving linked metadata validation rejects bad magic, version, size,
   checksum, or missing required tables before any kernel launch
-- checks proving CMake `OPS` entries resolve to the host/device symbols required
-  by the selected lowering mode
+- checks proving CMake `OPS` entries resolve to the entrypoint roles required by
+  the selected lowering mode, without requiring unused roles
 - direct-call smoke tests for the compiled orchestrate program
 - direct-call smoke tests proving compiled targets return `megacu::status` for
   validation, launch, and backend errors rather than throwing from the core ABI
@@ -143,8 +143,8 @@ The first metadata JSON must be checked for these facts:
 - a platform launch slot for `megacu::cuda::launch_view`;
 - metadata header fields for magic, metadata ABI version, target id, component
   ids, table offsets/counts, and total size/checksum;
-- op implementation metadata for each op slot naming the symbol ids required by
-  the selected lowering mode;
+- op implementation metadata for each op slot naming only the entrypoint roles
+  and symbol ids required by the selected lowering mode;
 - a backend target envelope with `TEAM_SIZE 2` for the first proof;
 - resource metadata marking `partial` and `events` as requiring symmetric
   NVSHMEM-accessible storage;

@@ -347,19 +347,22 @@ megacu_add_orchestrate_target(
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce
-      HOST gemm_tile_produce_kernel
-      DEVICE gemm_tile_produce_body
+      LAUNCH gemm_tile_produce_kernel
+      CALLABLE gemm_tile_produce_body
     allreduce_tile_consume
-      HOST allreduce_tile_consume_kernel
-      DEVICE allreduce_tile_consume_body
+      LAUNCH allreduce_tile_consume_kernel
+      CALLABLE allreduce_tile_consume_body
   COMPONENTS cuda_nvshmem_static
 )
 ```
 
 The op keys in `OPS` are build-time names that must match the op tags' `name`.
-They are not runtime lookup keys. `HOST` symbols are required for separate
-kernel-launch lowering. `DEVICE` symbols or lowering-provided trampolines are
-required for stitched persistent lowering.
+They are not runtime lookup keys. `LAUNCH` names a platform-native launchable
+entrypoint such as a CUDA `__global__` kernel; it is not host implementation
+code. `CALLABLE` names an optional device-callable body. The selected lowering
+declares which entrypoint roles it requires. A target that launches CUDA kernels
+directly may provide only `LAUNCH`; a stitched single-persistent-kernel lowering
+requires `CALLABLE` or a lowering-provided trampoline.
 
 ## Resources
 

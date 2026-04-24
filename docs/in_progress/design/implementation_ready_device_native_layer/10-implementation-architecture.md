@@ -155,31 +155,44 @@ Rules:
 CMake `OPS` entries must resolve to concrete implementation symbols before
 target lowering succeeds.
 
-First op implementation record:
+Op symbols are role-based. Megacu must not require every op to provide both a
+launchable CUDA kernel and a device-callable body.
+
+First build-time op implementation record:
 
 ```cpp
 namespace megacu::detail {
-enum class op_lowering_mode : std::uint8_t {
-  host_launch_kernel,
-  device_callable_body
+enum class op_entrypoint_role : std::uint8_t {
+  launchable_kernel,
+  callable_body,
+  lowering_trampoline
+};
+
+struct op_entrypoint {
+  op_entrypoint_role role;
+  char const *symbol;
 };
 
 struct op_impl_entry {
   std::uint16_t op_slot;
   std::string_view op_name;
-  char const *host_symbol;
-  char const *device_symbol;
-  op_lowering_mode mode;
+  std::span<const op_entrypoint> entrypoints;
 };
 }
 ```
 
 Rules:
 
-- separate-launch lowering requires `host_symbol`;
-- stitched persistent lowering requires `device_symbol` or a linked trampoline
-  supplied by the lowering component;
-- missing required symbols fail target lowering;
+- `launchable_kernel` is a CUDA `__global__` kernel or equivalent
+  platform-native launchable entrypoint; it is not host implementation code;
+- separate-launch or multi-kernel lowering requires a `launchable_kernel`
+  entrypoint;
+- stitched single-persistent-kernel lowering requires a `callable_body` or a
+  `lowering_trampoline` supplied by the lowering component;
+- a target may provide only `launchable_kernel` entrypoints when the selected
+  lowering does not need device-callable bodies;
+- missing entrypoint roles required by the selected lowering fail target
+  lowering;
 - runtime metadata stores op slots and symbol ids, not raw function pointers;
 - linked artifact inspection must prove that required op symbols are present in
   the built target.

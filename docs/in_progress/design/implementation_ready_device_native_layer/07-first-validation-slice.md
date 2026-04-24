@@ -154,7 +154,8 @@ Required evidence:
   object and contains no raw pointers, spans, string views, type indexes, or
   allocator-owned state;
 - linked-symbol inspection proving each CMake `OPS` entry resolved to the
-  host/device symbols required by the selected lowering mode;
+  entrypoint roles required by the selected lowering mode, without requiring
+  unused roles;
 - smoke tests proving invalid linked metadata returns
   `status_code::metadata_error` before any kernel launch;
 - metadata inspection proving the phased target uses `progress_model::phased`;

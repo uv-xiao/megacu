@@ -276,8 +276,8 @@ namespace megacu::detail {
 struct kernel_symbol {
   std::string_view op_name;
   std::uint16_t op_slot;
-  std::uint16_t host_symbol_id;
-  std::uint16_t device_symbol_id;
+  std::uint16_t entrypoint_role;
+  std::uint16_t symbol_id;
 };
 
 struct cuda_launch_shape {
@@ -296,9 +296,12 @@ struct kernel_plan {
 ```
 
 The first persistent lowering may launch one stitched persistent entrypoint
-implemented by Megacu and call linked op bodies through a small op table. The
-op table is built from CMake `OPS` entries and follows the op implementation ABI
-in `10-implementation-architecture.md`.
+implemented by Megacu and call linked op bodies through a small op table. That
+lowering requires callable bodies or lowering-provided trampolines. A different
+CUDA lowering may instead launch one or more `__global__` kernels directly and
+only require launchable-kernel entrypoints. The op table is built from CMake
+`OPS` entries and follows the role-based op implementation ABI in
+`10-implementation-architecture.md`.
 
 It may also temporarily use separate launches while the persistent engine is
 being built. In both cases, the normal path links existing C++/CUDA symbols and
