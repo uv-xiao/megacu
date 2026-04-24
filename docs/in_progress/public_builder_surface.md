@@ -1,7 +1,7 @@
 # Feature Task: Public Builder Surface
 
 - Branch: `implementation/public-builder-surface`
-- PR:
+- PR: #3
 - Owner: Codex
 - Status: Active
 
