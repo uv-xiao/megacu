@@ -343,7 +343,7 @@ The CMake target maps op tags to implementation symbols:
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
   PROGRAM gemm_allreduce_overlap_program
-  SOURCES gemm_allreduce_orchestrate.cc
+  SOURCES gemm_allreduce_overlap_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce
@@ -756,7 +756,7 @@ Those belong to build-graph lowering and to target internals.
 ## Program Implementation Target
 
 The first code slice should prove the program model through
-`examples/cuda_nvshmem_gemm_allreduce/` and compile checks under
+`examples/cuda_nvshmem/gemm_allreduce/` and compile checks under
 `tests/build/`.
 
 Program-model evidence:

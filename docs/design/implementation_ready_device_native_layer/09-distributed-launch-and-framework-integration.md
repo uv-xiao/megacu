@@ -97,7 +97,7 @@ The first GEMM+AllReduce proof should compile for an exact two-PE target:
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
   PROGRAM gemm_allreduce_overlap_program
-  SOURCES gemm_allreduce_orchestrate.cc
+  SOURCES gemm_allreduce_overlap_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce
@@ -130,7 +130,7 @@ Planned public path:
 
 - `include/megacu/launch/mpi_nvshmem.h`
 - `src/launch/mpi_nvshmem/`
-- `examples/cuda_nvshmem_gemm_allreduce/mpi_main.cc`
+- `examples/cuda_nvshmem/gemm_allreduce/mpi_main.cc`
 
 Initial API shape:
 
@@ -203,7 +203,7 @@ lowering, metadata, or runtime ABI.
 Planned paths:
 
 - `src/integrations/torch/` for optional C++ extension glue;
-- `examples/cuda_nvshmem_gemm_allreduce/torch/` for reference wrapper code;
+- `examples/cuda_nvshmem/gemm_allreduce/torch/` for reference wrapper code;
 - `tests/integration/torch/`
 
 Reference Python-facing shape for the optional wrapper:

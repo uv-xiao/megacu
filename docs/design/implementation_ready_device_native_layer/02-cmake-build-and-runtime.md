@@ -156,7 +156,7 @@ Initial CMake API shape:
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_phased
   PROGRAM gemm_allreduce_phased_program
-  SOURCES gemm_allreduce_orchestrate.cc
+  SOURCES gemm_allreduce_phased_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce
@@ -172,7 +172,7 @@ megacu_add_orchestrate_target(
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
   PROGRAM gemm_allreduce_overlap_program
-  SOURCES gemm_allreduce_orchestrate.cc
+  SOURCES gemm_allreduce_overlap_orchestrate.cc
   KERNELS gemm_allreduce_kernels.cu
   OPS
     gemm_tile_produce

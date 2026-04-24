@@ -82,3 +82,14 @@ were later promoted into `docs/design/`.
     content must be unified into `docs/design/` with updated indexes and
     README entry points, and apply that promotion directly on `main` for the
     accepted Megacu design.
+
+- 2026-04-25 Asia/Shanghai - Example assets mirror platform/backend/example layout
+  > Let's give a rule about examples/ folder organization. First, we need examples/<platform>-<backend>/<example> structure. That is, we need examples/cuda_nvshmem/gemm_allreduce. This should also be applied to docker/ and tools/ . And for every example, it should provide a readme to explain the example details (with visulaization and simple pseudocode) as well as usage or running scripts. This rule should be added for agent and also specified by README.md under each folder (like examples/).
+  - Context: User requested a persistent organization rule while PR #3 already
+    had a CUDA/NVSHMEM GEMM+AllReduce example, Docker image, and run script.
+  - Related: `.agents/rules/example-organization.md`,
+    `examples/README.md`, `docker/README.md`, `tools/README.md`.
+  - Agent interpretation: Example code, Docker support, and scripts should be
+    organized as matching platform/backend/example groups. Each example must be
+    self-explaining through README files, including visualization, pseudocode,
+    usage, and runtime assumptions.

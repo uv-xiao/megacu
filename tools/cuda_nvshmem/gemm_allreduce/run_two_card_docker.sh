@@ -6,7 +6,7 @@ gpus="${MEGACU_DOCKER_GPUS:-\"device=5,6\"}"
 build_dir="${MEGACU_NVSHMEM_BUILD_DIR:-build-nvshmem}"
 
 docker build \
-  -f docker/nvshmem/Dockerfile \
+  -f docker/cuda_nvshmem/gemm_allreduce/Dockerfile \
   -t "${image}" \
   .
 

@@ -36,7 +36,7 @@ GEMM+AllReduce targets.
 - CMake functions:
   - `cmake/MegacuTargets.cmake`
 - Example target:
-  - `examples/cuda_nvshmem_gemm_allreduce/`
+  - `examples/cuda_nvshmem/gemm_allreduce/`
 - Tests proving:
   - `gemm_allreduce_phased_program` and `gemm_allreduce_overlap_program` can be
     authored with the public builder surface;
@@ -139,7 +139,7 @@ Current local evidence:
 ```sh
 MEGACU_TEST_CUDA_DEVICES=5,6 MEGACU_TEST_CUDA_DEVICE=6 \
   ctest --test-dir build --output-on-failure
-tools/run_nvshmem_two_card_docker.sh
+tools/cuda_nvshmem/gemm_allreduce/run_two_card_docker.sh
 ```
 
 ## Docs

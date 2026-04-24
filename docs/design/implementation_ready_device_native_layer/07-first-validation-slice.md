@@ -130,8 +130,8 @@ strategy.
   - `src/integrations/torch/`
   - `src/target/`
 - Proof:
-  - `examples/cuda_nvshmem_gemm_allreduce/`
-  - `examples/cuda_nvshmem_gemm_allreduce/torch/`
+  - `examples/cuda_nvshmem/gemm_allreduce/`
+  - `examples/cuda_nvshmem/gemm_allreduce/torch/`
   - `tests/build/`
   - `tests/runtime/`
   - `tests/integration/torch/`

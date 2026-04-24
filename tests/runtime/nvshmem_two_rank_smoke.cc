@@ -6,7 +6,7 @@
 #include <cmath>
 #include <vector>
 
-#include "examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce.h"
+#include "examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce.h"
 
 // The CUDA 12.8 Debian package ships a host library that exports these C API
 // symbols, while its CMake package references a missing device archive. Keep

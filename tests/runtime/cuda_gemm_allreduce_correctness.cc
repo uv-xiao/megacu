@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <vector>
 
-#include "examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce.h"
+#include "examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce.h"
 
 namespace {
 

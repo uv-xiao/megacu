@@ -54,7 +54,7 @@ in `01-program.md` and `06-examples.md`. The important properties are:
 ## First ABI Types
 
 The first example should define these concrete view types under
-`examples/cuda_nvshmem_gemm_allreduce/` and move reusable pieces into public
+`examples/cuda_nvshmem/gemm_allreduce/` and move reusable pieces into public
 headers only after the implementation proves the shape:
 
 ```cpp
@@ -152,7 +152,7 @@ validates and consumes it.
 ## Function Body Shape
 
 The orchestrate function is ordinary C++ in the target. It may be handwritten in
-`examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_orchestrate.cc`:
+`examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce_overlap_orchestrate.cc`:
 
 ```cpp
 megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(

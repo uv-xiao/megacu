@@ -46,7 +46,7 @@ megacu_add_components(
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_phased
   PROGRAM gemm_allreduce_phased_program
-  SOURCES examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_phased_orchestrate.cc
+  SOURCES examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce_phased_orchestrate.cc
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE phased
   BACKEND_ENVELOPE TEAM_SIZE 2)
@@ -54,14 +54,14 @@ megacu_add_orchestrate_target(
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
   PROGRAM gemm_allreduce_overlap_program
-  SOURCES examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_overlap_orchestrate.cc
+  SOURCES examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce_overlap_orchestrate.cc
   COMPONENTS cuda_nvshmem_static
   SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE TEAM_SIZE 2)
 
 if(MEGACU_HAS_CUDA_LANGUAGE)
   add_library(megacu_gemm_allreduce_cuda_numeric OBJECT
-    examples/cuda_nvshmem_gemm_allreduce/gemm_allreduce_kernels.cu)
+    examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce_kernels.cu)
   target_link_libraries(megacu_gemm_allreduce_cuda_numeric PUBLIC
     megacu_headers
     CUDA::cudart)
