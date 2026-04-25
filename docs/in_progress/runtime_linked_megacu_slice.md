@@ -1,13 +1,14 @@
 # Feature Task: Runtime-Linked Megacu Slice
 
 - Branch: `implementation/runtime-linked-megacu-slice`
-- PR: #3
+- PR: #4
 - Owner: Codex
 - Status: Active, architecture redirected
 
 ## Review Reset
 
-PR #3 must no longer pursue the compiler-like implementation that records
+PR #4 continues the PR #3 review reset. It must no longer pursue the
+compiler-like implementation that records
 program IR, materializes owned facts, builds dispatch/schedule/kernel/backend
 sections, and validates linked target metadata. That model is too heavy and
 does not match the intended Megacu layer.
