@@ -794,3 +794,15 @@ were later promoted into `docs/design/`.
     partition explicit before further dispatcher details. Dispatcher owns
     spatial/topology retargeting for single-card and multi-card runs; scheduler
     owns temporal progress and participates in overlap co-residency legality.
+
+- 2026-04-25 Asia/Shanghai - Redesign concrete implementation docs after architecture update
+  > Redesign/review/update docs/in_progress/design/concrete_impl according to new
+  - Context: User requested the implementation-facing docs be brought in line
+    after the active design moved to `docs/in_progress/design/architecture/`
+    and clarified dispatcher/scheduler/backend responsibility partition.
+  - Related: `docs/in_progress/design/concrete_impl/`,
+    `docs/in_progress/design/architecture/`, PR #4.
+  - Agent interpretation: Rewrite concrete implementation documentation around
+    the runtime-linked implementation path. Treat current `program_ir`,
+    materialization, static metadata sections, and target-lowering files as
+    transitional gaps to replace, not as the desired implementation contract.

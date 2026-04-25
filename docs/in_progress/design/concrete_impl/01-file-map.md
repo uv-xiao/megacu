@@ -1,83 +1,76 @@
 # File Map
 
-This document explains the ownership of each current Megacu implementation
-file. It is a map for implementation and review, not a stable architecture
-contract.
+This file map describes the intended runtime-linked implementation ownership.
+It also marks the current compiler-like files as transitional so code review
+does not mistake them for the target design.
 
 ## Public Headers
 
-| Path | Owns | Main types or functions | Must not own |
-| --- | --- | --- | --- |
-| `include/megacu/views.h` | Plain runtime value views shared by examples, adapters, and orchestrate functions. | `status`, `dtype`, `tensor_view`, `symmetric_buffer_view`, `symmetric_tensor_view`, `event_storage_view`, `backend_id`, `session_id`. | Platform launch policy, scheduler behavior, NVSHMEM semantics beyond opaque ids. |
-| `include/megacu/platform/cuda.h` | CUDA-specific runtime launch view and kernel context shape. | `megacu::cuda::launch_view`, `kernel_context`. | Generic program semantics or NVSHMEM team validation. |
-| `include/megacu/backends/nvshmem.h` | NVSHMEM-specific runtime team view. | `megacu::nvshmem::team_view`, `ownership`. | CUDA launch behavior, program authoring, scheduler decisions. |
-| `include/megacu/program.h` | Public C++ authoring surface for logical programs. | `program_builder`, typed refs for extents/domains/participants/resources/events, `over`, `place`, `remote_event`, `args`, event wait specs. | Backend peer mapping, concrete schedules, CUDA launch shapes, generated source. |
-
-The public headers are intentionally value-oriented. They let a program
-describe what exists and what is called, but do not expose dispatcher,
-scheduler, lowering, or backend internals.
-
-## Private Detail Headers
-
-| Path | Owns | Main types or functions | Must not own |
-| --- | --- | --- | --- |
-| `include/megacu/detail/program_ir.h` | The immutable view records produced by `program_builder`. | `program_ir`, `extent_decl`, `domain_decl`, `participant_decl`, `resource_decl`, `event_decl`, `submission_decl`, `event_use`, `arg_binding`. | Runtime ownership, backend lowering, CMake policy. |
-| `include/megacu/detail/materialize.h` | Owned copies of program IR and template entrypoint for materialization. | `owned_program_ir`, `materialized_target`, `own`, `materialize_program`, `has_blocking_wait`, `lower_target`. | Component implementation details beyond sequencing. |
-| `include/megacu/detail/target_metadata.h` | Concrete metadata sections shared by materialization tests and linked targets. | `target_options`, `target_metadata`, `program_section`, `dispatch_section`, `schedule_section`, `kernel_section`, `backend_section`, `metadata_header`, `serialize`, `validate`. | Large runtime plans or generated platform code. |
-| `include/megacu/detail/components.h` | Private component builder declarations. | `build_tiled_compute_comm_dispatch`, `build_static_persistent_schedule`, `build_persistent_stitch_kernel_section`, `build_nvshmem_backend_section`. | Public API. |
-| `include/megacu/detail/runtime_validation.h` | Runtime validation function declarations used by example orchestrate paths and tests. | `validate_cuda_launch`, `validate_nvshmem_team`, `validate_nvshmem_symmetric_storage`. | Device kernels or materialized metadata construction. |
-
-The detail headers are currently exposed to tests and example plumbing. They
-are not meant to be the user-facing programming model.
-
-## Source Files
-
-| Path | Owns | Current behavior |
+| Path | Intended ownership | Must not own |
 | --- | --- | --- |
-| `src/program/materialize.cc` | The materialization pipeline driver. | Fills `program_section`, then calls dispatcher, scheduler, kernel lowering, and NVSHMEM backend builders in order. |
-| `src/dispatcher/tiled_compute_comm_dispatch.cc` | Dispatch metadata from submissions and participants. | Classifies submissions as compute or communication by matching participant slots against event producer/consumer slots. Creates one work entry per submission and one participant mapping per participant per logical rank. |
-| `src/scheduler/static_persistent.cc` | Schedule metadata for phased and co-resident persistent modes. | Turns dispatch entries into ordered schedule entries, records event waits/releases, assigns phase 1 to communication in phased mode, and creates one residency group for co-resident persistent mode. |
-| `src/lowering/persistent_stitch.cc` | Kernel-lowering metadata. | Records one kernel symbol per submitted op and launch-shape metadata. Marks overlap schedules as stitched persistent. It does not emit CUDA/C++ source. |
-| `src/backends/nvshmem/backend.cc` | NVSHMEM backend metadata. | Records team size, event storage byte requirement, event offsets, symmetric partial-buffer requirement, and multimem capability flag. |
-| `src/backends/nvshmem/validation.cc` | NVSHMEM runtime validation. | Checks team envelope and symmetric storage session identity for event storage and partial buffers. |
-| `src/platform/cuda/platform.cc` | CUDA component link anchor. | Exposes `megacu_platform_cuda_component()` so the component library has a concrete CUDA platform object. |
-| `src/platform/cuda/validation.cc` | CUDA runtime validation. | Checks that `launch.device_ordinal` matches `team.cuda_device_ordinal`. |
-| `src/target/runtime.cc` | Target runtime link anchor. | Exposes `megacu_target_runtime_component()`. Current target runtime behavior mostly lives in headers and example glue. |
+| `include/megacu/views.h` | Small value views: status, dtype, tensor views, symmetric buffer views, event storage views, backend/session ids. | Scheduling policy, participant mapping, backend algorithms. |
+| `include/megacu/runtime_context.h` | Planned runtime call context: launch view, team view, event storage, target capability. | Graph ownership or heap-backed execution plans. |
+| `include/megacu/runtime_config.h` | Planned linked capability envelope for `ConfigureTarget` and `OrchTarget`. | Per-tile schedules or materialized metadata sections. |
+| `include/megacu/participants.h` | Planned virtual participant annotation API: typed participant refs, role, placement scope, peer policy, progress requirement. | Backend rank assignment or CMake mapping syntax. |
+| `include/megacu/platform/cuda.h` | CUDA launch view and CUDA-specific execution constraints. | NVSHMEM PE identity or participant placement. |
+| `include/megacu/backends/nvshmem.h` | NVSHMEM team view, backend/session identity, symmetric-resource view helpers. | CUDA launch shape or scheduler ordering. |
 
-## Example Files That Exercise The Implementation
+The current `include/megacu/program.h` should be removed or rewritten. The
+accepted programming surface is direct C++ orchestration plus participant
+annotations, not a program builder that records IR.
 
-| Path | Owns |
+## Private Runtime Headers
+
+| Path | Intended ownership | Notes |
+| --- | --- | --- |
+| `include/megacu/detail/component_runtime.h` | Planned common declarations for dispatcher, scheduler, backend, platform, and target runtime entrypoints. | Should expose typed runtime requests and states, not metadata sections. |
+| `include/megacu/detail/runtime_validation.h` | Runtime validation declarations used by target runtime and tests. | May remain, but should validate runtime views and capabilities, not metadata headers. |
+
+The following current headers are transitional and should disappear as
+implementation dependencies:
+
+| Path | Why transitional |
 | --- | --- |
-| `examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h` | Logical GEMM+AllReduce programs and direct orchestrate ABI declarations. |
-| `examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce_orchestrate_common.h` | Shared runtime validation and dispatch from linked metadata to native CUDA/NVSHMEM entrypoints. |
-| `examples/cuda_nvshmem/gemm_allreduce/common/megacu_native_common.h` | Adapter from Megacu runtime views to Megacu-free golden/native CUDA+NVSHMEM views. |
-| `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/gemm_allreduce_phased_orchestrate.cc` | Linked phased metadata header and public phased orchestrate function. |
-| `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/gemm_allreduce_overlap_orchestrate.cc` | Linked overlap metadata header and public overlap orchestrate function. |
-| `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu` | Current phased Megacu native symbol, routing single-card and multi-card cases to pure CUDA/NVSHMEM implementations. |
-| `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/megacu_gemm_allreduce_overlap.cu` | Current overlap Megacu native symbol, routing single-card and multi-card cases to pure CUDA/NVSHMEM implementations. |
+| `include/megacu/detail/program_ir.h` | Stores program-builder records; architecture rejects program IR as the implementation dependency. |
+| `include/megacu/detail/materialize.h` | Owns copied IR and materialization; architecture rejects materialization as the normal path. |
+| `include/megacu/detail/target_metadata.h` | Defines static dispatch/schedule/kernel/backend sections; architecture requires runtime components instead. |
+| `include/megacu/detail/components.h` | Declares section builders; should become runtime component declarations or be removed. |
 
-## Ownership Boundary
+## Source Directories
 
-The intended boundary is:
+| Path | Intended ownership | Current status |
+| --- | --- | --- |
+| `src/dispatcher/` | General `ConfigureTarget` dispatcher implementation. Input: participant annotations, problem view, runtime context. Output: compact `dispatch_state` with tile/lane/peer work and co-residency constraints. | Currently builds `dispatch_section` from `owned_program_ir`; replace. |
+| `src/scheduler/` | Runtime phased/overlap scheduler implementations. Input: `runtime_context`, `dispatch_state`, workload views, linked operator symbols. | Currently builds `schedule_section`; replace with runtime scheduler calls. |
+| `src/platform/cuda/` | CUDA validation and launch feasibility checks, including persistent/cooperative constraints for overlap. | Current device check can remain but must grow beyond link anchors. |
+| `src/backends/nvshmem/` | NVSHMEM team/resource validation and device-side primitive wrappers. | Current validation can remain; backend metadata builder must be replaced. |
+| `src/target/` | Common target-runtime glue: validation sequence, capability checks, status propagation, reusable fast-path helpers. | Currently mostly a link anchor; move reusable example glue here. |
+| `src/operators/` | Planned home for reusable operator wrappers if a second example proves common ownership. | `src/lowering/` should not remain as a compiler-stage name. |
+| `src/program/` | No target ownership in the corrected architecture. | `src/program/materialize.cc` should be removed with materialization tests. |
+
+## Example Ownership
+
+| Path | Intended ownership |
+| --- | --- |
+| `examples/cuda_nvshmem/gemm_allreduce/common/` | Problem/workspace types, direct ABI declarations, participant annotation helpers, shared example-only validation. |
+| `examples/cuda_nvshmem/gemm_allreduce/golden/` | Expected local GEMM results only. Must not be the implementation called by Megacu targets. |
+| `examples/cuda_nvshmem/gemm_allreduce/phased/baseline/` | Pure CUDA/NVSHMEM phased implementation for single-card and two-card runs. |
+| `examples/cuda_nvshmem/gemm_allreduce/overlap/baseline/` | Pure CUDA/NVSHMEM overlap implementation for single-card and two-card runs. |
+| `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/` | Megacu phased `OrchTarget`, participant annotations, linked phased operator symbol. |
+| `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/` | Megacu overlap `OrchTarget`, participant annotations, linked overlap operator symbol. |
+
+## Concrete Ownership Rule
+
+The implementation path must not copy facts from one owner to another through
+static metadata sections. Each runtime component consumes the values it owns:
 
 ```text
-program.h
-  records logical facts
-      |
-detail/materialize.h + src/program/materialize.cc
-  owns copied facts and creates target metadata
-      |
-src/dispatcher + src/scheduler + src/lowering + src/backends
-  build private metadata sections
-      |
-example orchestrate target
-  validates linked metadata and runtime views
-      |
-native CUDA/NVSHMEM entrypoints
-  execute the current numeric implementation
-```
+OrchTarget
+  owns direct ABI + workload types + participant annotations + operator symbols
 
-The current weak point is that the runtime numeric execution path does not yet
-consume the materialized `dispatch_section`, `schedule_section`, or
-`kernel_section` payloads. Those sections are produced and tested as metadata,
-but the CUDA kernels are still hand-connected through example glue.
+ConfigureTarget
+  owns linked dispatcher + scheduler + platform + backend + target runtime
+
+runtime call
+  passes views directly through the components
+```

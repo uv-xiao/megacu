@@ -9,10 +9,10 @@ multiple files.
 
 ## Active Workstreams
 
-- `concrete_impl/`: PR #3 implementation documentation for current
-  `include/`, `src/`, CMake, and CUDA+NVSHMEM GEMM+AllReduce example call
-  paths. This is implementation-facing documentation and must not be promoted
-  into `docs/design/` until the PR is ready to merge.
+- `concrete_impl/`: PR #4 implementation documentation that translates
+  `architecture/` into concrete `include/`, `src/`, CMake, and
+  CUDA+NVSHMEM GEMM+AllReduce implementation ownership. It treats the current
+  materialization-oriented files as transitional gaps to replace.
 - `architecture/`: active redesign of the first
   Megacu implementation around runtime-linked dispatcher/scheduler/backend
   components instead of compiler-style IR materialization. This workstream was

@@ -1,146 +1,124 @@
 # Build And Linking
 
-Megacu compilation in the current implementation means normal C++/CUDA compile
-and link. It does not generate new CUDA, C++, PTX, or another intermediate
-programming language.
+Megacu compilation means normal C++/CUDA compile and link. It does not mean
+translating an authored program into IR, static sections, generated C++, or
+generated CUDA.
 
-## Component Library
+## ConfigureTarget
 
-`examples/cuda_nvshmem/gemm_allreduce/CMakeLists.txt` calls:
+The CMake API should move from `megacu_add_components` toward an explicit
+`megacu_add_configure_target` shape:
 
 ```cmake
-megacu_add_components(
+megacu_add_configure_target(
   NAME cuda_nvshmem_static
-  DISPATCHER tiled_compute_comm_dispatch
-  SCHEDULER static_persistent
-  KERNEL_LOWERING persistent_stitch
+  DISPATCHER annotated_runtime
+  SCHEDULER static_phased_or_overlap
   PLATFORM cuda
   BACKEND nvshmem)
 ```
 
-`cmake/MegacuTargets.cmake` expands this into a static library containing:
+This target links reusable runtime component implementations:
 
 ```text
-src/program/materialize.cc
-src/dispatcher/tiled_compute_comm_dispatch.cc
-src/scheduler/static_persistent.cc
-src/lowering/persistent_stitch.cc
-src/platform/cuda/platform.cc
+src/dispatcher/annotated_runtime.cc
+src/scheduler/static_runtime.cc
 src/platform/cuda/validation.cc
-src/backends/nvshmem/backend.cc
+src/backends/nvshmem/runtime.cc
 src/backends/nvshmem/validation.cc
 src/target/runtime.cc
 ```
 
-The CMake arguments are currently recorded as compile definitions and target
-properties:
+It must not link:
 
 ```text
-MEGACU_COMPONENT_DISPATCHER
-MEGACU_COMPONENT_SCHEDULER
-MEGACU_COMPONENT_KERNEL_LOWERING
-MEGACU_COMPONENT_PLATFORM
-MEGACU_COMPONENT_BACKEND
+src/program/materialize.cc
+src/lowering/persistent_stitch.cc
+metadata section builders as the main execution contract
 ```
 
-Those properties make the selected configuration inspectable. They do not yet
-select different source files from a registry; `megacu_add_components` links the
-same first-slice source files and validates that each configuration name was
-provided.
+The dispatcher is part of the `ConfigureTarget`, but it is general. It is not
+named `gemm_ar` and it does not contain example-specific policy.
 
-## Orchestrate Targets
+## OrchTarget
 
-Each Megacu variant owns its own `CMakeLists.txt`:
-
-```text
-examples/cuda_nvshmem/gemm_allreduce/phased/megacu/CMakeLists.txt
-examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/CMakeLists.txt
-```
-
-Each file calls `megacu_add_orchestrate_target`, for example:
+Each Megacu example variant links one direct target:
 
 ```cmake
 megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
-  PROGRAM gemm_allreduce_overlap_program
-  COMPONENTS cuda_nvshmem_static
-  SCHEDULER_MODE co_resident_persistent
-  SOURCES gemm_allreduce_overlap_orchestrate.cc)
+  CONFIGURE_TARGET cuda_nvshmem_static
+  SOURCES gemm_allreduce_overlap_orchestrate.cc
+  OPERATORS megacu_cuda_gemm_allreduce_overlap_f32
+  CAPABILITY cuda_nvshmem_gemm_allreduce_overlap_capability)
 ```
 
-The function creates a static library for the orchestrate target and links:
+The `OrchTarget` source supplies:
 
-```text
-megacu_headers
-cuda_nvshmem_static
-```
+- the direct ABI;
+- workload problem/workspace types;
+- virtual participant annotations;
+- native operator symbols;
+- workload capability facts.
 
-The example `CMakeLists.txt` then adds CUDA object files and native
-CUDA/NVSHMEM support:
+The `ConfigureTarget` supplies:
 
-```text
-megacu_gemm_allreduce_cuda_native
-golden_cuda_nvshmem_gemm_allreduce
-CUDA::cudart
-optional CUDA::cuda_driver + NVSHMEM host/device libraries
-```
+- dispatcher algorithm;
+- scheduler implementation;
+- platform validation;
+- backend validation and primitives;
+- common target runtime.
 
 ## What Is Linked
 
-For the phased target:
+For the first CUDA+NVSHMEM configuration:
 
 ```text
+cuda_nvshmem_static
+  -> annotated runtime dispatcher
+  -> static phased/overlap scheduler runtime
+  -> CUDA platform validation
+  -> NVSHMEM backend validation and primitive wrappers
+  -> common target runtime
+
 cuda_nvshmem_gemm_allreduce_phased
-  includes gemm_allreduce_phased_orchestrate.cc
-  links cuda_nvshmem_static
-  links megacu_gemm_allreduce_cuda_native
-  links golden_cuda_nvshmem_gemm_allreduce
-```
+  -> cuda_nvshmem_static
+  -> phased OrchTarget source
+  -> phased Megacu native operator
+  -> common GEMM+AllReduce problem/workspace helpers
 
-For the overlap target:
-
-```text
 cuda_nvshmem_gemm_allreduce_overlap
-  includes gemm_allreduce_overlap_orchestrate.cc
-  links cuda_nvshmem_static
-  links megacu_gemm_allreduce_cuda_native
-  links golden_cuda_nvshmem_gemm_allreduce
+  -> cuda_nvshmem_static
+  -> overlap OrchTarget source
+  -> overlap Megacu native operator
+  -> common GEMM+AllReduce problem/workspace helpers
 ```
 
-The linked native object currently contains:
+Golden and baseline libraries are test/example dependencies. The Megacu
+orchestrate targets should not call `golden/` functions as their production
+operator path.
 
-```text
-phased/megacu/megacu_gemm_allreduce_phased.cu
-overlap/megacu/megacu_gemm_allreduce_overlap.cu
-```
+## Current CMake Gap
 
-These files provide the C symbols called by the orchestrate common path:
+`cmake/MegacuTargets.cmake` currently links the materialization source and
+metadata section builders through `megacu_add_components`. The next
+implementation update should:
 
-```text
-megacu_cuda_gemm_allreduce_phased_f32
-megacu_cuda_gemm_allreduce_overlap_f32
-```
+1. add or rename to `megacu_add_configure_target`;
+2. link runtime component source files instead of materializer files;
+3. keep target properties for inspectability;
+4. make unknown dispatcher/scheduler/platform/backend names fail at configure
+   time;
+5. make each example variant own its own `CMakeLists.txt`;
+6. remove compile definitions that imply kernel lowering or static section
+   generation.
 
-## What Is Not Generated
+## What Must Not Be Generated
 
-The current Megacu build does not:
+The build must not:
 
-- emit generated CUDA files;
-- emit generated C++ orchestrate code;
-- translate `program_builder` records into new kernels;
-- synthesize CMake targets from metadata at build time;
-- create PTX/cubin/fatbin artifacts as checked-in outputs.
-
-The build links existing implementation files to high-level APIs. This matches
-the design requirement that kernel-lowering and target-lowering connect
-existing low-level implementation symbols to Megacu metadata instead of
-generating a new source language.
-
-## Current Build Limitation
-
-`megacu_add_orchestrate_target` records the program name and scheduler mode as
-CMake metadata, but the checked-in orchestrate source still manually defines
-the linked `metadata_header` constants. A stronger implementation should make
-that header mechanically derived from `materialize_program<Program>(options)`
-or otherwise prove that CMake target properties and linked metadata cannot
-drift.
+- emit generated CUDA or C++ sources;
+- generate per-program binary metadata;
+- create a materializer executable as a normal path;
+- translate C++ participant annotations into a new language;
+- select backend or scheduler through runtime string loading.
