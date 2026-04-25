@@ -683,3 +683,31 @@ were later promoted into `docs/design/`.
     the task must explicitly require implemented dispatcher, scheduler,
     lowering, CUDA platform, NVSHMEM backend, target-lowering, file
     organization, and verification paths aligned with the accepted design.
+
+- 2026-04-25 Asia/Shanghai - PR #3 pending review details
+  > The overlap golden seems fake.
+  >
+  > I think we are doing wrong. We need:
+  > 1. golden is just local GEMM to give golden results;
+  > 2. baseline* should be pure CUDA+NVSHMEM implementation of GEMM-AR; -- this needs four versions: single/multiple cards, phased or overlapped.
+  > 3. megacu* should be Megacu-based implementation. -- this needs two versions.
+  >
+  > And we need to put phased and overlapped as two examples, don't put in the same directory.
+  >
+  > numeric validation should be removed.
+  >
+  > this looks very fake. Where is the working implementation?
+  >
+  > Why we put the orch code inside tests/ programs?
+  >
+  > The implementation is so thin. Where is the components? This looks not working at all.
+  - Context: These comments were discovered under a pending GitHub review on PR
+    #3 after normal submitted-comment endpoints returned no comments.
+  - Related: `docs/in_progress/public_builder_surface.md`,
+    `examples/cuda_nvshmem/gemm_allreduce/`, `tests/build/`, `src/components/`.
+  - Agent interpretation: Split GEMM+AllReduce phased and overlap into separate
+    examples, distinguish local-GEMM golden results from pure CUDA+NVSHMEM
+    baseline implementations and Megacu implementations, remove correctness
+    validation from orchestrate/common runtime code, move orchestrate program
+    definitions out of tests, and implement real Megacu components instead of a
+    placeholder component anchor.

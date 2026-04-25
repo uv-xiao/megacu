@@ -1,12 +1,15 @@
 # Example Organization Rules
 
 - Examples live under `examples/<platform>_<backend>/<example>/`.
-- Matching Docker assets live under `docker/<platform>_<backend>/<example>/`.
-- Matching runnable helper scripts live under
-  `tools/<platform>_<backend>/<example>/`.
-- Use the same `<platform>_<backend>` and `<example>` names across
-  `examples/`, `docker/`, and `tools/` so code, containers, and run scripts are
-  discoverable as one unit.
+- Shared Docker assets live under `docker/<platform>_<backend>/` by default.
+  Add `docker/<platform>_<backend>/<example>/` only when an example truly needs
+  a unique image or container asset.
+- Shared runnable helper scripts live under `tools/<platform>_<backend>/` by
+  default. Add `tools/<platform>_<backend>/<example>/` only when an example
+  truly needs unique scripts.
+- Use the same `<platform>_<backend>` grouping across `examples/`, `docker/`,
+  and `tools/` so code, containers, and run scripts are discoverable without
+  creating redundant per-example operational trees.
 - Every example owns its own `CMakeLists.txt`. The repository root may add the
   example with `add_subdirectory(...)`, but example libraries, golden targets,
   run targets, and example-specific tests must be declared by the example.

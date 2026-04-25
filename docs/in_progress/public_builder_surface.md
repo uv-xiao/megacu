@@ -13,10 +13,13 @@ only metadata labels or example-local shortcuts. A correct first slice must run
 through the same component boundaries described by the accepted design and then
 prove the resulting target on CUDA and CUDA+NVSHMEM.
 
-GitHub connector and `gh` currently show no visible PR comments or review
-threads for PR #3. The actionable review input for this reset is the user
-feedback that the PR lacks real dispatch/schedule/etc., does not look like a
-working version, and needs better file organization.
+The actionable review input for this reset came from a pending GitHub review.
+Normal submitted-comment endpoints returned no comments, but
+`gh api repos/uv-xiao/megacu/pulls/3/reviews/4175138919/comments` exposed the
+pending comments. The review says the PR lacks real dispatch/schedule/etc.,
+does not look like a working version, has questionable file organization, mixes
+phased and overlap examples, treats the overlap golden as fake, keeps numeric
+validation in orchestrate code, and puts orchestrate code inside tests.
 
 ## Design Contract
 
@@ -60,10 +63,14 @@ ownership is:
   device-side event/communication adapter.
 - `src/target/`: linked metadata object validation and target runtime ABI
   helpers.
-- `examples/cuda_nvshmem/gemm_allreduce/`: example-specific descriptors,
-  kernels, golden baselines, README, and example-owned CMake.
-- `docker/cuda_nvshmem/gemm_allreduce/` and
-  `tools/cuda_nvshmem/gemm_allreduce/`: matching Docker and run support.
+- `examples/cuda_nvshmem/gemm_allreduce_phased/`: phased example descriptors,
+  kernels, baselines, README, and example-owned CMake.
+- `examples/cuda_nvshmem/gemm_allreduce_overlap/`: overlap example descriptors,
+  kernels, baselines, README, and example-owned CMake.
+- `docker/cuda_nvshmem/`: shared CUDA+NVSHMEM Docker support. Add per-example
+  Docker assets only if an example genuinely needs a unique image.
+- `tools/cuda_nvshmem/`: shared CUDA+NVSHMEM run support. Add per-example tools
+  only if an example genuinely needs unique scripts.
 
 Example code may provide target-specific kernels and descriptors. It must not
 be the only place where dispatch, scheduling, lowering, CUDA platform, or
@@ -87,14 +94,26 @@ The PR should produce these implementation artifacts:
   `src/backends/nvshmem/`, and `src/target/`.
 - CMake functions in `cmake/MegacuTargets.cmake` that compile reusable
   components and link concrete orchestrate targets without generating CUDA.
+- Two split example directories, not one mixed GEMM+AllReduce directory:
+  - `examples/cuda_nvshmem/gemm_allreduce_phased/`
+  - `examples/cuda_nvshmem/gemm_allreduce_overlap/`
 - Two Megacu orchestrate targets for one design family:
   - `cuda_nvshmem_gemm_allreduce_phased_orchestrate`
   - `cuda_nvshmem_gemm_allreduce_overlap_orchestrate`
-- Two Megacu-free golden baselines:
-  - `golden_phased`
-  - `golden_overlap`
-- Single-card and two-card execution for both golden and Megacu paths, selected
-  from runtime team/backend capability rather than duplicated program designs.
+- Local golden result generation:
+  - `golden_local_gemm`, which is just local GEMM used to produce expected
+    numeric results.
+- Four Megacu-free CUDA+NVSHMEM baselines:
+  - `baseline_phased_single_card`
+  - `baseline_phased_multi_card`
+  - `baseline_overlap_single_card`
+  - `baseline_overlap_multi_card`
+- Two Megacu implementations:
+  - `megacu_phased`
+  - `megacu_overlap`
+- Single-card and two-card execution for both Megacu implementations is
+  selected from runtime team/backend capability rather than duplicated program
+  designs.
 
 ## Component Requirements
 
@@ -145,8 +164,8 @@ The PR should produce these implementation artifacts:
   persistent launch requirements, and device capability constraints.
 - NVSHMEM adapter validates team size, local PE, symmetric event storage,
   symmetric partial buffers, session identity, and peer mapping.
-- Multi-card communication in both golden and Megacu paths must use device-side
-  NVSHMEM, not host-side reduction callbacks.
+- Multi-card communication in both baseline and Megacu paths must use
+  device-side NVSHMEM, not host-side reduction callbacks.
 - The config capability range must be explicit: platform, backend, dispatcher,
   scheduler, lowering mode, supported team sizes, supported layouts/dtypes, and
   unsupported features.
@@ -165,10 +184,10 @@ The PR is not complete until fresh evidence covers:
   sections;
 - direct ABI validation tests returning `megacu::status` before launch on bad
   runtime views;
-- CUDA single-card numeric correctness for golden phased, golden overlap,
-  Megacu phased, and Megacu overlap;
+- CUDA single-card numeric correctness for local GEMM golden, baseline phased,
+  baseline overlap, Megacu phased, and Megacu overlap;
 - single-host two-card CUDA/NVSHMEM correctness under Docker using device-side
-  NVSHMEM for golden and Megacu paths;
+  NVSHMEM for baseline and Megacu paths;
 - file-organization checks for `examples/`, `docker/`, and `tools/`;
 - `git diff --check`, CMake build, and CTest.
 
@@ -178,6 +197,17 @@ These gaps must be closed before the task can be marked complete:
 
 - Move real implementation ownership out of example-local common headers into
   reusable `src/` components.
+- Split `examples/cuda_nvshmem/gemm_allreduce/` into phased and overlap example
+  directories.
+- Move shared Docker and tool support to `docker/cuda_nvshmem/` and
+  `tools/cuda_nvshmem/`, keeping per-example subdirectories only if a unique
+  asset is justified.
+- Replace the current golden naming with local-GEMM golden result generation,
+  four pure CUDA+NVSHMEM baselines, and two Megacu implementations.
+- Remove numeric validation from orchestrate/common runtime code; correctness
+  checking belongs in tests or validation drivers.
+- Move orchestrate program definitions out of `tests/` into example or target
+  source files that tests consume.
 - Replace count-only dispatch metadata with inspectable dispatch entries and
   participant/backend peer mappings.
 - Replace boolean schedule metadata with inspectable schedule entries,
@@ -187,11 +217,11 @@ These gaps must be closed before the task can be marked complete:
   of target-local helper checks.
 - Ensure Megacu phased and overlap paths consume dispatcher/scheduler/lowering
   payloads rather than directly selecting golden/native helper calls.
-- Keep golden implementations Megacu-free and clearly separated from Megacu
-  paths.
-- Keep examples, Docker assets, and tools in matching
-  `<platform>_<backend>/<example>` trees with example-local CMake and README
-  coverage.
+- Keep local golden, CUDA+NVSHMEM baselines, and Megacu paths clearly
+  separated.
+- Keep examples in `<platform>_<backend>/<example>` trees, with shared
+  platform/backend Docker and tool assets unless per-example support is
+  justified.
 
 ## Tests To Run
 
@@ -202,7 +232,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j"$(nproc)"
 MEGACU_TEST_CUDA_DEVICES=5,6 MEGACU_TEST_CUDA_DEVICE=6 \
   ctest --test-dir build --output-on-failure
-tools/cuda_nvshmem/gemm_allreduce/run_two_card_docker.sh
+tools/cuda_nvshmem/run_two_card_docker.sh
 git diff --check
 ```
 

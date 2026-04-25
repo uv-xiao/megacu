@@ -21,6 +21,10 @@ failures, or human feedback saying the PR does not match the design.
      - `gh api repos/<owner>/<repo>/issues/<pr>/comments --paginate`
      - `gh api repos/<owner>/<repo>/pulls/<pr>/comments --paginate`
      - GraphQL `reviewThreads(first: 100)` for unresolved inline threads.
+     - Pending reviews:
+       `gh api repos/<owner>/<repo>/pulls/<pr>/reviews`, then
+       `gh api repos/<owner>/<repo>/pulls/<pr>/reviews/<review-id>/comments`
+       for any `PENDING` review.
      - `gh pr checks <pr>` for checks.
    - If no GitHub comments are visible, state that and use the user's message
      as the actionable feedback source.

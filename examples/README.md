@@ -9,15 +9,19 @@ examples/<platform>_<backend>/<example>/
 For example, CUDA plus NVSHMEM GEMM+AllReduce lives at:
 
 ```text
-examples/cuda_nvshmem/gemm_allreduce/
+examples/cuda_nvshmem/gemm_allreduce_phased/
+examples/cuda_nvshmem/gemm_allreduce_overlap/
 ```
 
-Each example must have matching operational assets when they exist:
+Operational assets are shared at the platform/backend level by default:
 
 ```text
-docker/<platform>_<backend>/<example>/
-tools/<platform>_<backend>/<example>/
+docker/<platform>_<backend>/
+tools/<platform>_<backend>/
 ```
+
+Use per-example Docker or tool subdirectories only when a specific example needs
+unique container assets or unique run scripts.
 
 Every example README must explain the example, file layout, execution path,
 simple pseudocode, usage commands, runtime assumptions, and known limitations.

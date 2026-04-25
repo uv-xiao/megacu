@@ -103,3 +103,17 @@ were later promoted into `docs/design/`.
     feedback from GitHub, classifies it, verifies it against repo reality, fixes
     implementation/design gaps, and records blocked reply/resolve actions when
     GitHub permissions are unavailable.
+
+- 2026-04-25 Asia/Shanghai - PR comments can be pending review comments
+  > Why we need a Dockerfile under a specific example? Why not let docker/cuda_nvshmem to have only one Dockerfile
+  >
+  > Same problem, we shouldn't give tool/script for every example
+  - Context: These comments were discovered under a pending GitHub review on PR
+    #3 rather than through the normal submitted-comments endpoints.
+  - Related: `.agents/skills/fix-pr-comments/SKILL.md`,
+    `.agents/rules/example-organization.md`, `docker/README.md`,
+    `tools/README.md`.
+  - Agent interpretation: The PR-comment workflow must query pending reviews
+    explicitly. The example-organization rule should prefer shared
+    platform/backend Docker and tool assets, adding per-example assets only when
+    a specific example truly needs unique operational support.
