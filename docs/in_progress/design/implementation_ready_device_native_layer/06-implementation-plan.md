@@ -113,7 +113,7 @@ The following files must be updated during implementation:
 
 - `docs/in_progress/design/concrete_impl/`: replace materializer call path with
   runtime-linked component call path.
-- `docs/in_progress/public_builder_surface.md`: keep it aligned with this
+- `docs/in_progress/runtime_linked_megacu_slice.md`: keep it aligned with this
   design.
 - Example READMEs: remove "materialized schedule metadata" claims and document
   runtime dispatcher/scheduler behavior.
@@ -125,7 +125,7 @@ After code replacement:
 
 - update `docs/in_progress/design/concrete_impl/` so it documents runtime
   components, not materialization;
-- update `docs/in_progress/public_builder_surface.md` to remove materializer
+- update `docs/in_progress/runtime_linked_megacu_slice.md` to remove materializer
   requirements and add distributed runtime requirements;
 - keep `docs/design/` untouched until this redesigned work is accepted and
   ready to merge.

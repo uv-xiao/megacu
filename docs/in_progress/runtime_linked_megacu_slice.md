@@ -1,6 +1,6 @@
 # Feature Task: Runtime-Linked Megacu Slice
 
-- Branch: `implementation/public-builder-surface`
+- Branch: `implementation/runtime-linked-megacu-slice`
 - PR: #3
 - Owner: Codex
 - Status: Active, architecture redirected

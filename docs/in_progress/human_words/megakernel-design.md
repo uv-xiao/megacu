@@ -598,7 +598,7 @@ were later promoted into `docs/design/`.
   - Context: User reviewed the first implementation PR after it only added the
     public compile-only builder surface.
   - Related: `docs/design/implementation_ready_device_native_layer/`,
-    `docs/in_progress/public_builder_surface.md`, PR #3.
+    `docs/in_progress/runtime_linked_megacu_slice.md`, PR #3.
   - Agent interpretation: PR #3 must broaden from a narrow authoring-surface
     slice to a locally verifiable first Megacu implementation covering the full
     design lifecycle: authoring, materialization, metadata sections, CMake
@@ -614,7 +614,7 @@ were later promoted into `docs/design/`.
   - Context: User corrected the first implementation PR verification strategy
     after local inspection showed CUDA runtime, multiple A100 GPUs, Open MPI,
     and Docker were available, while host NVSHMEM tooling was not installed.
-  - Related: `docs/in_progress/public_builder_surface.md`, PR #3.
+  - Related: `docs/in_progress/runtime_linked_megacu_slice.md`, PR #3.
   - Agent interpretation: The implementation PR should not skip hardware
     validation just because host NVSHMEM is missing. It should first validate
     CUDA on real devices, including a single-host two-card CUDA smoke path, and
@@ -625,7 +625,7 @@ were later promoted into `docs/design/`.
   > For questions: 1. until real correctness test; 2. implement a numeric path. You should move on to solve the risks and missing things.
   - Context: User answered the open review questions about how far PR #3
     should go before it can be considered implementation-ready.
-  - Related: `docs/in_progress/public_builder_surface.md`, PR #3.
+  - Related: `docs/in_progress/runtime_linked_megacu_slice.md`, PR #3.
   - Agent interpretation: Smoke tests are not enough for this PR. The first
     implementation must include a numeric GEMM+AllReduce path and keep closing
     review risks until correctness is validated on real CUDA and CUDA+NVSHMEM
@@ -677,7 +677,7 @@ were later promoted into `docs/design/`.
     and found that the implementation still did not demonstrate the complete
     Megacu lifecycle from the accepted implementation-ready design.
   - Related: `docs/design/implementation_ready_device_native_layer/`,
-    `docs/in_progress/public_builder_surface.md`, PR #3.
+    `docs/in_progress/runtime_linked_megacu_slice.md`, PR #3.
   - Agent interpretation: The active PR task must be reset around a real working
     Megacu slice. Metadata labels and example-local wrappers are not enough;
     the task must explicitly require implemented dispatcher, scheduler,
@@ -703,7 +703,7 @@ were later promoted into `docs/design/`.
   > The implementation is so thin. Where is the components? This looks not working at all.
   - Context: These comments were discovered under a pending GitHub review on PR
     #3 after normal submitted-comment endpoints returned no comments.
-  - Related: `docs/in_progress/public_builder_surface.md`,
+  - Related: `docs/in_progress/runtime_linked_megacu_slice.md`,
     `examples/cuda_nvshmem/gemm_allreduce/`, `tests/build/`, `src/components/`.
   - Agent interpretation: Split GEMM+AllReduce phased and overlap into separate
     examples, distinguish local-GEMM golden results from pure CUDA+NVSHMEM
@@ -744,7 +744,7 @@ were later promoted into `docs/design/`.
     compiler-style implementation shape.
   - Related: `docs/design/implementation_ready_device_native_layer/`,
     `docs/in_progress/design/implementation_ready_device_native_layer/`,
-    `docs/in_progress/public_builder_surface.md`.
+    `docs/in_progress/runtime_linked_megacu_slice.md`.
   - Agent interpretation: The implementation-ready design is no longer stable
     implemented behavior and must move back to `docs/in_progress/design/`.
     The fix must happen in design first and must explicitly cover distributed
@@ -773,3 +773,12 @@ were later promoted into `docs/design/`.
     surface should expose APIs for virtual-participant attributes, and the
     linked dispatcher should map ranks, peers, lanes, and work at runtime from
     those annotations plus the current team/problem.
+
+- 2026-04-25 Asia/Shanghai - Rename stale branch and task doc
+  > The branch name and docs/in_progress/public_builder_surface.md 's name is stale.
+  - Context: User corrected naming after PR #3 moved from public-builder-surface
+    work to the runtime-linked Megacu slice.
+  - Related: `docs/in_progress/runtime_linked_megacu_slice.md`, PR #3.
+  - Agent interpretation: Rename the active task document and branch so they
+    describe the runtime-linked Megacu slice instead of the stale public builder
+    surface label.

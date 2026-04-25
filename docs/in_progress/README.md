@@ -13,6 +13,6 @@ Rules:
 
 ## Active Tasks
 
-- `docs/in_progress/public_builder_surface.md` - implement the first locally
-  verifiable Megacu lifecycle for the GEMM+AllReduce phased and overlap
+- `docs/in_progress/runtime_linked_megacu_slice.md` - implement the
+  runtime-linked Megacu slice for the GEMM+AllReduce phased and overlap
   targets.
