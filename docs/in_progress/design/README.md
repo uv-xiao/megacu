@@ -9,4 +9,7 @@ multiple files.
 
 ## Active Workstreams
 
-No active design workstreams after the implementation-ready design closeout.
+- `concrete_impl/`: PR #3 implementation documentation for current
+  `include/`, `src/`, CMake, and CUDA+NVSHMEM GEMM+AllReduce example call
+  paths. This is implementation-facing documentation and must not be promoted
+  into `docs/design/` until the PR is ready to merge.

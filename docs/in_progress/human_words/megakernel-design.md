@@ -711,3 +711,15 @@ were later promoted into `docs/design/`.
     validation from orchestrate/common runtime code, move orchestrate program
     definitions out of tests, and implement real Megacu components instead of a
     placeholder component anchor.
+
+- 2026-04-25 Asia/Shanghai - Document the concrete implementation path
+  > I found the implementation is quite thin and not well-documented. Let's create documents for implementation in docs/in_progress/design/concrete_impl/, which holds the explain for files under include/ and src/. And we also need the path visulaization and explanation to describe how a megacu-based example can run with the impls: what functions are called one-by-one.
+  - Context: User reviewed the implementation after the initial component
+    pipeline and example reorganization landed in PR #3.
+  - Related: `docs/in_progress/design/concrete_impl/`, `include/megacu/`,
+    `src/`, `examples/cuda_nvshmem/gemm_allreduce/`.
+  - Agent interpretation: Add implementation-facing documentation that maps
+    current files to responsibilities and traces a Megacu-based example from
+    authored descriptor through build/linking, metadata validation, runtime
+    validation, and native CUDA/NVSHMEM execution. The docs must be honest
+    about current thinness instead of overclaiming completeness.
