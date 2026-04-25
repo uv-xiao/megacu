@@ -1,4 +1,4 @@
-#include "examples/cuda_nvshmem/common/gemm_allreduce/gemm_allreduce_orchestrate_common.h"
+#include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce_orchestrate_common.h"
 
 extern "C" megacu::detail::metadata_header const
     megacu_cuda_nvshmem_gemm_allreduce_phased_metadata =

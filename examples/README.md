@@ -9,8 +9,20 @@ examples/<platform>_<backend>/<example>/
 For example, CUDA plus NVSHMEM GEMM+AllReduce lives at:
 
 ```text
-examples/cuda_nvshmem/gemm_allreduce_phased/
-examples/cuda_nvshmem/gemm_allreduce_overlap/
+examples/cuda_nvshmem/gemm_allreduce/
+```
+
+Example families may contain variant directories. The CUDA+NVSHMEM
+GEMM+AllReduce family uses:
+
+```text
+examples/cuda_nvshmem/gemm_allreduce/
+  common/
+  golden/
+  phased/baseline/
+  phased/megacu/
+  overlap/baseline/
+  overlap/megacu/
 ```
 
 Operational assets are shared at the platform/backend level by default:

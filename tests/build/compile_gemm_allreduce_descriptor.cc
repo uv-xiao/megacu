@@ -3,7 +3,7 @@
 #include <megacu/program.h>
 #include <megacu/views.h>
 
-#include "examples/cuda_nvshmem/common/gemm_allreduce/gemm_allreduce.h"
+#include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h"
 
 int main() {
   megacu::program_builder phased;

@@ -63,10 +63,18 @@ ownership is:
   device-side event/communication adapter.
 - `src/target/`: linked metadata object validation and target runtime ABI
   helpers.
-- `examples/cuda_nvshmem/gemm_allreduce_phased/`: phased example descriptors,
-  kernels, baselines, README, and example-owned CMake.
-- `examples/cuda_nvshmem/gemm_allreduce_overlap/`: overlap example descriptors,
-  kernels, baselines, README, and example-owned CMake.
+- `examples/cuda_nvshmem/gemm_allreduce/common/`: shared descriptors and
+  runtime helpers for the GEMM+AllReduce example family.
+- `examples/cuda_nvshmem/gemm_allreduce/golden/`: Megacu-free local golden
+  result generation and pure CUDA/NVSHMEM baseline entrypoints.
+- `examples/cuda_nvshmem/gemm_allreduce/phased/baseline/`: phased baseline
+  ownership point.
+- `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/`: phased Megacu
+  descriptors, kernels, README, and example-owned CMake.
+- `examples/cuda_nvshmem/gemm_allreduce/overlap/baseline/`: overlap baseline
+  ownership point.
+- `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/`: overlap Megacu
+  descriptors, kernels, README, and example-owned CMake.
 - `docker/cuda_nvshmem/`: shared CUDA+NVSHMEM Docker support. Add per-example
   Docker assets only if an example genuinely needs a unique image.
 - `tools/cuda_nvshmem/`: shared CUDA+NVSHMEM run support. Add per-example tools
@@ -94,9 +102,14 @@ The PR should produce these implementation artifacts:
   `src/backends/nvshmem/`, and `src/target/`.
 - CMake functions in `cmake/MegacuTargets.cmake` that compile reusable
   components and link concrete orchestrate targets without generating CUDA.
-- Two split example directories, not one mixed GEMM+AllReduce directory:
-  - `examples/cuda_nvshmem/gemm_allreduce_phased/`
-  - `examples/cuda_nvshmem/gemm_allreduce_overlap/`
+- One GEMM+AllReduce example family with split variant implementation
+  directories:
+  - `examples/cuda_nvshmem/gemm_allreduce/common/`
+  - `examples/cuda_nvshmem/gemm_allreduce/golden/`
+  - `examples/cuda_nvshmem/gemm_allreduce/phased/baseline/`
+  - `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/`
+  - `examples/cuda_nvshmem/gemm_allreduce/overlap/baseline/`
+  - `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/`
 - Two Megacu orchestrate targets for one design family:
   - `cuda_nvshmem_gemm_allreduce_phased_orchestrate`
   - `cuda_nvshmem_gemm_allreduce_overlap_orchestrate`
@@ -203,9 +216,11 @@ These gaps must be closed before the task can be marked complete:
   payloads rather than directly selecting golden/native helper calls.
 - Keep local golden, CUDA+NVSHMEM baselines, and Megacu paths clearly
   separated.
-- Keep examples in `<platform>_<backend>/<example>` trees, with shared
-  platform/backend Docker and tool assets unless per-example support is
-  justified.
+- Keep examples in `<platform>_<backend>/<example>` trees. The
+  CUDA+NVSHMEM GEMM+AllReduce example is one family root with
+  `{common,golden,phased/{baseline,megacu},overlap/{baseline,megacu}}`
+  underneath it. Keep shared platform/backend Docker and tool assets unless
+  per-example support is justified.
 
 ## Landed Evidence
 
@@ -229,11 +244,12 @@ These gaps must be closed before the task can be marked complete:
 - `tests/build/compile_gemm_allreduce_descriptor.cc` now consumes the example
   descriptor header instead of defining a duplicate orchestrate program inside
   `tests/`.
-- `examples/cuda_nvshmem/gemm_allreduce_phased/` and
-  `examples/cuda_nvshmem/gemm_allreduce_overlap/` now own separate example
-  CMake files, READMEs, and orchestrate entrypoints.
-- Shared GEMM+AllReduce descriptor, runtime helper, native baseline, and Megacu
-  CUDA support now live under `examples/cuda_nvshmem/common/gemm_allreduce/`.
+- `examples/cuda_nvshmem/gemm_allreduce/` now owns one example family layout:
+  shared descriptor/runtime/golden code at the family root and phased/overlap
+  variants split into `baseline/` and `megacu/` directories.
+- `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/` and
+  `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/` now own separate
+  example CMake files, READMEs, and orchestrate entrypoints.
 - Shared Docker and tool support now live at `docker/cuda_nvshmem/` and
   `tools/cuda_nvshmem/`; the stale per-example Docker/tool support directories
   were removed.
@@ -241,13 +257,26 @@ These gaps must be closed before the task can be marked complete:
 Current local evidence:
 
 ```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j$(nproc)
 MEGACU_TEST_CUDA_DEVICES=5,6 MEGACU_TEST_CUDA_DEVICE=6 \
   ctest --test-dir build --output-on-failure
+bash -n tools/cuda_nvshmem/run_two_card_docker.sh
+test -d examples/cuda_nvshmem/gemm_allreduce/common
+test -d examples/cuda_nvshmem/gemm_allreduce/phased/baseline
+test -d examples/cuda_nvshmem/gemm_allreduce/phased/megacu
+test -d examples/cuda_nvshmem/gemm_allreduce/overlap/baseline
+test -d examples/cuda_nvshmem/gemm_allreduce/overlap/megacu
+test -d examples/cuda_nvshmem/gemm_allreduce/golden
+test ! -e examples/cuda_nvshmem/gemm_allreduce_phased
+test ! -e examples/cuda_nvshmem/gemm_allreduce_overlap
+test ! -e examples/cuda_nvshmem/common
 git diff --check
 ```
 
-Result: 9/9 CTest tests passed locally on 2026-04-25 Asia/Shanghai.
+Result: configure/build passed, 9/9 CTest tests passed, Docker script syntax
+checked, requested GEMM+AllReduce layout checked, and `git diff --check`
+passed locally on 2026-04-25 Asia/Shanghai.
 
 ## Tests To Run
 

@@ -1,4 +1,4 @@
-#include "examples/cuda_nvshmem/common/gemm_allreduce/golden/golden_gemm_allreduce.h"
+#include "examples/cuda_nvshmem/gemm_allreduce/golden/golden_gemm_allreduce.h"
 
 #include <cuda_runtime.h>
 

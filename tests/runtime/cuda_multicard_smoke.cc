@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 
-#include "examples/cuda_nvshmem/common/gemm_allreduce/gemm_allreduce.h"
+#include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h"
 
 namespace {
 

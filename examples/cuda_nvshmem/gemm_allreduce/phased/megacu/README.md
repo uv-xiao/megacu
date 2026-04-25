@@ -16,8 +16,11 @@ persistent launch.
 - `CMakeLists.txt`: example-owned orchestrate target.
 - `gemm_allreduce_phased_orchestrate.cc`: phased target entrypoint and linked
   metadata symbol.
-- `../common/gemm_allreduce/`: shared descriptors, runtime helper, CUDA native
-  baselines, and Megacu CUDA kernels used by both phased and overlap examples.
+- `../../common/`: shared descriptors and runtime helper used by both phased
+  and overlap variants.
+- `../baseline/`: phased pure CUDA/NVSHMEM baseline ownership point.
+- `../../golden/`: local golden result generation and Megacu-free baseline
+  entrypoints.
 
 ## Execution
 

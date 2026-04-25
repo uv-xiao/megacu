@@ -5,13 +5,10 @@ communication backend is NVSHMEM.
 
 ## Examples
 
-- `gemm_allreduce_phased/`: phased GEMM+AllReduce orchestration with CUDA
-  numeric kernels and NVSHMEM-backed two-rank validation.
-- `gemm_allreduce_overlap/`: co-resident persistent GEMM+AllReduce overlap
-  orchestration with CUDA numeric kernels and NVSHMEM-backed two-rank
-  validation.
-- `common/gemm_allreduce/`: shared descriptor, runtime helper, native baseline,
-  and Megacu CUDA kernel support used by both examples.
+- `gemm_allreduce/`: CUDA+NVSHMEM GEMM+AllReduce family. Shared descriptors,
+  runtime helpers, and golden code live under the family root. Phased and
+  overlap variants each separate pure CUDA/NVSHMEM baseline ownership from the
+  Megacu implementation.
 
 Matching assets:
 

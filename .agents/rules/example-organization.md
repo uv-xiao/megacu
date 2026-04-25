@@ -1,6 +1,10 @@
 # Example Organization Rules
 
 - Examples live under `examples/<platform>_<backend>/<example>/`.
+- If one example is a family with implementation variants, keep the family as
+  the example root and put variants underneath it. For CUDA+NVSHMEM
+  GEMM+AllReduce, the required shape is
+  `examples/cuda_nvshmem/gemm_allreduce/{common,golden,phased/{baseline,megacu},overlap/{baseline,megacu}}`.
 - Shared Docker assets live under `docker/<platform>_<backend>/` by default.
   Add `docker/<platform>_<backend>/<example>/` only when an example truly needs
   a unique image or container asset.
