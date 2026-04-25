@@ -44,15 +44,6 @@ struct gemm_ar_problem {
   std::int32_t tile_n = 0;
 };
 
-struct gemm_ar_comm_ops {
-  megacu::status (*sum_reduce_f32)(
-      megacu::nvshmem::team_view team,
-      void *dest,
-      void const *src,
-      std::int64_t elements,
-      void *stream) = nullptr;
-};
-
 struct gemm_allreduce_phased_program {
   static void describe(megacu::program_builder &p) {
     auto m_tiles = p.extent<m_tiles_extent>("m_tiles");

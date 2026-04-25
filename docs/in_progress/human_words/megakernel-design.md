@@ -657,3 +657,16 @@ were later promoted into `docs/design/`.
     Megacu implementation should choose single-card versus multi-card behavior
     from the target/team/backend configuration rather than duplicating program
     code.
+
+- 2026-04-25 Asia/Shanghai - Require device-side NVSHMEM and config capability range
+  > we need the device-side one in both golden and our megacu solution. Also, we need to be very clear about one megacu config (including platform, backend, dispatcher, schediler, etc.)'s capability range, especially for our goal to share one design for single-/multi-card scenario.
+  - Context: User reviewed the two-rank GEMM+AllReduce path and rejected
+    host-side NVSHMEM reduction callbacks as the multi-card communication
+    mechanism.
+  - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
+    `tests/runtime/nvshmem_two_rank_smoke.cc`, PR #3.
+  - Agent interpretation: The golden CUDA+NVSHMEM path and the Megacu path must
+    perform multi-card communication with NVSHMEM APIs called from device code.
+    The example must also state the concrete capability envelope of the
+    `cuda_nvshmem_static` config, including what single-card and multi-card
+    cases are shared by one design and what is intentionally out of scope.

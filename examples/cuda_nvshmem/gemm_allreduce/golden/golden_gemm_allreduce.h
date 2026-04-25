@@ -54,15 +54,6 @@ struct golden_gemm_ar_team {
   int cuda_device_ordinal = 0;
 };
 
-struct golden_gemm_ar_comm_ops {
-  golden_status (*sum_reduce_f32)(
-      void *team,
-      void *dest,
-      void const *src,
-      std::int64_t elements,
-      void *stream) = nullptr;
-};
-
 golden_status golden_phased_single_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
@@ -77,12 +68,10 @@ golden_status golden_phased_multi_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_team team,
-    golden_gemm_ar_problem problem,
-    golden_gemm_ar_comm_ops const *ops);
+    golden_gemm_ar_problem problem);
 
 golden_status golden_overlap_multi_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_team team,
-    golden_gemm_ar_problem problem,
-    golden_gemm_ar_comm_ops const *ops);
+    golden_gemm_ar_problem problem);

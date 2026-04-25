@@ -22,6 +22,43 @@ megacu_add_orchestrate_target(
   SCHEDULER_MODE co_resident_persistent
   BACKEND_ENVELOPE TEAM_SIZE 2)
 
+if(MEGACU_ENABLE_NVSHMEM_TESTS)
+  if(NOT MEGACU_HAS_CUDA_LANGUAGE)
+    message(FATAL_ERROR
+      "MEGACU_ENABLE_NVSHMEM_TESTS requires a CUDA compiler for numeric kernels")
+  endif()
+
+  find_package(CUDAToolkit REQUIRED)
+  find_path(NVSHMEM_INCLUDE_DIR
+    NAMES nvshmem.h
+    HINTS ENV NVSHMEM_HOME
+    PATHS /opt/nvidia/nvshmem /usr/include/nvshmem_12
+    PATH_SUFFIXES include)
+  find_library(NVSHMEM_HOST_LIBRARY
+    NAMES libnvshmem_host.so.3 nvshmem_host
+    HINTS ENV NVSHMEM_HOME
+    PATHS /opt/nvidia/nvshmem /usr/lib/x86_64-linux-gnu/nvshmem/12
+    PATH_SUFFIXES lib lib64)
+  find_library(NVSHMEM_DEVICE_LIBRARY
+    NAMES libnvshmem_device.a nvshmem_device
+    HINTS ENV NVSHMEM_HOME
+    PATHS /opt/nvidia/nvshmem /usr/lib/x86_64-linux-gnu/nvshmem/12
+    PATH_SUFFIXES lib lib64)
+  find_program(NVSHMEMRUN_EXECUTABLE
+    NAMES nvshmrun nvshmemrun
+    HINTS ENV NVSHMEM_HOME
+    PATHS /usr/bin/nvshmem_12 /opt/nvidia/nvshmem
+    PATH_SUFFIXES bin)
+
+  if(NOT NVSHMEM_INCLUDE_DIR OR
+     NOT NVSHMEM_HOST_LIBRARY OR
+     NOT NVSHMEM_DEVICE_LIBRARY OR
+     NOT NVSHMEMRUN_EXECUTABLE)
+    message(FATAL_ERROR
+      "MEGACU_ENABLE_NVSHMEM_TESTS requires nvshmem.h, libnvshmem_host, libnvshmem_device, and nvshmrun")
+  endif()
+endif()
+
 if(MEGACU_HAS_CUDA_LANGUAGE)
   add_library(golden_cuda_nvshmem_gemm_allreduce STATIC
     golden/golden_gemm_allreduce.cu)
@@ -40,7 +77,19 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   endif()
   set_target_properties(golden_cuda_nvshmem_gemm_allreduce PROPERTIES
     CUDA_ARCHITECTURES 80
+    CUDA_SEPARABLE_COMPILATION ON
     ${MEGACU_GEMM_AR_CUDA_STANDARD_PROPERTIES})
+
+  if(MEGACU_ENABLE_NVSHMEM_TESTS)
+    target_compile_definitions(golden_cuda_nvshmem_gemm_allreduce PRIVATE
+      MEGACU_GEMM_AR_HAS_DEVICE_NVSHMEM=1)
+    target_include_directories(golden_cuda_nvshmem_gemm_allreduce PUBLIC
+      ${NVSHMEM_INCLUDE_DIR})
+    target_link_libraries(golden_cuda_nvshmem_gemm_allreduce PUBLIC
+      CUDA::cuda_driver
+      ${NVSHMEM_DEVICE_LIBRARY}
+      ${NVSHMEM_HOST_LIBRARY})
+  endif()
 
   add_library(megacu_gemm_allreduce_cuda_native OBJECT
     megacu/megacu_gemm_allreduce_kernels.cu)
@@ -54,6 +103,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   endif()
   set_target_properties(megacu_gemm_allreduce_cuda_native PROPERTIES
     CUDA_ARCHITECTURES 80
+    CUDA_SEPARABLE_COMPILATION ON
     ${MEGACU_GEMM_AR_CUDA_STANDARD_PROPERTIES})
 
   foreach(target
@@ -153,35 +203,6 @@ if(CUDAToolkit_FOUND)
 endif()
 
 if(MEGACU_ENABLE_NVSHMEM_TESTS)
-  if(NOT MEGACU_HAS_CUDA_LANGUAGE)
-    message(FATAL_ERROR
-      "MEGACU_ENABLE_NVSHMEM_TESTS requires a CUDA compiler for numeric kernels")
-  endif()
-
-  find_package(CUDAToolkit REQUIRED)
-  find_path(NVSHMEM_INCLUDE_DIR
-    NAMES nvshmem.h
-    HINTS ENV NVSHMEM_HOME
-    PATHS /usr/include/nvshmem_12
-    PATH_SUFFIXES include)
-  find_library(NVSHMEM_HOST_LIBRARY
-    NAMES nvshmem_host
-    HINTS ENV NVSHMEM_HOME
-    PATHS /usr/lib/x86_64-linux-gnu/nvshmem/12
-    PATH_SUFFIXES lib lib64)
-  find_program(NVSHMEMRUN_EXECUTABLE
-    NAMES nvshmrun nvshmemrun
-    HINTS ENV NVSHMEM_HOME
-    PATHS /usr/bin/nvshmem_12
-    PATH_SUFFIXES bin)
-
-  if(NOT NVSHMEM_INCLUDE_DIR OR
-     NOT NVSHMEM_HOST_LIBRARY OR
-     NOT NVSHMEMRUN_EXECUTABLE)
-    message(FATAL_ERROR
-      "MEGACU_ENABLE_NVSHMEM_TESTS requires nvshmem.h, libnvshmem_host, and nvshmrun")
-  endif()
-
   add_executable(megacu_nvshmem_two_rank_smoke
     ${PROJECT_SOURCE_DIR}/tests/runtime/nvshmem_two_rank_smoke.cc)
   target_link_libraries(megacu_nvshmem_two_rank_smoke PRIVATE
@@ -191,12 +212,19 @@ if(MEGACU_ENABLE_NVSHMEM_TESTS)
     cuda_nvshmem_gemm_allreduce_overlap
     CUDA::cudart
     CUDA::cuda_driver
+    ${NVSHMEM_DEVICE_LIBRARY}
     ${NVSHMEM_HOST_LIBRARY})
 
-  add_test(
-    NAME nvshmem_two_rank_smoke
-    COMMAND ${NVSHMEMRUN_EXECUTABLE} -np 2
-            $<TARGET_FILE:megacu_nvshmem_two_rank_smoke>)
-  set_tests_properties(nvshmem_two_rank_smoke PROPERTIES
-    SKIP_RETURN_CODE 77)
+  foreach(mode
+      golden_phased
+      golden_overlap
+      megacu_phased
+      megacu_overlap)
+    add_test(
+      NAME nvshmem_two_rank_smoke_${mode}
+      COMMAND ${NVSHMEMRUN_EXECUTABLE} -np 2
+              $<TARGET_FILE:megacu_nvshmem_two_rank_smoke> ${mode})
+    set_tests_properties(nvshmem_two_rank_smoke_${mode} PROPERTIES
+      SKIP_RETURN_CODE 77)
+  endforeach()
 endif()

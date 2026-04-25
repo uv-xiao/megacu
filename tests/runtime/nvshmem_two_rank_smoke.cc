@@ -1,31 +1,16 @@
 #include <cuda_runtime.h>
+#include <nvshmem_host.h>
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "examples/cuda_nvshmem/gemm_allreduce/golden/golden_gemm_allreduce.h"
 #include "examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce.h"
-
-// The CUDA 12.8 Debian package ships a host library that exports these C API
-// symbols, while its CMake package references a missing device archive. Keep
-// this smoke on the exported host ABI until the device package is available.
-extern "C" {
-int nvshmemx_hostlib_init_attr(unsigned int flags, void *attr);
-void nvshmemx_hostlib_finalize();
-int nvshmem_my_pe();
-int nvshmem_n_pes();
-void *nvshmem_malloc(std::size_t size);
-void nvshmem_free(void *ptr);
-void nvshmem_barrier_all();
-int nvshmem_float_sum_reduce(
-    int team,
-    float *dest,
-    float const *src,
-    std::size_t nreduce);
-}
 
 namespace {
 
@@ -37,8 +22,6 @@ constexpr std::size_t kABytes = kM * kK * sizeof(float);
 constexpr std::size_t kBBytes = kK * kN * sizeof(float);
 constexpr std::size_t kCBytes = kM * kN * sizeof(float);
 constexpr std::size_t kPartialBytes = 2 * kCBytes;
-constexpr int kNvshmemTeamWorld = 0;
-
 void require_cuda(cudaError_t error) {
   assert(error == cudaSuccess);
 }
@@ -52,76 +35,48 @@ gemm_ar_problem correctness_problem() {
       .tile_n = kN};
 }
 
-megacu::status nvshmem_sum_reduce_f32(
-    megacu::nvshmem::team_view,
-    void *dest,
-    void const *src,
-    std::int64_t elements,
-    void *stream) {
-  require_cuda(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
-  auto rc = nvshmem_float_sum_reduce(
-      kNvshmemTeamWorld,
-      static_cast<float *>(dest),
-      static_cast<float const *>(src),
-      static_cast<std::size_t>(elements));
-  if (rc != 0) {
-    return {megacu::status_code::backend_error, 1, "nvshmem sum reduce failed"};
-  }
-  nvshmem_barrier_all();
-  return {};
-}
-
-golden_status golden_nvshmem_sum_reduce_f32(
-    void *,
-    void *dest,
-    void const *src,
-    std::int64_t elements,
-    void *stream) {
-  require_cuda(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
-  auto rc = nvshmem_float_sum_reduce(
-      kNvshmemTeamWorld,
-      static_cast<float *>(dest),
-      static_cast<float const *>(src),
-      static_cast<std::size_t>(elements));
-  if (rc != 0) {
-    return {golden_status_code::backend_error, 1, "nvshmem sum reduce failed"};
-  }
-  nvshmem_barrier_all();
-  return {};
-}
-
 void reset_outputs(void *c, void *partial, void *events, cudaStream_t stream) {
   require_cuda(cudaMemsetAsync(c, 0, kCBytes, stream));
   require_cuda(cudaMemsetAsync(partial, 0, kPartialBytes, stream));
   require_cuda(cudaMemsetAsync(events, 0, 128, stream));
+  require_cuda(cudaStreamSynchronize(stream));
+  nvshmem_barrier_all();
 }
 
-void check_expected(void *c, cudaStream_t stream) {
+void check_expected(char const *label, int pe, void *c, cudaStream_t stream) {
   std::vector<float> host_c(kM * kN, 0.0f);
   require_cuda(cudaMemcpyAsync(
       host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
   for (float value : host_c) {
+    if (std::fabs(value - 12.0f) >= 1.0e-4f) {
+      std::fprintf(stderr, "%s pe=%d values:", label, pe);
+      for (float item : host_c) {
+        std::fprintf(stderr, " %.6f", item);
+      }
+      std::fprintf(stderr, "\n");
+    }
     assert(std::fabs(value - 12.0f) < 1.0e-4f);
   }
 }
 
 }  // namespace
 
-int main() {
-  assert(nvshmemx_hostlib_init_attr(0, nullptr) == 0);
+int main(int argc, char **argv) {
+  char const *mode = argc > 1 ? argv[1] : "";
+  nvshmem_init();
 
   int pe = nvshmem_my_pe();
   int npes = nvshmem_n_pes();
   if (npes != 2) {
-    nvshmemx_hostlib_finalize();
+    nvshmem_finalize();
     return kSkipTest;
   }
 
   int device_count = 0;
   require_cuda(cudaGetDeviceCount(&device_count));
   if (device_count < 2) {
-    nvshmemx_hostlib_finalize();
+    nvshmem_finalize();
     return kSkipTest;
   }
 
@@ -172,8 +127,6 @@ int main() {
       .world_my_pe = pe,
       .world_n_pes = npes,
       .cuda_device_ordinal = device};
-  golden_gemm_ar_comm_ops golden_ops{
-      .sum_reduce_f32 = golden_nvshmem_sum_reduce_f32};
   golden_gemm_ar_problem golden_problem{
       .m = kM,
       .n = kN,
@@ -183,22 +136,8 @@ int main() {
       .compute_ctas = 2,
       .comm_ctas = 1};
 
-  auto golden_status = golden_phased_multi_card_gemm_allreduce_f32(
-      golden_workspace, golden_launch, golden_team, golden_problem, &golden_ops);
-  assert(golden_status.code == golden_status_code::ok);
-  check_expected(c, stream);
-
-  reset_outputs(c, partial, events, stream);
-  golden_status = golden_overlap_multi_card_gemm_allreduce_f32(
-      golden_workspace, golden_launch, golden_team, golden_problem, &golden_ops);
-  assert(golden_status.code == golden_status_code::ok);
-  check_expected(c, stream);
-
-  reset_outputs(c, partial, events, stream);
-
   megacu::backend_id backend{1};
   megacu::session_id session{7};
-  gemm_ar_comm_ops ops{.sum_reduce_f32 = nvshmem_sum_reduce_f32};
 
   gemm_ar_workspace workspace{
       .a = {
@@ -235,7 +174,7 @@ int main() {
       .stream = stream,
       .device_ordinal = device};
   megacu::nvshmem::team_view team{
-      .team = &ops,
+      .team = nullptr,
       .team_my_pe = pe,
       .team_n_pes = npes,
       .world_my_pe = pe,
@@ -244,17 +183,37 @@ int main() {
       .backend = backend,
       .session = session};
 
-  auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
-      workspace, event_storage, launch, team, correctness_problem());
-  assert(status.code == megacu::status_code::ok);
-  check_expected(c, stream);
-
-  reset_outputs(c, partial, events, stream);
-  status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-      workspace, event_storage, launch, team, correctness_problem());
-  assert(status.code == megacu::status_code::ok);
-  check_expected(c, stream);
-
+  if (std::strcmp(mode, "golden_phased") == 0) {
+    auto golden_status = golden_phased_multi_card_gemm_allreduce_f32(
+        golden_workspace, golden_launch, golden_team, golden_problem);
+    if (golden_status.code != golden_status_code::ok) {
+      std::fprintf(
+          stderr,
+          "golden phased failed: code=%d detail=%u message=%s\n",
+          static_cast<int>(golden_status.code),
+          golden_status.detail,
+          golden_status.message);
+    }
+    assert(golden_status.code == golden_status_code::ok);
+    check_expected("golden phased", pe, c, stream);
+  } else if (std::strcmp(mode, "golden_overlap") == 0) {
+    auto golden_status = golden_overlap_multi_card_gemm_allreduce_f32(
+        golden_workspace, golden_launch, golden_team, golden_problem);
+    assert(golden_status.code == golden_status_code::ok);
+    check_expected("golden overlap", pe, c, stream);
+  } else if (std::strcmp(mode, "megacu_phased") == 0) {
+    auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+        workspace, event_storage, launch, team, correctness_problem());
+    assert(status.code == megacu::status_code::ok);
+    check_expected("megacu phased", pe, c, stream);
+  } else if (std::strcmp(mode, "megacu_overlap") == 0) {
+    auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
+        workspace, event_storage, launch, team, correctness_problem());
+    assert(status.code == megacu::status_code::ok);
+    check_expected("megacu overlap", pe, c, stream);
+  } else {
+    assert(false && "unknown nvshmem smoke mode");
+  }
   nvshmem_barrier_all();
   nvshmem_free(events);
   nvshmem_free(partial);
@@ -265,6 +224,6 @@ int main() {
   require_cuda(cudaFree(a));
   require_cuda(cudaStreamDestroy(stream));
 
-  nvshmemx_hostlib_finalize();
+  nvshmem_finalize();
   return 0;
 }

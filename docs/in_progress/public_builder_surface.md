@@ -49,15 +49,15 @@ GEMM+AllReduce targets.
     async device operation, and direct orchestrate calls;
   - CUDA multi-card tests exercise two visible GPUs on one host, peer-copy
     runtime plumbing, and one logical PE/orchestrate call per device;
-  - Docker NVSHMEM tests exercise two single-host PEs, NVSHMEM host bootstrap,
-    symmetric allocation, CUDA stream/device setup, and the direct orchestrate
-    ABI with NVSHMEM-backed symmetric views;
+  - Docker NVSHMEM tests exercise two single-host PEs, NVSHMEM bootstrap,
+    symmetric allocation, CUDA stream/device setup, device-side NVSHMEM peer
+    reads, and the direct orchestrate ABI with NVSHMEM-backed symmetric views;
   - numeric CUDA tests execute golden phased, golden overlap, Megacu phased,
     and Megacu overlap on a real CUDA stream and compare output matrices
     against host-computed expected values;
   - numeric Docker NVSHMEM tests execute golden phased, golden overlap, Megacu
     phased, and Megacu overlap under two ranks and compare both rank outputs
-    after an NVSHMEM sum-reduce;
+    after device-side NVSHMEM allreduce work;
   - resource arguments bind concrete workspace fields through member pointers,
     so the program IR records both the workspace slot and field name used by
     each kernel argument;
@@ -119,11 +119,18 @@ GEMM+AllReduce targets.
 - Host inspection currently finds CUDA, Open MPI, Docker, and two idle A100s,
   but no host NVSHMEM headers, libraries, or launcher. Two-rank NVSHMEM
   validation is therefore provided by a CUDA/NVSHMEM Docker environment.
-- Docker NVSHMEM smoke tests prove the packaged NVSHMEM host runtime can
-  bootstrap two PEs on one host, allocate symmetric buffers, synchronize both
-  PEs, pass NVSHMEM-backed symmetric views into the compiled orchestrate ABI on
-  two visible GPUs, execute golden phased/overlap and Megacu phased/overlap
-  paths, and verify both ranks observe the expected sum-reduced matrix.
+- Docker NVSHMEM smoke tests prove the packaged NVSHMEM runtime can bootstrap
+  two PEs on one host, allocate symmetric buffers, synchronize both PEs, link
+  the NVSHMEM device archive, pass NVSHMEM-backed symmetric views into the
+  compiled orchestrate ABI on two visible GPUs, execute golden phased/overlap
+  and Megacu phased/overlap paths with device-side NVSHMEM peer reads, and
+  verify both ranks observe the expected sum-reduced matrix.
+- The `cuda_nvshmem_static` config capability range is explicit in
+  `examples/cuda_nvshmem/gemm_allreduce/README.md`: CUDA platform, NVSHMEM
+  backend, tiled compute/communication dispatcher, static persistent scheduler,
+  persistent-stitch lowering, one shared design for `team_n_pes == 1` and
+  `team_n_pes == 2`, and no claims for arbitrary PE counts, non-`f32` layouts,
+  dynamic scheduling, or distributed launcher integration yet.
 
 ## Tests
 

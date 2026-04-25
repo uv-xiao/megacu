@@ -12,16 +12,14 @@ extern "C" megacu::status megacu_cuda_gemm_allreduce_phased_f32(
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
-    gemm_ar_problem problem,
-    gemm_ar_comm_ops const *ops);
+    gemm_ar_problem problem);
 
 extern "C" megacu::status megacu_cuda_gemm_allreduce_overlap_f32(
     gemm_ar_workspace workspace,
     megacu::event_storage_view events,
     megacu::cuda::launch_view launch,
     megacu::nvshmem::team_view team,
-    gemm_ar_problem problem,
-    gemm_ar_comm_ops const *ops);
+    gemm_ar_problem problem);
 #endif
 
 namespace gemm_ar_detail {
@@ -113,15 +111,6 @@ inline megacu::status run_numeric(
     return {};
   }
 
-  auto *ops = static_cast<gemm_ar_comm_ops const *>(team.team);
-  if (team.team_n_pes > 1 &&
-      (ops == nullptr || ops->sum_reduce_f32 == nullptr)) {
-    return {
-        megacu::status_code::invalid_argument,
-        9,
-        "missing f32 communication primitive"};
-  }
-
   auto validation = validate_numeric_f32(workspace, problem);
   if (validation.code != megacu::status_code::ok) {
     return validation;
@@ -130,14 +119,14 @@ inline megacu::status run_numeric(
 #ifdef MEGACU_HAS_CUDA_NUMERIC_PATH
   if (progress == megacu::detail::progress_model::phased) {
     return megacu_cuda_gemm_allreduce_phased_f32(
-        workspace, events, launch, team, problem, ops);
+        workspace, events, launch, team, problem);
   }
   return megacu_cuda_gemm_allreduce_overlap_f32(
-      workspace, events, launch, team, problem, ops);
+      workspace, events, launch, team, problem);
 #else
   return {
       megacu::status_code::unsupported,
-      10,
+      9,
       "CUDA numeric path was not built"};
 #endif
 }
