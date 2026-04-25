@@ -12,6 +12,10 @@ in-progress drafts should be removed.
   source-reading policy, GitHub workflow skills, and human-agent workflow.
 - `docs/design/megacu_cpp_cuda_layer.md` - picked Megacu device-native layer
   direction and current stable boundaries.
-- `docs/design/implementation_ready_device_native_layer/` -
-  implementation-ready API, build, runtime, metadata, examples, and verification
-  contracts for the first Megacu device-native implementation.
+
+## Moved Back To In-Progress
+
+- `docs/design/implementation_ready_device_native_layer/` was moved back to
+  `docs/in_progress/design/implementation_ready_device_native_layer/` during
+  PR #3 because the previous design described a compiler-like materialization
+  path that is no longer accepted.

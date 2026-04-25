@@ -723,3 +723,30 @@ were later promoted into `docs/design/`.
     authored descriptor through build/linking, metadata validation, runtime
     validation, and native CUDA/NVSHMEM execution. The docs must be honest
     about current thinness instead of overclaiming completeness.
+
+- 2026-04-25 Asia/Shanghai - Runtime linking replaces compiler-style materialization
+  > 1. materialize.cc 's behavior is very wrong. It works in a compiler way: operate on program ir and create sections or other intermediate things (like scheduler_section, schedule-entry). But this is very static, and cause overheads. We don't want to do things like lowering/transform/ir-building. Instead, we just want to link real implementation to APIs and let scheduler/dispatcher and other components run at runtime, not do static compilation. This is fundamentally wrong.
+  > 2. the current dispatcher is too ad-hoc.
+  > 3. from the ownership's view, we don't want things like program.h records logical facts and detail/materialize.h + src/program/materialize.cc owns copied facts and creates target metadata. This pattern is not as thin as we want. We're not doing compilation!
+  - Context: User reviewed the concrete implementation docs and rejected the
+    compiler-like implementation shape in PR #3.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/design/concrete_impl/`, `include/megacu/`,
+    `src/program/materialize.cc`, PR #3.
+  - Agent interpretation: Replace program-IR materialization and static section
+    construction with runtime-linked components. CMake should link real
+    dispatcher, scheduler, platform, backend, and operator implementations;
+    those components should run inside the orchestrate target at runtime.
+
+- 2026-04-25 Asia/Shanghai - Move implementation-ready design back to in-progress
+  > Since we've redirecting architectural design, we need to bring docs/design/implementation_ready_device_native_layer back to in_progress and do fixing there first. Also, I found distributed features not covered in the fix plan.
+  - Context: User corrected the documentation workflow after rejecting the
+    compiler-style implementation shape.
+  - Related: `docs/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/public_builder_surface.md`.
+  - Agent interpretation: The implementation-ready design is no longer stable
+    implemented behavior and must move back to `docs/in_progress/design/`.
+    The fix must happen in design first and must explicitly cover distributed
+    runtime support, including CUDA+NVSHMEM under single-card, two-card,
+    MPI-launched, and torch-distributed-launched scenarios.

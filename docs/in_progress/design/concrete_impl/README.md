@@ -1,8 +1,15 @@
 # Concrete Implementation Docs
 
-These documents explain the current PR #3 implementation, not the final
-accepted architecture. They are intentionally placed under `docs/in_progress/`
-because the implementation is still thin and under review.
+These documents explain the current PR #3 implementation before the
+runtime-linking redesign, not the final accepted architecture. They are
+intentionally placed under `docs/in_progress/` because the implementation is
+still thin and under review.
+
+After the 2026-04-25 architecture redirect, the materialization-oriented path
+documented here is diagnostic only. The replacement design lives in
+`docs/in_progress/design/implementation_ready_device_native_layer/` and removes
+`program_ir`, `materialize_program`, static dispatch/schedule sections, and
+compiler-style target lowering from the intended implementation.
 
 The scope is concrete:
 
@@ -16,7 +23,8 @@ The scope is concrete:
 
 The scope is not:
 
-- a replacement for `docs/design/implementation_ready_device_native_layer/`;
+- a replacement for the active redesign under
+  `docs/in_progress/design/implementation_ready_device_native_layer/`;
 - a claim that the current implementation is complete;
 - a new architecture proposal detached from current files.
 
@@ -64,6 +72,6 @@ runtime validation and native call
 ```
 
 The current implementation already has named component files and inspectable
-metadata sections. It does not yet fully execute from the metadata schedule
-payload at runtime; the example runtime still routes through a hand-written
-native CUDA/NVSHMEM implementation selected by the orchestrate wrapper.
+metadata sections. That shape is now considered the wrong direction. The next
+implementation slice should replace those metadata sections with runtime-linked
+components called directly from the orchestrate target.

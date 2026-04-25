@@ -15,8 +15,8 @@ Start with:
 - `AGENTS.md` for agent operating rules
 - `docs/design/megacu_cpp_cuda_layer.md` for the accepted device-native layer
   design
-- `docs/design/implementation_ready_device_native_layer/` for the first
-  implementation contract
+- `docs/in_progress/design/implementation_ready_device_native_layer/` for the
+  active first-implementation redesign
 - `docs/design/agent_harness.md` for the repo-local collaboration harness
 - `docs/notes/megakernel_cuda_layer_sources.md` for MPK and Event Tensor reading
 - `docs/todo/README.md` for open gaps
