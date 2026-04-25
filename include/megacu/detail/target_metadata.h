@@ -34,9 +34,48 @@ struct program_section {
   std::uint16_t submission_count = 0;
 };
 
+enum class placement_role : std::uint8_t {
+  compute,
+  comm
+};
+
+struct domain_tile_2d {
+  std::uint32_t m = 0;
+  std::uint32_t n = 0;
+};
+
+struct dispatch_entry {
+  domain_tile_2d tile;
+  placement_role role = placement_role::compute;
+  std::uint16_t participant_slot = invalid_slot;
+  std::uint16_t logical_rank = 0;
+  std::uint16_t worker_index = 0;
+};
+
+struct participant_entry {
+  domain_tile_2d tile;
+  std::uint16_t participant_slot = invalid_slot;
+  std::uint16_t logical_rank = 0;
+  std::uint16_t backend_peer = 0;
+};
+
 struct dispatch_section {
   std::uint16_t work_entry_count = 0;
   std::uint16_t participant_entry_count = 0;
+  std::vector<dispatch_entry> work;
+  std::vector<participant_entry> participants;
+};
+
+enum class schedule_action : std::uint8_t {
+  launch_gemm_tile_produce,
+  launch_allreduce_tile_consume
+};
+
+using event_wait_mode = megacu::event_wait_mode;
+
+enum class residency_role : std::uint8_t {
+  compute,
+  comm
 };
 
 struct residency_group {
@@ -46,25 +85,76 @@ struct residency_group {
   bool all_workers_must_be_launched_together = false;
 };
 
+struct cuda_residency_envelope {
+  std::uint16_t persistent_grid_blocks = 0;
+  std::uint16_t threads_per_block = 0;
+  std::uint16_t min_sm_count = 0;
+  std::uint16_t max_blocks_per_sm = 0;
+  bool requires_cooperative_launch = false;
+};
+
+struct schedule_entry {
+  std::uint32_t order = 0;
+  std::uint32_t dispatch_entry_index = 0;
+  schedule_action action = schedule_action::launch_gemm_tile_produce;
+  std::uint16_t required_event_slot = invalid_slot;
+  std::uint16_t released_event_slot = invalid_slot;
+  std::uint16_t phase = 0;
+  std::uint16_t residency_group = invalid_slot;
+  residency_role role = residency_role::compute;
+  event_wait_mode wait_mode = event_wait_mode::none;
+};
+
 struct schedule_section {
   progress_model progress = progress_model::phased;
+  std::uint16_t num_compute_workers = 0;
+  std::uint16_t num_comm_workers = 0;
   std::vector<residency_group> residency_groups;
+  cuda_residency_envelope residency;
+  std::vector<schedule_entry> entries;
   bool has_blocking_device_wait = false;
+};
+
+enum class entrypoint_role : std::uint8_t {
+  launchable_kernel,
+  callable_body
 };
 
 struct kernel_symbol {
   std::string op_name;
   std::uint16_t op_slot = invalid_slot;
+  entrypoint_role role = entrypoint_role::callable_body;
+  std::uint16_t symbol_id = invalid_slot;
+};
+
+struct cuda_launch_shape {
+  std::uint32_t grid_x = 1;
+  std::uint32_t grid_y = 1;
+  std::uint32_t grid_z = 1;
+  std::uint32_t block_x = 1;
+  std::uint32_t block_y = 1;
+  std::uint32_t block_z = 1;
+  std::uint32_t dynamic_smem_bytes = 0;
+  bool cooperative = false;
 };
 
 struct kernel_section {
   std::vector<kernel_symbol> symbols;
+  cuda_launch_shape launch;
   bool stitched_persistent = false;
+};
+
+struct event_layout_entry {
+  std::uint16_t event_slot = invalid_slot;
+  std::uint16_t domain_rank = invalid_slot;
+  std::uint32_t byte_offset = 0;
+  megacu::memory_scope scope = megacu::memory_scope::local_device;
 };
 
 struct backend_section {
   std::uint16_t team_size = 1;
   std::uint32_t event_storage_bytes = 0;
+  std::vector<event_layout_entry> events;
   bool requires_symmetric_partial_buffer = false;
   bool may_use_multimem_reduce = false;
 };

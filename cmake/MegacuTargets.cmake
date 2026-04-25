@@ -12,7 +12,15 @@ function(megacu_add_components)
   endforeach()
 
   add_library(${MEGACU_NAME} STATIC
-    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/components/component_anchor.cc)
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/program/materialize.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/dispatcher/tiled_compute_comm_dispatch.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/scheduler/static_persistent.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/lowering/persistent_stitch.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/platform/cuda/platform.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/platform/cuda/validation.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/backends/nvshmem/backend.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/backends/nvshmem/validation.cc
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/target/runtime.cc)
   target_compile_features(${MEGACU_NAME} PUBLIC cxx_std_20)
   target_link_libraries(${MEGACU_NAME} PUBLIC megacu_headers)
   target_compile_definitions(${MEGACU_NAME} PRIVATE

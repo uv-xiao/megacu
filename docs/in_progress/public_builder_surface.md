@@ -195,8 +195,6 @@ The PR is not complete until fresh evidence covers:
 
 These gaps must be closed before the task can be marked complete:
 
-- Move real implementation ownership out of example-local common headers into
-  reusable `src/` components.
 - Split `examples/cuda_nvshmem/gemm_allreduce/` into phased and overlap example
   directories.
 - Move shared Docker and tool support to `docker/cuda_nvshmem/` and
@@ -208,13 +206,6 @@ These gaps must be closed before the task can be marked complete:
   checking belongs in tests or validation drivers.
 - Move orchestrate program definitions out of `tests/` into example or target
   source files that tests consume.
-- Replace count-only dispatch metadata with inspectable dispatch entries and
-  participant/backend peer mappings.
-- Replace boolean schedule metadata with inspectable schedule entries,
-  residency groups, event wait/release slots, and CUDA residency envelope.
-- Add real lowering validation for op entrypoint roles and linked symbols.
-- Make CUDA platform and NVSHMEM backend validation reusable adapters instead
-  of target-local helper checks.
 - Ensure Megacu phased and overlap paths consume dispatcher/scheduler/lowering
   payloads rather than directly selecting golden/native helper calls.
 - Keep local golden, CUDA+NVSHMEM baselines, and Megacu paths clearly
@@ -222,6 +213,37 @@ These gaps must be closed before the task can be marked complete:
 - Keep examples in `<platform>_<backend>/<example>` trees, with shared
   platform/backend Docker and tool assets unless per-example support is
   justified.
+
+## Landed Evidence
+
+- `src/dispatcher/tiled_compute_comm_dispatch.cc` now owns tiled
+  compute/communication dispatch metadata, including work entries and
+  participant/backend peer mappings.
+- `src/scheduler/static_persistent.cc` now owns phased and co-resident
+  persistent schedule metadata, including schedule entries, event wait/release
+  slots, residency groups, and CUDA residency envelope facts.
+- `src/lowering/persistent_stitch.cc` now owns kernel symbol metadata and
+  entrypoint-role records for the selected lowering mode.
+- `src/platform/cuda/validation.cc` and
+  `src/backends/nvshmem/validation.cc` now own reusable runtime validation for
+  CUDA launch views, NVSHMEM teams, and symmetric storage.
+- `cmake/MegacuTargets.cmake` now builds `cuda_nvshmem_static` from the
+  component source files rather than from one `component_anchor.cc` placeholder.
+- `tests/build/component_metadata_contracts.cc` verifies the dispatcher,
+  scheduler, lowering, backend metadata, and linked component symbols.
+- `tests/build/runtime_adapter_validation.cc` verifies reusable CUDA/NVSHMEM
+  validation behavior.
+
+Current local evidence:
+
+```sh
+cmake --build build -j$(nproc)
+MEGACU_TEST_CUDA_DEVICES=5,6 MEGACU_TEST_CUDA_DEVICE=6 \
+  ctest --test-dir build --output-on-failure
+git diff --check
+```
+
+Result: 9/9 CTest tests passed locally on 2026-04-25 Asia/Shanghai.
 
 ## Tests To Run
 

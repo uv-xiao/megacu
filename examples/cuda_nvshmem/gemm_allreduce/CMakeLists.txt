@@ -131,11 +131,32 @@ add_test(
 add_executable(megacu_materialize_gemm_allreduce
   ${PROJECT_SOURCE_DIR}/tests/build/materialize_gemm_allreduce.cc)
 target_link_libraries(megacu_materialize_gemm_allreduce PRIVATE
-  megacu_headers)
+  megacu_headers
+  cuda_nvshmem_static)
 
 add_test(
   NAME materialize_gemm_allreduce
   COMMAND megacu_materialize_gemm_allreduce)
+
+add_executable(megacu_component_metadata_contracts
+  ${PROJECT_SOURCE_DIR}/tests/build/component_metadata_contracts.cc)
+target_link_libraries(megacu_component_metadata_contracts PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME component_metadata_contracts
+  COMMAND megacu_component_metadata_contracts)
+
+add_executable(megacu_runtime_adapter_validation
+  ${PROJECT_SOURCE_DIR}/tests/build/runtime_adapter_validation.cc)
+target_link_libraries(megacu_runtime_adapter_validation PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME runtime_adapter_validation
+  COMMAND megacu_runtime_adapter_validation)
 
 add_executable(megacu_linked_metadata_symbols
   ${PROJECT_SOURCE_DIR}/tests/build/linked_metadata_symbols.cc)

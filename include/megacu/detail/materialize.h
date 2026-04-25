@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -72,61 +71,7 @@ inline bool has_blocking_wait(owned_program_ir const &program) {
   return false;
 }
 
-inline target_metadata lower_target(
-    owned_program_ir const &program,
-    target_options options) {
-  target_metadata metadata;
-  metadata.target_name = std::string(options.target_name);
-  metadata.program.extent_count = static_cast<std::uint16_t>(program.extents.size());
-  metadata.program.domain_count = static_cast<std::uint16_t>(program.domains.size());
-  metadata.program.participant_count =
-      static_cast<std::uint16_t>(program.participants.size());
-  metadata.program.resource_count =
-      static_cast<std::uint16_t>(program.resources.size());
-  metadata.program.event_count = static_cast<std::uint16_t>(program.events.size());
-  metadata.program.submission_count =
-      static_cast<std::uint16_t>(program.submissions.size());
-
-  metadata.dispatch.work_entry_count =
-      static_cast<std::uint16_t>(program.submissions.size());
-  metadata.dispatch.participant_entry_count =
-      static_cast<std::uint16_t>(program.participants.size() * options.team_size);
-
-  metadata.schedule.progress = options.progress;
-  metadata.schedule.has_blocking_device_wait = has_blocking_wait(program);
-  if (options.progress == progress_model::co_resident_persistent) {
-    metadata.schedule.residency_groups.push_back({
-        .group = 0,
-        .min_compute_workers = 1,
-        .min_comm_workers = 1,
-        .all_workers_must_be_launched_together = options.co_resident_guard});
-  }
-
-  for (auto const &submission : program.submissions) {
-    auto found = std::find_if(
-        metadata.kernel.symbols.begin(),
-        metadata.kernel.symbols.end(),
-        [&](kernel_symbol const &symbol) {
-          return symbol.op_name == submission.op_name;
-        });
-    if (found == metadata.kernel.symbols.end()) {
-      metadata.kernel.symbols.push_back({
-          .op_name = std::string(submission.op_name),
-          .op_slot = submission.op_slot});
-    }
-  }
-  metadata.kernel.stitched_persistent =
-      options.progress == progress_model::co_resident_persistent;
-
-  metadata.backend.team_size = options.team_size;
-  metadata.backend.event_storage_bytes =
-      static_cast<std::uint32_t>(program.events.size() * options.team_size *
-                                 sizeof(std::uint64_t));
-  metadata.backend.requires_symmetric_partial_buffer = true;
-  metadata.backend.may_use_multimem_reduce = true;
-
-  return metadata;
-}
+target_metadata lower_target(owned_program_ir const &program, target_options options);
 
 template <class Program>
 materialized_target materialize_program(target_options options) {
