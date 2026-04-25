@@ -204,8 +204,6 @@ These gaps must be closed before the task can be marked complete:
   four pure CUDA+NVSHMEM baselines, and two Megacu implementations.
 - Remove numeric validation from orchestrate/common runtime code; correctness
   checking belongs in tests or validation drivers.
-- Move orchestrate program definitions out of `tests/` into example or target
-  source files that tests consume.
 - Ensure Megacu phased and overlap paths consume dispatcher/scheduler/lowering
   payloads rather than directly selecting golden/native helper calls.
 - Keep local golden, CUDA+NVSHMEM baselines, and Megacu paths clearly
@@ -233,6 +231,9 @@ These gaps must be closed before the task can be marked complete:
   scheduler, lowering, backend metadata, and linked component symbols.
 - `tests/build/runtime_adapter_validation.cc` verifies reusable CUDA/NVSHMEM
   validation behavior.
+- `tests/build/compile_gemm_allreduce_descriptor.cc` now consumes the example
+  descriptor header instead of defining a duplicate orchestrate program inside
+  `tests/`.
 
 Current local evidence:
 
