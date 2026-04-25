@@ -8,9 +8,8 @@ subdirectory only when that example needs a unique image or container asset.
 
 ## Examples
 
-- Target layout: one shared CUDA 12.8 development image with Open MPI, Ninja,
-  and NVSHMEM host packages for CUDA+NVSHMEM validations should live directly
-  under `docker/cuda_nvshmem/`.
+- `Dockerfile`: shared CUDA 12.8 development image with Open MPI, Ninja, and
+  NVSHMEM host packages for CUDA+NVSHMEM validations.
 
 Matching paths:
 

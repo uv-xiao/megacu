@@ -4,7 +4,7 @@
 #include <megacu/detail/materialize.h>
 #include <megacu/detail/target_metadata.h>
 
-#include "examples/cuda_nvshmem/gemm_allreduce/gemm_allreduce.h"
+#include "examples/cuda_nvshmem/common/gemm_allreduce/gemm_allreduce.h"
 
 int main() {
   auto phased = megacu::detail::materialize_program<

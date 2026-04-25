@@ -195,11 +195,6 @@ The PR is not complete until fresh evidence covers:
 
 These gaps must be closed before the task can be marked complete:
 
-- Split `examples/cuda_nvshmem/gemm_allreduce/` into phased and overlap example
-  directories.
-- Move shared Docker and tool support to `docker/cuda_nvshmem/` and
-  `tools/cuda_nvshmem/`, keeping per-example subdirectories only if a unique
-  asset is justified.
 - Replace the current golden naming with local-GEMM golden result generation,
   four pure CUDA+NVSHMEM baselines, and two Megacu implementations.
 - Remove numeric validation from orchestrate/common runtime code; correctness
@@ -234,6 +229,14 @@ These gaps must be closed before the task can be marked complete:
 - `tests/build/compile_gemm_allreduce_descriptor.cc` now consumes the example
   descriptor header instead of defining a duplicate orchestrate program inside
   `tests/`.
+- `examples/cuda_nvshmem/gemm_allreduce_phased/` and
+  `examples/cuda_nvshmem/gemm_allreduce_overlap/` now own separate example
+  CMake files, READMEs, and orchestrate entrypoints.
+- Shared GEMM+AllReduce descriptor, runtime helper, native baseline, and Megacu
+  CUDA support now live under `examples/cuda_nvshmem/common/gemm_allreduce/`.
+- Shared Docker and tool support now live at `docker/cuda_nvshmem/` and
+  `tools/cuda_nvshmem/`; the stale per-example Docker/tool support directories
+  were removed.
 
 Current local evidence:
 

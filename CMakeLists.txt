@@ -37,4 +37,4 @@ target_compile_features(megacu_headers INTERFACE cxx_std_20)
 
 enable_testing()
 
-add_subdirectory(examples/cuda_nvshmem/gemm_allreduce)
+add_subdirectory(examples/cuda_nvshmem)

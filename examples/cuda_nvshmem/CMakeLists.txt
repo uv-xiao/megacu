@@ -6,22 +6,6 @@ megacu_add_components(
   PLATFORM cuda
   BACKEND nvshmem)
 
-megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce_phased
-  PROGRAM gemm_allreduce_phased_program
-  SOURCES gemm_allreduce_phased_orchestrate.cc
-  COMPONENTS cuda_nvshmem_static
-  SCHEDULER_MODE phased
-  BACKEND_ENVELOPE TEAM_SIZE 2)
-
-megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce_overlap
-  PROGRAM gemm_allreduce_overlap_program
-  SOURCES gemm_allreduce_overlap_orchestrate.cc
-  COMPONENTS cuda_nvshmem_static
-  SCHEDULER_MODE co_resident_persistent
-  BACKEND_ENVELOPE TEAM_SIZE 2)
-
 if(MEGACU_ENABLE_NVSHMEM_TESTS)
   if(NOT MEGACU_HAS_CUDA_LANGUAGE)
     message(FATAL_ERROR
@@ -61,7 +45,7 @@ endif()
 
 if(MEGACU_HAS_CUDA_LANGUAGE)
   add_library(golden_cuda_nvshmem_gemm_allreduce STATIC
-    golden/golden_gemm_allreduce.cu)
+    common/gemm_allreduce/golden/golden_gemm_allreduce.cu)
   target_link_libraries(golden_cuda_nvshmem_gemm_allreduce PUBLIC
     CUDA::cudart)
   target_include_directories(golden_cuda_nvshmem_gemm_allreduce PUBLIC
@@ -92,7 +76,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   endif()
 
   add_library(megacu_gemm_allreduce_cuda_native OBJECT
-    megacu/megacu_gemm_allreduce_kernels.cu)
+    common/gemm_allreduce/megacu/megacu_gemm_allreduce_kernels.cu)
   target_link_libraries(megacu_gemm_allreduce_cuda_native PUBLIC
     megacu_headers
     golden_cuda_nvshmem_gemm_allreduce
@@ -106,18 +90,10 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA_SEPARABLE_COMPILATION ON
     ${MEGACU_GEMM_AR_CUDA_STANDARD_PROPERTIES})
 
-  foreach(target
-      cuda_nvshmem_gemm_allreduce_phased
-      cuda_nvshmem_gemm_allreduce_overlap)
-    target_sources(${target} PRIVATE
-      $<TARGET_OBJECTS:megacu_gemm_allreduce_cuda_native>)
-    target_link_libraries(${target} PUBLIC
-      golden_cuda_nvshmem_gemm_allreduce
-      CUDA::cudart)
-    target_compile_definitions(${target} PRIVATE
-      MEGACU_HAS_CUDA_NUMERIC_PATH=1)
-  endforeach()
 endif()
+
+add_subdirectory(gemm_allreduce_phased)
+add_subdirectory(gemm_allreduce_overlap)
 
 add_executable(megacu_compile_gemm_allreduce_descriptor
   ${PROJECT_SOURCE_DIR}/tests/build/compile_gemm_allreduce_descriptor.cc)

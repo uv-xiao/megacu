@@ -8,8 +8,8 @@ subdirectory only when that example needs a unique script.
 
 ## Examples
 
-- Target layout: a shared two-card Docker runner for CUDA+NVSHMEM validation
-  targets should live directly under `tools/cuda_nvshmem/`.
+- `run_two_card_docker.sh`: shared two-card Docker runner for CUDA+NVSHMEM
+  validation targets.
 
 Matching paths:
 
