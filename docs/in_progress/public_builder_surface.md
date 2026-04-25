@@ -1,170 +1,222 @@
-# Feature Task: Complete First Megacu Implementation
+# Feature Task: First Working Megacu Slice
 
 - Branch: `implementation/public-builder-surface`
 - PR: #3
 - Owner: Codex
-- Status: Active
+- Status: Active, scope reset after PR review
 
-## Goal
+## Review Reset
 
-Implement the first locally verifiable Megacu lifecycle from the accepted
-implementation-ready design: public program authoring, host materialization,
-target metadata sections, CMake component/orchestrate target plumbing, direct
-compiled orchestrate ABI, runtime validation, numeric GEMM+AllReduce
-correctness, and negative overlap-guard checks for the phased and overlap
-GEMM+AllReduce targets.
+The PR cannot be treated as a working Megacu implementation while dispatcher,
+scheduler, kernel-lowering, platform/backend binding, and target-lowering are
+only metadata labels or example-local shortcuts. A correct first slice must run
+through the same component boundaries described by the accepted design and then
+prove the resulting target on CUDA and CUDA+NVSHMEM.
 
-## Input
+GitHub connector and `gh` currently show no visible PR comments or review
+threads for PR #3. The actionable review input for this reset is the user
+feedback that the PR lacks real dispatch/schedule/etc., does not look like a
+working version, and needs better file organization.
 
-- `docs/design/implementation_ready_device_native_layer/01-program.md`
-- `docs/design/implementation_ready_device_native_layer/07-first-validation-slice.md`
-- `docs/design/implementation_ready_device_native_layer/08-verification.md`
-- `docs/design/implementation_ready_device_native_layer/10-implementation-architecture.md`
+## Design Contract
 
-## Output
+This task implements the first complete local lifecycle from
+`docs/design/implementation_ready_device_native_layer/`:
+
+- public C++ authoring records the logical program;
+- materialization converts the program into owned target facts;
+- dispatcher maps logical domains and virtual participants to execution
+  placements;
+- scheduler turns dispatch output plus events into phased or co-resident
+  persistent execution;
+- kernel lowering links existing CUDA/NVSHMEM implementations to named ops and
+  selected schedule payloads without emitting generated CUDA/C++ source;
+- CUDA platform and NVSHMEM backend adapters validate runtime views, bind native
+  launch/team/event resources, and expose device-side backend primitives;
+- CMake builds reusable components and then links concrete orchestrate targets;
+- runtime code calls the compiled orchestrate functions directly.
+
+The public surface must stay thin: public headers may expose only authoring
+helpers, typed runtime views, CMake functions, and the direct orchestrate ABI.
+Dispatcher, scheduler, lowering, platform, backend, and metadata sections are
+private implementation details.
+
+## Required File Organization
+
+Core implementation must not live primarily inside the example. The expected
+ownership is:
+
+- `include/megacu/`: public C++ authoring and runtime view API only.
+- `include/megacu/detail/`: private record and metadata declarations used by
+  tests and target plumbing.
+- `src/program/`: program materialization and validation.
+- `src/dispatcher/`: tiled compute/communication dispatcher implementation.
+- `src/scheduler/`: phased and co-resident persistent scheduler
+  implementation, including overlap guard validation.
+- `src/lowering/`: kernel and target lowering driver that links existing
+  implementations and builds launch payloads.
+- `src/platform/cuda/`: CUDA stream/device validation and launch adapter.
+- `src/backends/nvshmem/`: NVSHMEM team, symmetric resource, peer, and
+  device-side event/communication adapter.
+- `src/target/`: linked metadata object validation and target runtime ABI
+  helpers.
+- `examples/cuda_nvshmem/gemm_allreduce/`: example-specific descriptors,
+  kernels, golden baselines, README, and example-owned CMake.
+- `docker/cuda_nvshmem/gemm_allreduce/` and
+  `tools/cuda_nvshmem/gemm_allreduce/`: matching Docker and run support.
+
+Example code may provide target-specific kernels and descriptors. It must not
+be the only place where dispatch, scheduling, lowering, CUDA platform, or
+NVSHMEM backend behavior exists.
+
+## Working Slice Outputs
+
+The PR should produce these implementation artifacts:
 
 - Public headers:
   - `include/megacu/program.h`
   - `include/megacu/views.h`
   - `include/megacu/platform/cuda.h`
   - `include/megacu/backends/nvshmem.h`
-- Internal first-pass record declarations:
+- Private records:
   - `include/megacu/detail/program_ir.h`
-- Target metadata and materialization headers:
   - `include/megacu/detail/target_metadata.h`
   - `include/megacu/detail/materialize.h`
-- CMake functions:
-  - `cmake/MegacuTargets.cmake`
-- Example target:
-  - `examples/cuda_nvshmem/gemm_allreduce/`
-  - `examples/cuda_nvshmem/gemm_allreduce/CMakeLists.txt`
-- Tests proving:
-  - `gemm_allreduce_phased_program` and `gemm_allreduce_overlap_program` can be
-    authored with the public builder surface;
-  - materialization emits program facts and metadata sections;
-  - overlap schedules require a co-residency guard;
-  - direct orchestrate ABI validates typed runtime views and returns
-    `megacu::status`;
-  - CUDA runtime tests exercise a real device stream, device allocation,
-    async device operation, and direct orchestrate calls;
-  - CUDA multi-card tests exercise two visible GPUs on one host, peer-copy
-    runtime plumbing, and one logical PE/orchestrate call per device;
-  - Docker NVSHMEM tests exercise two single-host PEs, NVSHMEM bootstrap,
-    symmetric allocation, CUDA stream/device setup, device-side NVSHMEM peer
-    reads, and the direct orchestrate ABI with NVSHMEM-backed symmetric views;
-  - numeric CUDA tests execute golden phased, golden overlap, Megacu phased,
-    and Megacu overlap on a real CUDA stream and compare output matrices
-    against host-computed expected values;
-  - numeric Docker NVSHMEM tests execute golden phased, golden overlap, Megacu
-    phased, and Megacu overlap under two ranks and compare both rank outputs
-    after device-side NVSHMEM allreduce work;
-  - resource arguments bind concrete workspace fields through member pointers,
-    so the program IR records both the workspace slot and field name used by
-    each kernel argument;
-  - phased and overlap static libraries each export a linked metadata symbol
-    validated by a consuming test binary;
-  - target creation uses CMake/native build plumbing without generated CUDA.
+- Reusable component implementations under `src/program/`, `src/dispatcher/`,
+  `src/scheduler/`, `src/lowering/`, `src/platform/cuda/`,
+  `src/backends/nvshmem/`, and `src/target/`.
+- CMake functions in `cmake/MegacuTargets.cmake` that compile reusable
+  components and link concrete orchestrate targets without generating CUDA.
+- Two Megacu orchestrate targets for one design family:
+  - `cuda_nvshmem_gemm_allreduce_phased_orchestrate`
+  - `cuda_nvshmem_gemm_allreduce_overlap_orchestrate`
+- Two Megacu-free golden baselines:
+  - `golden_phased`
+  - `golden_overlap`
+- Single-card and two-card execution for both golden and Megacu paths, selected
+  from runtime team/backend capability rather than duplicated program designs.
 
-## Scope Checklist
+## Component Requirements
 
-- [x] Define input, output, and verification criteria
-- [x] Implement public builder and typed view headers
-- [x] Implement minimal internal `program_ir` record declarations
-- [x] Add compile-only GEMM+AllReduce descriptor coverage
-- [x] Implement materialization and target metadata sections
-- [x] Implement CMake component/orchestrate target plumbing
-- [x] Implement direct GEMM+AllReduce orchestrate ABI smoke path
-- [x] Add real CUDA single-device runtime smoke coverage
-- [x] Add single-host two-card CUDA runtime smoke coverage
-- [x] Add negative overlap-guard and metadata validation tests
-- [x] Verify locally across build, materialization, metadata, ABI, CUDA device,
-  and CUDA two-card tests
-- [x] Add Docker-provisioned two-card NVSHMEM runtime validation
-- [x] Add numeric GEMM+AllReduce correctness on CUDA and two-rank NVSHMEM
-- [x] Replace the minimal numeric path with golden phased/overlap baselines and
-  two Megacu implementations
-- [x] Move example target ownership into the example-local `CMakeLists.txt`
-- [x] Make resource-field bindings concrete in program IR
-- [x] Prove linked per-target metadata symbols from consuming binaries
-- [x] Sync `docs/todo/` and `docs/in_progress/`
+### Program And Materialization
 
-## Verification
+- Authoring must collect typed extents, domains, participants, resources,
+  events, named ops, submissions, and resource-field bindings.
+- Materialization must own copied records, reject missing required tables, and
+  feed dispatcher/scheduler/lowering inputs.
+- String names may be diagnostic labels only. Runtime event/op/resource lookup
+  must use typed slots or materialized indexes.
 
-- Public-header inspection proves no dispatcher, scheduler, kernel-lowering,
-  platform, backend, or metadata plan classes are exposed.
-- Compile-only test proves phased and overlap GEMM+AllReduce descriptors build
-  using only the planned public headers.
-- Materializer tests prove extents, domains, participants, resources, events,
-  submissions, dispatch, schedule, kernel, and backend sections are present.
-- Negative materializer test proves an overlap target with blocking device wait
-  and no co-residency guard fails.
-- Direct ABI tests prove invalid runtime resources return non-OK
-  `megacu::status` before any launch path.
-- CUDA runtime smoke tests prove the local build can touch a real CUDA device
-  through `CUDA::cudart`, create a stream, allocate device buffers, perform an
-  async device operation, and pass CUDA-backed views through the compiled
-  orchestrate ABI.
-- CUDA multi-card smoke tests prove the local build can touch two GPUs on the
-  same host, perform a peer copy between them, and pass one logical two-PE team
-  view per device through the compiled orchestrate ABI.
-- CUDA numeric correctness tests prove golden phased, golden overlap, Megacu
-  phased, and Megacu overlap run on a real CUDA stream and write expected output
-  matrices. The overlap golden uses a persistent fused CUDA kernel with
-  co-resident compute and communication CTAs.
-- Linked metadata tests prove a consuming binary can link the phased and
-  overlap target metadata symbols and validate their schedule mode, extent,
-  domain, and team-size facts without re-materializing descriptors.
-- Static or grep check proves no runtime strategy selection, string event
-  lookup, generated CUDA source, or generic `runtime_env` surface is introduced.
-- Host inspection currently finds CUDA, Open MPI, Docker, and two idle A100s,
-  but no host NVSHMEM headers, libraries, or launcher. Two-rank NVSHMEM
-  validation is therefore provided by a CUDA/NVSHMEM Docker environment.
-- Docker NVSHMEM smoke tests prove the packaged NVSHMEM runtime can bootstrap
-  two PEs on one host, allocate symmetric buffers, synchronize both PEs, link
-  the NVSHMEM device archive, pass NVSHMEM-backed symmetric views into the
-  compiled orchestrate ABI on two visible GPUs, execute golden phased/overlap
-  and Megacu phased/overlap paths with device-side NVSHMEM peer reads, and
-  verify both ranks observe the expected sum-reduced matrix.
-- The `cuda_nvshmem_static` config capability range is explicit in
-  `examples/cuda_nvshmem/gemm_allreduce/README.md`: CUDA platform, NVSHMEM
-  backend, tiled compute/communication dispatcher, static persistent scheduler,
-  persistent-stitch lowering, one shared design for `team_n_pes == 1` and
-  `team_n_pes == 2`, and no claims for arbitrary PE counts, non-`f32` layouts,
-  dynamic scheduling, or distributed launcher integration yet.
+### Dispatcher
 
-## Tests
+- Implement a real tiled compute/communication dispatcher for GEMM+AllReduce.
+- Output must identify compute work, communication work, tile coordinates,
+  participant slots, logical ranks, worker roles, and backend peers.
+- Virtual participant mapping belongs to the dispatcher policy, not CMake
+  ad hoc mapping syntax.
+- Single-card and two-card cases should share the same logical program and
+  diverge only through dispatcher/backend capability inputs.
 
-- Add a focused build/compile-only test target for the two program descriptors.
-- Add materialization, metadata validation, CMake, and direct ABI smoke tests.
-- Add CUDA runtime smoke tests for one device and single-host two-card plumbing.
-- Add numeric CUDA GEMM+AllReduce correctness tests for the compiled target.
-- Run the repository CMake build and CTest suite.
-- If CUDA runtime is unavailable, skip only CUDA tests by absence of
-  `CUDAToolkit`; if fewer than two GPUs are visible, skip only the two-card
-  smoke with CTest skip code `77`.
-- If host NVSHMEM tooling is unavailable, use a Docker-provisioned NVSHMEM
-  environment for the two-rank single-host validation and record any remaining
-  skip reason explicitly.
+### Scheduler
 
-Current local evidence:
+- Implement phased static scheduling for the baseline target.
+- Implement co-resident persistent scheduling for the overlap target.
+- The overlap scheduler must materialize residency groups and reject blocking
+  communication waits unless compute and communication workers are proven to be
+  launched together in the same residency group.
+- The phased scheduler may allow GEMM tile production and reduction tile work
+  to proceed as soon as dependencies are satisfied; it should not introduce
+  false whole-program dependencies unless the backend capability requires them.
+
+### Kernel And Target Lowering
+
+- Lowering links existing CUDA/NVSHMEM symbols and reusable component code; it
+  does not generate per-program CUDA/C++ source.
+- Lowering must bind named ops to required entrypoint roles for the selected
+  strategy, validate missing symbols, and record inspectable kernel metadata.
+- The overlap path must use a persistent loop for co-resident compute and
+  communication workers.
+- The phased path may use separate launches or a persistent phase loop, but it
+  must still run through Megacu dispatch and schedule payloads.
+
+### CUDA Platform And NVSHMEM Backend
+
+- CUDA adapter validates device ordinal, stream, launch shape, cooperative or
+  persistent launch requirements, and device capability constraints.
+- NVSHMEM adapter validates team size, local PE, symmetric event storage,
+  symmetric partial buffers, session identity, and peer mapping.
+- Multi-card communication in both golden and Megacu paths must use device-side
+  NVSHMEM, not host-side reduction callbacks.
+- The config capability range must be explicit: platform, backend, dispatcher,
+  scheduler, lowering mode, supported team sizes, supported layouts/dtypes, and
+  unsupported features.
+
+## Verification Requirements
+
+The PR is not complete until fresh evidence covers:
+
+- compile-only authoring for phased and overlap descriptors;
+- materialization tests for program facts and owned records;
+- dispatcher tests that inspect tile/participant/backend peer placement;
+- scheduler tests for phased readiness and co-resident overlap guard behavior;
+- negative test for blocking communication without a valid residency guard;
+- lowering tests for missing op symbols and no generated CUDA/C++ source;
+- linked metadata tests for program, dispatch, schedule, kernel, and backend
+  sections;
+- direct ABI validation tests returning `megacu::status` before launch on bad
+  runtime views;
+- CUDA single-card numeric correctness for golden phased, golden overlap,
+  Megacu phased, and Megacu overlap;
+- single-host two-card CUDA/NVSHMEM correctness under Docker using device-side
+  NVSHMEM for golden and Megacu paths;
+- file-organization checks for `examples/`, `docker/`, and `tools/`;
+- `git diff --check`, CMake build, and CTest.
+
+## Current Gap List
+
+These gaps must be closed before the task can be marked complete:
+
+- Move real implementation ownership out of example-local common headers into
+  reusable `src/` components.
+- Replace count-only dispatch metadata with inspectable dispatch entries and
+  participant/backend peer mappings.
+- Replace boolean schedule metadata with inspectable schedule entries,
+  residency groups, event wait/release slots, and CUDA residency envelope.
+- Add real lowering validation for op entrypoint roles and linked symbols.
+- Make CUDA platform and NVSHMEM backend validation reusable adapters instead
+  of target-local helper checks.
+- Ensure Megacu phased and overlap paths consume dispatcher/scheduler/lowering
+  payloads rather than directly selecting golden/native helper calls.
+- Keep golden implementations Megacu-free and clearly separated from Megacu
+  paths.
+- Keep examples, Docker assets, and tools in matching
+  `<platform>_<backend>/<example>` trees with example-local CMake and README
+  coverage.
+
+## Tests To Run
+
+Minimum local evidence after implementation changes:
 
 ```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j"$(nproc)"
 MEGACU_TEST_CUDA_DEVICES=5,6 MEGACU_TEST_CUDA_DEVICE=6 \
   ctest --test-dir build --output-on-failure
 tools/cuda_nvshmem/gemm_allreduce/run_two_card_docker.sh
+git diff --check
 ```
 
-## Docs
-
-The accepted design is already in `docs/design/`. This implementation PR should
-only update design docs if the code exposes a mismatch in the accepted
-contract.
+If host NVSHMEM is unavailable, Docker-provisioned CUDA+NVSHMEM remains the
+required two-card validation path. If Docker or GPUs are unavailable, record the
+exact blocker and do not claim multi-card correctness.
 
 ## Closeout
 
-Before closing this task:
+Before this PR can be closed:
 
-- update `docs/todo/README.md` if this completes a listed implementation gap;
-- remove this task file or mark follow-up implementation tasks explicitly;
-- keep any new public API aligned with the thinness rule in
-  `docs/design/implementation_ready_device_native_layer/00-overview.md`.
+- update this task so completed items have evidence, not intent;
+- update `docs/todo/README.md` for any remaining implementation gaps;
+- keep accepted architecture content in `docs/design/` untouched until PR
+  merge preparation;
+- merge only implementation-relevant learnings into stable design docs at the
+  end of the PR.

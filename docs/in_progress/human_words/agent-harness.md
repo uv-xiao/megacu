@@ -93,3 +93,13 @@ were later promoted into `docs/design/`.
     organized as matching platform/backend/example groups. Each example must be
     self-explaining through README files, including visualization, pseudocode,
     usage, and runtime assumptions.
+
+- 2026-04-25 Asia/Shanghai - Add PR-comment fixing skill
+  > I've glanced over the PR. You should read my comments. I think there are large problems about feature implementation (don't see any dispatch/schedule/etc., don't think we've implemented a working version) and file organization. You should look at research/repos/simpler/.claude/skills/fix-pr/ to $skill-creator create a skill about get and fix PR comments, and then rethink about docs/in_progress/public_builder_surface.md, making it a full working slice (aligned with the complete implementation-ready design).
+  - Context: User reviewed PR #3 and asked for a reusable agent workflow for
+    fetching and fixing PR comments, adapted from the Simpler fix-pr skill.
+  - Related: `.agents/skills/fix-pr-comments/SKILL.md`, PR #3.
+  - Agent interpretation: Megacu agents need a local skill that fetches PR
+    feedback from GitHub, classifies it, verifies it against repo reality, fixes
+    implementation/design gaps, and records blocked reply/resolve actions when
+    GitHub permissions are unavailable.

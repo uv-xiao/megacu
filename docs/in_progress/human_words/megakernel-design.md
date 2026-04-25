@@ -670,3 +670,16 @@ were later promoted into `docs/design/`.
     The example must also state the concrete capability envelope of the
     `cuda_nvshmem_static` config, including what single-card and multi-card
     cases are shared by one design and what is intentionally out of scope.
+
+- 2026-04-25 Asia/Shanghai - PR #3 is not yet a working slice
+  > I've glanced over the PR. You should read my comments. I think there are large problems about feature implementation (don't see any dispatch/schedule/etc., don't think we've implemented a working version) and file organization. You should look at research/repos/simpler/.claude/skills/fix-pr/ to $skill-creator create a skill about get and fix PR comments, and then rethink about docs/in_progress/public_builder_surface.md, making it a full working slice (aligned with the complete implementation-ready design).
+  - Context: User reviewed PR #3 after numeric CUDA/NVSHMEM examples were added
+    and found that the implementation still did not demonstrate the complete
+    Megacu lifecycle from the accepted implementation-ready design.
+  - Related: `docs/design/implementation_ready_device_native_layer/`,
+    `docs/in_progress/public_builder_surface.md`, PR #3.
+  - Agent interpretation: The active PR task must be reset around a real working
+    Megacu slice. Metadata labels and example-local wrappers are not enough;
+    the task must explicitly require implemented dispatcher, scheduler,
+    lowering, CUDA platform, NVSHMEM backend, target-lowering, file
+    organization, and verification paths aligned with the accepted design.
