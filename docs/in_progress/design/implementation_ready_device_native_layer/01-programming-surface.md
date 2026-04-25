@@ -7,7 +7,8 @@ through a generic runtime graph object.
 The user-facing surface has two layers:
 
 1. direct target ABI used by application/framework code;
-2. native operator entrypoints linked into that target.
+2. virtual-participant annotations and native operator entrypoints linked into
+   that target.
 
 Component-facing runtime APIs live under `include/megacu/detail/` or
 component-specific headers until they are proven reusable.
@@ -94,7 +95,43 @@ per-task schedules.
 
 ## Orchestrator Code
 
-An orchestrator is normal C++ code that calls runtime components:
+An orchestrator is normal C++ code that calls runtime components. It supplies
+workload-specific virtual-participant attributes to the general dispatcher
+linked by the `ConfigureTarget`:
+
+```cpp
+namespace gemm_ar_tags {
+struct gemm_producer;
+struct reduce_consumer;
+}
+
+constexpr auto participants = megacu::participant_list{
+    megacu::participant<gemm_ar_tags::gemm_producer>(
+        "gemm_producer",
+        megacu::participant_attrs{
+            .role = megacu::participant_role::compute,
+            .placement = megacu::placement_scope::per_rank,
+            .progress = megacu::progress_requirement::nonblocking,
+            .peer_policy = megacu::peer_policy::local_then_remote,
+            .requires = megacu::participant_requirement::none}),
+    megacu::participant<gemm_ar_tags::reduce_consumer>(
+        "reduce_consumer",
+        megacu::participant_attrs{
+            .role = megacu::participant_role::communication,
+            .placement = megacu::placement_scope::per_peer,
+            .progress = megacu::progress_requirement::may_block,
+            .peer_policy = megacu::peer_policy::all_remote_peers,
+            .requires = megacu::participant_requirement::
+                co_resident_progress_if_blocking})};
+```
+
+The annotations are small typed declarations. They let the linked dispatcher
+choose concrete rank, lane, peer, and work ownership at runtime from the current
+team and problem. They are not a program builder, not a static schedule, and
+not metadata materialized by a compiler pass.
+
+The orchestrate call then uses the `ConfigureTarget` dispatcher through a
+generic API:
 
 ```cpp
 megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
@@ -114,8 +151,13 @@ megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
     return validation;
   }
 
-  megacu::gemm_ar_dispatch dispatch;
-  validation = megacu::dispatcher::prepare_gemm_ar(dispatch, problem, team);
+  megacu::dispatch_state dispatch;
+  validation = megacu::dispatcher::map(
+      dispatch,
+      megacu::dispatch_request{
+          .context = ctx,
+          .problem = megacu::problem_view::from(problem),
+          .participants = participants});
   if (validation.code != megacu::status_code::ok) {
     return validation;
   }
@@ -134,6 +176,67 @@ implementation, but the direction cannot revert to compiler-like IR building.
 
 The orchestrator must stay readable top-to-bottom. It should not hide runtime
 state in a generic payload blob.
+
+## Virtual Participant Annotation API
+
+The public programming surface should expose only the minimum needed for an
+orchestrate target to describe logical actors:
+
+```cpp
+namespace megacu {
+enum class participant_role : std::uint8_t {
+  compute,
+  communication,
+  mixed,
+};
+
+enum class placement_scope : std::uint8_t {
+  per_rank,
+  per_peer,
+  per_tile,
+  cooperative_group,
+};
+
+enum class progress_requirement : std::uint8_t {
+  nonblocking,
+  may_block,
+  requires_co_resident_progress,
+};
+
+enum class peer_policy : std::uint8_t {
+  local_only,
+  local_then_remote,
+  all_remote_peers,
+  paired_peer,
+};
+
+enum class participant_requirement : std::uint16_t {
+  none = 0,
+  symmetric_storage = 1 << 0,
+  co_resident_progress_if_blocking = 1 << 1,
+};
+
+struct participant_attrs {
+  participant_role role;
+  placement_scope placement;
+  progress_requirement progress;
+  peer_policy peer_policy;
+  participant_requirement requires;
+};
+
+template <class Tag>
+constexpr participant_ref<Tag> participant(
+    std::string_view debug_name,
+    participant_attrs attrs);
+}
+```
+
+`debug_name` is for diagnostics. Runtime mapping must not depend on string
+lookup. Type tags and the `participant_attrs` values are the semantic input.
+
+The dispatcher may reject annotations that are unsupported by the linked
+`ConfigureTarget`, such as a blocking communication participant without a
+co-resident progress-capable scheduler.
 
 ## Kernel Operator Code
 

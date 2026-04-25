@@ -761,3 +761,15 @@ were later promoted into `docs/design/`.
     runtime-linking design itself, especially the programming surface, so it
     gives concrete APIs, component boundaries, distributed adapter contracts,
     and verification criteria that match the no-materialization requirement.
+
+- 2026-04-25 Asia/Shanghai - ConfigureTarget owns a general dispatcher
+  > You misunderstand me. dispatcher should be part of the configureTarget, but it needs to be more general! And it should expose APIs for programming surface to annotate virtual participents with attributes, and it can do mapping/dispatching according tot he annotations during runtime, with it's algorithm.
+  - Context: User corrected the dispatcher/configuration split after the
+    runtime-linking redesign risked moving dispatcher ownership away from the
+    configured target or making it GEMM+AllReduce-specific.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/`.
+  - Agent interpretation: Dispatcher remains a `ConfigureTarget` component, but
+    it must be a general annotation-driven runtime mapper. The programming
+    surface should expose APIs for virtual-participant attributes, and the
+    linked dispatcher should map ranks, peers, lanes, and work at runtime from
+    those annotations plus the current team/problem.

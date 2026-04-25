@@ -3,14 +3,14 @@
 CMake configures what implementation is linked. Runtime C++ runs that linked
 implementation. There is no Megacu compiler step between those two facts.
 
-## Component Target
+## ConfigureTarget
 
-The first component target remains useful:
+The first configured component target remains useful:
 
 ```cmake
-megacu_add_components(
+megacu_add_configure_target(
   NAME cuda_nvshmem_static
-  DISPATCHER cuda_nvshmem_gemm_ar
+  DISPATCHER annotated_runtime
   SCHEDULER static_phased_or_overlap
   PLATFORM cuda
   BACKEND nvshmem)
@@ -19,11 +19,16 @@ megacu_add_components(
 But the meaning changes. This function links runtime component libraries. It
 must not run a materializer or create metadata artifacts.
 
+The dispatcher belongs to the `ConfigureTarget`, but it must be general to the
+platform/backend/scheduler capability. It consumes virtual-participant
+annotations supplied by each `OrchTarget` at runtime. It must not be named or
+implemented as a GEMM+AllReduce-only dispatcher.
+
 Expected linked implementation files:
 
 ```text
-src/dispatcher/cuda_nvshmem_gemm_ar_runtime.cc
-src/scheduler/gemm_ar_runtime.cc
+src/dispatcher/annotated_runtime.cc
+src/scheduler/static_runtime.cc
 src/platform/cuda/validation.cc
 src/backends/nvshmem/runtime.cc
 src/backends/nvshmem/validation.cc
@@ -34,10 +39,10 @@ src/target/runtime.cc
 as `src/operators/` or `src/target/linked_symbols.cc`. If there is no lowering,
 we should not keep a directory named lowering.
 
-`megacu_add_components` should fail if a requested component name is unknown.
-It should not silently link a default placeholder.
+`megacu_add_configure_target` should fail if a requested component name is
+unknown. It should not silently link a default placeholder.
 
-## Orchestrate Target
+## OrchTarget
 
 Each example variant links a direct target:
 
@@ -55,7 +60,7 @@ The CMake target records a capability envelope, not a materialized program:
 ```text
 platform: cuda
 backend: nvshmem
-dispatcher: cuda_nvshmem_gemm_ar
+dispatcher: annotated_runtime
 scheduler: overlap_gemm_ar
 operator symbols: linked native CUDA/NVSHMEM functions
 supported team sizes: 1 or 2 for the first slice
@@ -66,6 +71,21 @@ This envelope can be exposed through target properties, a generated config
 header, or linked constant data. Prefer linked constant data in handwritten
 source for the first implementation. It must be small and static. It should not
 contain dispatch tables or schedule entries.
+
+The `OrchTarget` supplies workload-specific facts that are not part of the
+reusable `ConfigureTarget`:
+
+- direct ABI and problem/workspace types;
+- virtual participants and their attributes;
+- native operator symbols;
+- workload capability facts such as dtype/layout and supported problem shapes.
+
+The `ConfigureTarget` supplies:
+
+- platform and backend validation;
+- the general annotated dispatcher algorithm;
+- scheduler implementation;
+- target-runtime helpers and common capability checks.
 
 If a generated config header is ever considered, it needs a separate design
 review because the current requirement is to avoid code generation as the

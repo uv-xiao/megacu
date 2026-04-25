@@ -32,7 +32,10 @@ Expected concepts:
 
 - `runtime_context`: launch, team, event storage, optional target capability.
 - `target_capability`: linked static envelope for supported backend/platform,
-  dtype/layout/team sizes, and scheduler mode.
+  dispatcher algorithm, dtype/layout/team sizes, and scheduler mode.
+- `participant_attrs` and typed virtual-participant refs: workload annotations
+  supplied by the `OrchTarget` and interpreted by the `ConfigureTarget`
+  dispatcher.
 - `dispatch_state` and `tile_work`: compact runtime work cursors.
 - scheduler entrypoints for phased and overlap GEMM+AllReduce.
 
@@ -42,12 +45,21 @@ left as stale evidence.
 
 ## Runtime Dispatcher
 
-Replace the current ad-hoc dispatcher with a GEMM+AllReduce runtime dispatcher:
+Replace the current ad-hoc dispatcher with a general annotation-driven runtime
+dispatcher that is linked into the `ConfigureTarget`:
 
-- input: `gemm_ar_problem`, `team_view`, target capability;
+- input: `dispatch_request` containing runtime context, problem view, and
+  virtual-participant annotations;
 - output: compact `dispatch_state`;
 - helper: iterate tile work without heap-heavy tables;
 - behavior: map logical rank and peer rank from runtime team values.
+- behavior: enforce annotation requirements such as symmetric storage,
+  supported placement scope, and co-resident progress for blocking
+  communication.
+
+GEMM+AllReduce should provide participant annotations and problem/workspace
+types as an `OrchTarget` user. It should not define the dispatcher component
+for the whole CUDA+NVSHMEM configuration.
 
 ## Runtime Scheduler
 

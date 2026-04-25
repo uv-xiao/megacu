@@ -10,11 +10,15 @@ want.
 
 Megacu is a thin runtime-linked layer:
 
-- CMake links platform/backend/dispatcher/scheduler/operator components.
+- CMake links a `ConfigureTarget`: platform, backend, general dispatcher,
+  scheduler, and target-runtime components.
 - The public C++ surface exposes direct orchestrate functions and typed runtime
   views.
 - Dispatcher, scheduler, platform, and backend components run at runtime inside
   the linked orchestrate target.
+- The dispatcher is part of the `ConfigureTarget`, but it is not
+  workload-specific. It maps annotated virtual participants to runtime ranks,
+  lanes, peers, and work ownership using its linked algorithm.
 - Kernels/operators are handwritten native implementations linked into the
   target.
 - No normal Megacu path builds a program IR, lowers an IR, materializes target
@@ -44,10 +48,11 @@ user/framework/native driver
   calls cuda_nvshmem_gemm_allreduce_*_orchestrate(...)
         |
         v
-orchestrate target validates typed views and linked capability config
+orchestrate target validates typed views and linked ConfigureTarget capability
         |
         v
-runtime dispatcher maps problem/team to tile, rank, lane, peer work
+runtime dispatcher maps participant annotations plus problem/team to tile,
+rank, lane, and peer work
         |
         v
 runtime scheduler chooses phased or overlap progress actions for this call
@@ -65,11 +70,20 @@ into the same loops and launch setup an expert would write by hand.
 
 ## Terms In The Corrected Design
 
-- **Target**: a linked C++/CUDA library exposing one direct orchestrate ABI.
-  Example: `cuda_nvshmem_gemm_allreduce_overlap`.
+- **ConfigureTarget**: the linked reusable configuration: platform, backend,
+  general dispatcher, scheduler, target-runtime helpers, and capability
+  envelope. It is selected by CMake and compiled once as normal C++/CUDA code.
+- **OrchTarget**: a linked C++/CUDA library exposing one direct orchestrate
+  ABI. It depends on one `ConfigureTarget`, supplies workload-specific
+  problem/workspace types, virtual-participant annotations, and native operator
+  symbols. Example: `cuda_nvshmem_gemm_allreduce_overlap`.
+- **Target**: a shorthand when the distinction is not important. When mapping
+  or dispatch ownership is discussed, use `ConfigureTarget` or `OrchTarget`
+  explicitly.
 - **Capability envelope**: small static facts about the linked target:
-  platform, backend, scheduler mode, supported dtype/layout/team-size range,
-  and required native symbols. It is not a dispatch table or serialized IR.
+  platform, backend, dispatcher algorithm, scheduler mode, supported
+  dtype/layout/team-size range, and required native symbols. It is not a
+  dispatch table or serialized IR.
 - **Runtime context**: the handles passed to a call: CUDA launch view, NVSHMEM
   team view, event storage, and the target capability envelope.
 - **Task**: a runtime unit of work such as "produce this GEMM tile" or
@@ -78,8 +92,18 @@ into the same loops and launch setup an expert would write by hand.
 - **Event**: a runtime readiness protocol backed by caller-provided storage.
   Events are not looked up by string name. For CUDA+NVSHMEM first slice, the
   event protocol is tile-ready signaling over local or symmetric storage.
-- **Dispatcher**: runtime code that maps the current problem/team to work
-  cursors and peer identity.
+- **Virtual participant**: a typed logical actor named by the orchestration
+  code before concrete rank, lane, or worker placement is known. Examples:
+  compute producer, communication consumer, or mixed participant.
+- **Participant attributes**: small workload-supplied runtime annotations on a
+  virtual participant, such as role, placement scope, locality, progress
+  requirement, communication capability, peer policy, and co-residency
+  requirement. They are direct declarations consumed by the dispatcher, not
+  stored program IR.
+- **Dispatcher**: the `ConfigureTarget` runtime component that maps annotated
+  virtual participants plus the current problem/team to work cursors, backend
+  peer identity, and local lane/worker placement. It is general to the
+  platform/backend/scheduler configuration, not a GEMM+AllReduce-only mapper.
 - **Scheduler**: runtime code that decides when linked operators run for this
   call under the target's progress policy.
 - **Backend**: runtime code and device helpers for communication semantics.

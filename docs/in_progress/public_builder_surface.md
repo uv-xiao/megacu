@@ -24,8 +24,12 @@ Megacu is a runtime-linked device-native layer:
 - CMake links selected dispatcher, scheduler, platform, backend, target runtime,
   and native operator implementations.
 - Public C++ exposes direct orchestrate ABI functions and typed runtime views.
-- Dispatcher and scheduler are runtime components called inside the orchestrate
-  target.
+- The dispatcher is part of the linked `ConfigureTarget`, but it is a general
+  annotation-driven runtime mapper rather than a GEMM-specific component.
+- Public C++ exposes virtual-participant annotation APIs so each `OrchTarget`
+  can describe logical actors with attributes.
+- Dispatcher and scheduler are runtime components called inside the
+  orchestrate target.
 - Platform and backend adapters validate native CUDA/NVSHMEM handles and expose
   runtime/device-side primitives.
 - Native CUDA/NVSHMEM operators execute the actual work.
@@ -40,7 +44,7 @@ Core implementation ownership:
 - `include/megacu/`: public status, runtime views, launch/team views, runtime
   config/context types.
 - `include/megacu/detail/`: private runtime component declarations only.
-- `src/dispatcher/`: runtime tile/rank/peer mapping.
+- `src/dispatcher/`: annotation-driven runtime tile/rank/lane/peer mapping.
 - `src/scheduler/`: runtime phased and co-resident persistent scheduling.
 - `src/platform/cuda/`: CUDA validation and launch helpers.
 - `src/backends/nvshmem/`: NVSHMEM team, symmetric storage, and device-side
@@ -102,10 +106,16 @@ The PR should produce:
 
 ### Dispatcher
 
-- Runtime input: problem shape, tile shape, team view, capability envelope.
+- Runtime input: participant attributes, problem shape, tile shape, team view,
+  and capability envelope.
 - Runtime output: compact dispatch state and tile work cursors.
-- Must map logical ranks to backend peers from the runtime team.
+- Must map virtual participants to local lanes/workers and backend peers from
+  the runtime team.
+- Must enforce participant requirements such as symmetric storage and
+  co-resident progress for blocking communication.
 - Must not infer roles by ad hoc scans over event records.
+- Must not be implemented as a GEMM+AllReduce-only dispatcher for the CUDA+
+  NVSHMEM `ConfigureTarget`.
 - Must not build heap-heavy static metadata tables.
 
 ### Scheduler
@@ -157,8 +167,10 @@ The PR is not complete until fresh evidence covers:
 - no implementation dependency on `program_ir`, `materialize_program`,
   `owned_program_ir`, static `target_metadata`, static `dispatch_section`,
   static `schedule_section`, or static `kernel_section`;
-- runtime dispatcher tests for tile/rank/peer mapping from concrete problem and
-  team values;
+- runtime dispatcher tests for participant-annotation to tile/rank/lane/peer
+  mapping from concrete problem and team values;
+- negative dispatcher tests for unsupported annotation/capability
+  combinations;
 - runtime scheduler tests for phased tile readiness and overlap progress guard;
 - negative overlap test for blocking communication without a valid progress
   guard;
@@ -178,8 +190,8 @@ The PR is not complete until fresh evidence covers:
 - Remove compiler-like materialization implementation and tests.
 - Replace static metadata builders with runtime dispatcher/scheduler/backend
   component calls.
-- Replace ad-hoc dispatcher behavior with explicit GEMM+AllReduce runtime
-  mapping.
+- Replace ad-hoc dispatcher behavior with a general annotation-driven runtime
+  mapper owned by the `ConfigureTarget`.
 - Move reusable target runtime validation out of example-only headers.
 - Separate golden, baseline, and Megacu native paths in code.
 - Add distributed runtime adapter design and evidence for NVSHMEM, MPI, and

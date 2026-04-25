@@ -169,7 +169,9 @@ Runtime team/backend views decide which path is valid for this call.
 Every Megacu config must document:
 
 - platform and backend;
-- dispatcher and scheduler;
+- general dispatcher algorithm and scheduler;
+- supported virtual-participant attributes, placement scopes, and progress
+  requirements;
 - supported launch environments;
 - supported team sizes and world/team relationship;
 - required symmetric storage;
@@ -179,6 +181,13 @@ Every Megacu config must document:
 
 For `cuda_nvshmem_static`, host MPI and torch-distributed are launch adapters,
 not different communication backends.
+
+The distributed launch adapter must not decide participant placement by itself.
+It only produces `launch_view`, `team_view`, and storage views. The linked
+`ConfigureTarget` dispatcher reads the `OrchTarget` participant annotations and
+runtime team values, then chooses rank/peer/lane mapping with the same
+algorithm for direct C++, MPI-launched, torch-distributed-launched, and
+single-process runs.
 
 ## Distributed Verification
 

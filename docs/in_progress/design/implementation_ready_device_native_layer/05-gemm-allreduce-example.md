@@ -39,6 +39,10 @@ overlap/megacu:
 There should be two Megacu implementations, not four. Each Megacu target uses
 runtime team/backend views to support single-card and two-card cases.
 
+The two Megacu implementations share one `ConfigureTarget` dispatcher. The
+example supplies GEMM+AllReduce-specific virtual-participant annotations to that
+general dispatcher; it does not link a GEMM-specific dispatcher component.
+
 ## Phased Runtime Path
 
 Phased does not mean a fake whole-program dependency. It means communication
@@ -84,7 +88,8 @@ order:
 validate target capability envelope
 validate CUDA launch and NVSHMEM team
 validate workspace and symmetric storage
-create runtime dispatch state from problem and team
+declare GEMM producer and reduction consumer participant attributes
+create runtime dispatch state from participant attributes, problem, and team
 call phased or overlap scheduler
 scheduler calls linked native operator symbols
 ```
@@ -100,8 +105,16 @@ auto ctx = make_runtime_context(
     launch, team, events, cuda_nvshmem_gemm_allreduce_phased_capability());
 MEGACU_TRY(validate_common(ctx, workspace, problem));
 
-gemm_ar_dispatch dispatch;
-MEGACU_TRY(prepare_gemm_ar(dispatch, problem, team, ctx.capability));
+constexpr auto participants = gemm_ar_participants(
+    megacu::progress_requirement::nonblocking);
+
+megacu::dispatch_state dispatch;
+MEGACU_TRY(megacu::dispatcher::map(
+    dispatch,
+    megacu::dispatch_request{
+        .context = ctx,
+        .problem = megacu::problem_view::from(problem),
+        .participants = participants}));
 
 return run_phased_gemm_ar(
     ctx,
@@ -120,8 +133,16 @@ auto ctx = make_runtime_context(
 MEGACU_TRY(validate_common(ctx, workspace, problem));
 MEGACU_TRY(validate_overlap_progress_guard(ctx.capability, launch));
 
-gemm_ar_dispatch dispatch;
-MEGACU_TRY(prepare_gemm_ar(dispatch, problem, team, ctx.capability));
+constexpr auto participants = gemm_ar_participants(
+    megacu::progress_requirement::requires_co_resident_progress);
+
+megacu::dispatch_state dispatch;
+MEGACU_TRY(megacu::dispatcher::map(
+    dispatch,
+    megacu::dispatch_request{
+        .context = ctx,
+        .problem = megacu::problem_view::from(problem),
+        .participants = participants}));
 
 return run_overlap_gemm_ar(
     ctx,
@@ -134,6 +155,33 @@ return run_overlap_gemm_ar(
 
 The exact helper names can change, but the call order cannot collapse back into
 metadata validation plus a direct golden function call.
+
+`gemm_ar_participants` is a small constexpr helper owned by the example:
+
+```cpp
+constexpr auto gemm_ar_participants(megacu::progress_requirement comm_progress) {
+  return megacu::participant_list{
+      megacu::participant<gemm_producer_tag>(
+          "gemm_producer",
+          {.role = megacu::participant_role::compute,
+           .placement = megacu::placement_scope::per_rank,
+           .progress = megacu::progress_requirement::nonblocking,
+           .peer_policy = megacu::peer_policy::local_then_remote,
+           .requires = megacu::participant_requirement::none}),
+      megacu::participant<reduce_consumer_tag>(
+          "reduce_consumer",
+          {.role = megacu::participant_role::communication,
+           .placement = megacu::placement_scope::per_peer,
+           .progress = comm_progress,
+           .peer_policy = megacu::peer_policy::all_remote_peers,
+           .requires = megacu::participant_requirement::
+               co_resident_progress_if_blocking})};
+}
+```
+
+The dispatcher decides how those participants map to local workers and backend
+peers for `team_n_pes == 1` and `team_n_pes == 2`. The CMake configuration does
+not contain participant-to-rank mappings.
 
 ## Golden And Baseline Separation
 

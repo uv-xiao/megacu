@@ -21,55 +21,114 @@ not an executor object and does not own a graph.
 
 ## Dispatcher
 
-The dispatcher maps the current problem and team to executable work:
+The dispatcher is a general `ConfigureTarget` runtime component. It maps
+workload-supplied virtual-participant annotations plus the current problem and
+team to executable work:
 
 ```cpp
-struct gemm_ar_dispatch {
-  std::int32_t tiles_m;
-  std::int32_t tiles_n;
-  std::int32_t tile_count;
-  std::int32_t team_size;
-  std::int32_t local_rank;
+enum class participant_role : std::uint8_t {
+  compute,
+  communication,
+  mixed,
 };
 
-struct gemm_ar_tile_work {
-  int tile_row;
-  int tile_col;
-  int logical_rank;
-  int peer_rank;
+enum class placement_scope : std::uint8_t {
+  per_rank,
+  per_peer,
+  per_tile,
+  cooperative_group,
 };
+
+enum class progress_requirement : std::uint8_t {
+  nonblocking,
+  may_block,
+  requires_co_resident_progress,
+};
+
+enum class peer_policy : std::uint8_t {
+  local_only,
+  local_then_remote,
+  all_remote_peers,
+  paired_peer,
+};
+
+enum class participant_requirement : std::uint16_t {
+  none = 0,
+  symmetric_storage = 1 << 0,
+  co_resident_progress_if_blocking = 1 << 1,
+};
+
+struct participant_attrs {
+  participant_role role;
+  placement_scope placement;
+  progress_requirement progress;
+  peer_policy peer_policy;
+  participant_requirement requires;
+};
+
+struct participant_binding {
+  participant_slot slot;
+  participant_attrs attrs;
+};
+
+struct dispatch_request {
+  runtime_context context;
+  problem_view problem;
+  std::span<const participant_binding> participants;
+};
+
+struct dispatch_state;
+
+megacu::status map(dispatch_state &out, dispatch_request request);
 ```
 
 Contract:
 
-- compute tile counts from runtime problem shape;
-- map virtual roles such as producer/consumer to local runtime lanes;
-- map logical ranks to backend peers from `team_view`;
+- compute work cursor ranges from runtime problem shape;
+- map virtual participants to concrete local lanes or workers;
+- map logical peer policies to backend peers from `team_view`;
+- enforce annotation constraints such as symmetric storage and co-resident
+  progress;
 - avoid heap-heavy tables in the hot path;
 - expose enough information for scheduler/operator loops.
 
-The current ad-hoc dispatcher that infers compute/comm role by scanning events
-is wrong. The GEMM+AllReduce dispatcher should be explicit and domain-specific
-for the first slice, while still implementing a reusable component interface.
+The current ad-hoc dispatcher that infers compute/communication role by scanning
+events is wrong. The replacement is explicit and annotation-driven, but still
+general. GEMM+AllReduce should be one user of the annotated dispatcher, not the
+dispatcher implementation itself.
 
-Minimum API shape:
+The dispatcher may expose typed cursor helpers for scheduler/operator code:
 
 ```cpp
-megacu::status prepare_gemm_ar(
-    gemm_ar_dispatch &out,
-    gemm_ar_problem problem,
-    megacu::nvshmem::team_view team,
-    megacu::target_capability capability);
+struct tile_work {
+  std::int32_t tile_row;
+  std::int32_t tile_col;
+  std::int32_t local_lane;
+  std::int32_t logical_rank;
+  std::int32_t peer_rank;
+  participant_slot participant;
+};
 
-gemm_ar_tile_work tile_work_at(
-    gemm_ar_dispatch dispatch,
+tile_work tile_work_at(
+    dispatch_state dispatch,
     std::int32_t linear_tile,
-    std::int32_t peer_rank);
+    participant_slot participant);
 ```
 
 The dispatcher should be cheap enough to run per orchestrate call. Tile loops
 may be computed on host for launch setup or inside kernels for persistent
 execution, but they must derive from runtime problem/team values.
+
+The dispatcher must not:
+
+- require CMake syntax such as `MAP producer_lane TO RANK 0`;
+- specialize the `ConfigureTarget` to one example such as GEMM+AllReduce;
+- create static `dispatch_section` metadata;
+- depend on string lookup for participant names.
+
+The programming surface provides participant attributes; the dispatcher provides
+the algorithm that interprets them for the linked platform/backend/scheduler
+configuration.
 
 ## Scheduler
 
@@ -195,7 +254,8 @@ The runtime components must not return static section objects such as
 `dispatch_section` or `schedule_section`. If tests need inspection, they should
 inspect runtime behavior:
 
-- dispatcher maps a concrete problem/team to expected tile and peer work;
+- dispatcher maps participant annotations plus a concrete problem/team to
+  expected tile, lane, and peer work;
 - scheduler calls the expected operator path for phased or overlap;
 - backend rejects invalid teams or non-symmetric storage;
 - target runtime rejects unsupported capability envelopes.

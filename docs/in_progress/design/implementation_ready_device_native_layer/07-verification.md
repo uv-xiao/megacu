@@ -24,8 +24,13 @@ The build should prove:
 
 Replace materialization tests with runtime component tests:
 
-- dispatcher maps concrete `gemm_ar_problem` and `team_view` into tile counts
-  and peer ranks;
+- dispatcher maps concrete participant annotations, problem view, and
+  `team_view` into tile counts, local lanes, and peer ranks;
+- dispatcher rejects unsupported annotation combinations for the linked
+  `ConfigureTarget`;
+- blocking communication participants require a co-resident progress-capable
+  scheduler/launch envelope;
+- no `ConfigureTarget` uses a GEMM+AllReduce-specific dispatcher component;
 - phased scheduler permits tile-ready communication without needing a
   co-resident progress guard;
 - overlap scheduler rejects blocking communication without a valid progress
@@ -84,8 +89,10 @@ architecture.
 Before implementation starts, review these design files for:
 
 - no accepted path requiring materialization or static section construction;
-- programming surface shows direct ABI and runtime component APIs;
-- dispatcher is runtime and explicit, not event-scan ad hoc logic;
+- programming surface shows direct ABI, participant annotation APIs, and
+  runtime component APIs;
+- dispatcher is a general `ConfigureTarget` runtime component, not event-scan
+  ad hoc logic and not an example-specific mapper;
 - scheduler owns phased and overlap progress at runtime;
 - distributed paths all produce the same `launch_view` and `team_view`;
 - verification includes MPI and torch-distributed smoke or documented blockers;
