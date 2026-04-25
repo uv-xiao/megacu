@@ -63,6 +63,31 @@ This is ordinary linked C++/CUDA. The scheduler and dispatcher are components,
 not static compiler passes. Runtime work should be compact enough to disappear
 into the same loops and launch setup an expert would write by hand.
 
+## Terms In The Corrected Design
+
+- **Target**: a linked C++/CUDA library exposing one direct orchestrate ABI.
+  Example: `cuda_nvshmem_gemm_allreduce_overlap`.
+- **Capability envelope**: small static facts about the linked target:
+  platform, backend, scheduler mode, supported dtype/layout/team-size range,
+  and required native symbols. It is not a dispatch table or serialized IR.
+- **Runtime context**: the handles passed to a call: CUDA launch view, NVSHMEM
+  team view, event storage, and the target capability envelope.
+- **Task**: a runtime unit of work such as "produce this GEMM tile" or
+  "consume this reduction tile". A task is represented by a compact work cursor
+  or by native operator code, not by a stored task descriptor table.
+- **Event**: a runtime readiness protocol backed by caller-provided storage.
+  Events are not looked up by string name. For CUDA+NVSHMEM first slice, the
+  event protocol is tile-ready signaling over local or symmetric storage.
+- **Dispatcher**: runtime code that maps the current problem/team to work
+  cursors and peer identity.
+- **Scheduler**: runtime code that decides when linked operators run for this
+  call under the target's progress policy.
+- **Backend**: runtime code and device helpers for communication semantics.
+  For the first backend, that means NVSHMEM team/resource validation and
+  device-side signal/wait/reduction primitives.
+- **Platform**: runtime code for accelerator launch constraints and errors.
+  For the first platform, that means CUDA stream/device/launch validation.
+
 ## Directory Scope
 
 This in-progress design owns the next implementation direction for:
@@ -76,6 +101,22 @@ This in-progress design owns the next implementation direction for:
 - `cmake/MegacuTargets.cmake`
 - `examples/cuda_nvshmem/gemm_allreduce/`
 - distributed launch and framework adapters.
+
+## Architectural Review Result
+
+Three approaches were considered after rejecting the materializer:
+
+1. **Keep program authoring, but run the collected program at runtime.**
+   This keeps too much of the compiler shape and still requires program record
+   ownership.
+2. **Keep only linked components and direct runtime views.**
+   This is the selected direction. It is the thinnest design and matches
+   MPK/triton-dist/MegaKittens-style native implementation weight.
+3. **Make a generic runtime graph/executor.**
+   This is rejected because it adds scheduler and graph overhead to the hot
+   path and recreates the weight we are trying to avoid.
+
+The selected direction is option 2.
 
 ## Reading Order
 

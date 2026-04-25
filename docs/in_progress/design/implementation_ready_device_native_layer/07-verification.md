@@ -78,3 +78,15 @@ rg -n "materialize_program|program_ir|owned_program_ir|dispatch_section|schedule
 After the runtime-linked replacement, these terms should not be implementation
 dependencies. Historical design notes may still mention them only as rejected
 architecture.
+
+## Design Review Checklist
+
+Before implementation starts, review these design files for:
+
+- no accepted path requiring materialization or static section construction;
+- programming surface shows direct ABI and runtime component APIs;
+- dispatcher is runtime and explicit, not event-scan ad hoc logic;
+- scheduler owns phased and overlap progress at runtime;
+- distributed paths all produce the same `launch_view` and `team_view`;
+- verification includes MPI and torch-distributed smoke or documented blockers;
+- example docs separate golden, baseline, and Megacu implementations.

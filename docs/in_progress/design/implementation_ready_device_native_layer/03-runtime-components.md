@@ -12,6 +12,7 @@ struct runtime_context {
   megacu::cuda::launch_view launch;
   megacu::nvshmem::team_view team;
   megacu::event_storage_view events;
+  megacu::target_capability capability;
 };
 ```
 
@@ -23,14 +24,15 @@ not an executor object and does not own a graph.
 The dispatcher maps the current problem and team to executable work:
 
 ```cpp
-struct dispatch_state {
-  int tiles_m;
-  int tiles_n;
-  int team_size;
-  int local_rank;
+struct gemm_ar_dispatch {
+  std::int32_t tiles_m;
+  std::int32_t tiles_n;
+  std::int32_t tile_count;
+  std::int32_t team_size;
+  std::int32_t local_rank;
 };
 
-struct tile_work {
+struct gemm_ar_tile_work {
   int tile_row;
   int tile_col;
   int logical_rank;
@@ -49,6 +51,25 @@ Contract:
 The current ad-hoc dispatcher that infers compute/comm role by scanning events
 is wrong. The GEMM+AllReduce dispatcher should be explicit and domain-specific
 for the first slice, while still implementing a reusable component interface.
+
+Minimum API shape:
+
+```cpp
+megacu::status prepare_gemm_ar(
+    gemm_ar_dispatch &out,
+    gemm_ar_problem problem,
+    megacu::nvshmem::team_view team,
+    megacu::target_capability capability);
+
+gemm_ar_tile_work tile_work_at(
+    gemm_ar_dispatch dispatch,
+    std::int32_t linear_tile,
+    std::int32_t peer_rank);
+```
+
+The dispatcher should be cheap enough to run per orchestrate call. Tile loops
+may be computed on host for launch setup or inside kernels for persistent
+execution, but they must derive from runtime problem/team values.
 
 ## Scheduler
 
@@ -86,6 +107,14 @@ Overlap scheduler contract:
   allowing blocking communication waits;
 - reject invalid launch envelopes at runtime.
 
+The scheduler should not perform numeric correctness checks. Correctness
+checking belongs in tests and validation drivers.
+
+The scheduler may call one native fused operator for the first implementation if
+that operator internally implements the required progress model. In that case,
+the scheduler still owns validation that the operator capability matches the
+requested progress model.
+
 ## Backend
 
 The NVSHMEM backend owns runtime team and symmetric-resource validation:
@@ -108,6 +137,15 @@ __device__ void reduce_tile_from_peers(...);
 
 The exact device API can be private to CUDA/NVSHMEM first, but the ownership is
 backend, not scheduler and not program IR.
+
+Backend validation must distinguish:
+
+- single-card local execution, where `team_n_pes == 1` and no remote peer is
+  required;
+- multi-card execution, where event storage and partial buffers must be
+  symmetric and session-matched;
+- unsupported team sizes, which return `unsupported` or `invalid_argument`
+  before launch.
 
 ## Platform
 
@@ -134,6 +172,22 @@ CUDA platform code does not own rank mapping or NVSHMEM storage identity.
 Target runtime should move reusable code out of example-local headers. The
 example should keep only target-specific problem/workspace definitions and the
 direct orchestrate wrapper.
+
+Minimum target runtime API:
+
+```cpp
+megacu::status validate_capability(
+    megacu::target_capability capability,
+    megacu::runtime_context context);
+
+megacu::status validate_common_runtime(
+    megacu::runtime_context context,
+    gemm_ar_workspace workspace,
+    gemm_ar_problem problem);
+```
+
+Target-specific workspace/problem validation may live with the example until a
+second example proves it reusable.
 
 ## No Static Sections
 

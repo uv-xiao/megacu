@@ -93,6 +93,55 @@ The example must not call a materializer, build metadata sections, or route
 through golden functions as its Megacu implementation once the runtime-linked
 replacement is done.
 
+## Concrete Megacu Phased Pseudocode
+
+```cpp
+auto ctx = make_runtime_context(
+    launch, team, events, cuda_nvshmem_gemm_allreduce_phased_capability());
+MEGACU_TRY(validate_common(ctx, workspace, problem));
+
+gemm_ar_dispatch dispatch;
+MEGACU_TRY(prepare_gemm_ar(dispatch, problem, team, ctx.capability));
+
+return run_phased_gemm_ar(
+    ctx,
+    dispatch,
+    workspace,
+    problem,
+    operators::gemm_ar_phased{
+        .run = megacu_cuda_gemm_allreduce_phased_f32});
+```
+
+## Concrete Megacu Overlap Pseudocode
+
+```cpp
+auto ctx = make_runtime_context(
+    launch, team, events, cuda_nvshmem_gemm_allreduce_overlap_capability());
+MEGACU_TRY(validate_common(ctx, workspace, problem));
+MEGACU_TRY(validate_overlap_progress_guard(ctx.capability, launch));
+
+gemm_ar_dispatch dispatch;
+MEGACU_TRY(prepare_gemm_ar(dispatch, problem, team, ctx.capability));
+
+return run_overlap_gemm_ar(
+    ctx,
+    dispatch,
+    workspace,
+    problem,
+    operators::gemm_ar_overlap{
+        .run = megacu_cuda_gemm_allreduce_overlap_f32});
+```
+
+The exact helper names can change, but the call order cannot collapse back into
+metadata validation plus a direct golden function call.
+
+## Golden And Baseline Separation
+
+The `golden/` directory should provide expected results, not the implementation
+that Megacu calls in production. Native baseline implementations should live
+under `phased/baseline/` and `overlap/baseline/`. Megacu implementations should
+link their own operator symbols under `phased/megacu/` and `overlap/megacu/`.
+
 ## Usage Evidence
 
 Each variant README should include:

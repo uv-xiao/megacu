@@ -22,6 +22,21 @@ Megacu does not own:
 - distributed storage allocation policy outside the symmetric buffers passed to
   the target.
 
+## Common Distributed Abstraction
+
+All launch environments must produce the same runtime values:
+
+```cpp
+struct distributed_runtime_views {
+  megacu::cuda::launch_view launch;
+  megacu::nvshmem::team_view team;
+  megacu::event_storage_view events;
+};
+```
+
+The direct orchestrate target consumes those values and does not know whether
+they came from plain C++, `nvshmrun`, MPI, or torch-distributed.
+
 ## Single-Process Single-Card
 
 For one GPU:
@@ -82,6 +97,17 @@ auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
 The orchestrate target sees the same `launch_view` and `team_view` as any other
 caller. It does not depend on MPI headers.
 
+Implementation location:
+
+```text
+include/megacu/launch/mpi_nvshmem.h
+src/launch/mpi_nvshmem/
+tests/integration/mpi/
+```
+
+These files may be optional in the build. If MPI is not available, tests should
+skip with a documented reason.
+
 ## Torch-Distributed Runtime
 
 Torch-distributed is also a launcher/rendezvous layer. A framework adapter may
@@ -105,6 +131,18 @@ The C++ binding should:
 
 The binding must not reimplement dispatcher/scheduler/backend decisions.
 
+Implementation location:
+
+```text
+python/megacu/torch/
+src/integrations/torch/
+tests/integration/torch/
+```
+
+If Python packaging is out of scope for the first PR, the C++ design still needs
+a placeholder smoke target or documented blocker showing exactly how the same
+views will be built from torch-distributed.
+
 ## Capability Envelope
 
 The first CUDA+NVSHMEM configuration should state:
@@ -125,6 +163,22 @@ unsupported: arbitrary PE counts, multi-node performance claims, dynamic
 
 The same high-level target design must cover single-card and two-card runs.
 Runtime team/backend views decide which path is valid for this call.
+
+## Capability Range Per Config
+
+Every Megacu config must document:
+
+- platform and backend;
+- dispatcher and scheduler;
+- supported launch environments;
+- supported team sizes and world/team relationship;
+- required symmetric storage;
+- required CUDA launch properties;
+- supported dtypes/layouts;
+- unsupported communication mechanisms.
+
+For `cuda_nvshmem_static`, host MPI and torch-distributed are launch adapters,
+not different communication backends.
 
 ## Distributed Verification
 

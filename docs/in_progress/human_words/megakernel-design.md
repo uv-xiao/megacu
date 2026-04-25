@@ -750,3 +750,14 @@ were later promoted into `docs/design/`.
     The fix must happen in design first and must explicitly cover distributed
     runtime support, including CUDA+NVSHMEM under single-card, two-card,
     MPI-launched, and torch-distributed-launched scenarios.
+
+- 2026-04-25 Asia/Shanghai - Recheck runtime-linking design before implementation
+  > According to our new requirements, redo, recheck, review, update designs under docs/in_progress/design/implementation_ready_device_native_layer first. The programming surface might also need updating to fit the new requirements.
+  - Context: User requested a second design pass after the implementation-ready
+    workstream was moved back to in-progress and rewritten around runtime
+    linking.
+  - Related: `docs/in_progress/design/implementation_ready_device_native_layer/`.
+  - Agent interpretation: Before changing code again, review and tighten the
+    runtime-linking design itself, especially the programming surface, so it
+    gives concrete APIs, component boundaries, distributed adapter contracts,
+    and verification criteria that match the no-materialization requirement.

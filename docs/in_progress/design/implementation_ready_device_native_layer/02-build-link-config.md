@@ -34,6 +34,9 @@ src/target/runtime.cc
 as `src/operators/` or `src/target/linked_symbols.cc`. If there is no lowering,
 we should not keep a directory named lowering.
 
+`megacu_add_components` should fail if a requested component name is unknown.
+It should not silently link a default placeholder.
+
 ## Orchestrate Target
 
 Each example variant links a direct target:
@@ -43,7 +46,8 @@ megacu_add_orchestrate_target(
   TARGET cuda_nvshmem_gemm_allreduce_overlap
   COMPONENTS cuda_nvshmem_static
   SOURCES gemm_allreduce_overlap_orchestrate.cc
-  OPERATORS megacu_cuda_gemm_allreduce_overlap_f32)
+  OPERATORS megacu_cuda_gemm_allreduce_overlap_f32
+  CAPABILITY cuda_nvshmem_gemm_allreduce_overlap_capability)
 ```
 
 The CMake target records a capability envelope, not a materialized program:
@@ -59,8 +63,13 @@ supported dtype/layout: f32 row-major first slice
 ```
 
 This envelope can be exposed through target properties, a generated config
-header, or linked constant data. It must be small and static. It should not
+header, or linked constant data. Prefer linked constant data in handwritten
+source for the first implementation. It must be small and static. It should not
 contain dispatch tables or schedule entries.
+
+If a generated config header is ever considered, it needs a separate design
+review because the current requirement is to avoid code generation as the
+normal implementation mechanism.
 
 ## What Compilation Means
 
@@ -95,6 +104,24 @@ Runtime must not choose a different linked component family:
 - no switching from phased to overlap scheduler unless the target is explicitly
   designed as a runtime-polymorphic target;
 - no loading kernels by string or path.
+- no choosing scheduler/backend through a runtime registry.
+- no dispatch by opaque string names.
+
+## Symbol And Capability Checks
+
+The CMake layer should make linkage failures obvious:
+
+```text
+orchestrate target
+  requires target capability symbol
+  requires scheduler runtime symbol
+  requires dispatcher runtime symbol
+  requires native operator symbols
+  links platform/backend validation and primitive helpers
+```
+
+The first implementation can prove this with compile/link tests and direct
+symbol references. It does not need a materialized metadata file.
 
 ## CMake Failure Modes
 
