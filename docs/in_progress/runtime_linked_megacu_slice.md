@@ -13,7 +13,7 @@ sections, and validates linked target metadata. That model is too heavy and
 does not match the intended Megacu layer.
 
 The active design source is now
-`docs/in_progress/design/implementation_ready_device_native_layer/`. The
+`docs/in_progress/design/architecture/`. The
 previous stable copy was moved back from `docs/design/` because it is not
 accepted implemented behavior.
 
@@ -28,6 +28,11 @@ Megacu is a runtime-linked device-native layer:
   annotation-driven runtime mapper rather than a GEMM-specific component.
 - Public C++ exposes virtual-participant annotation APIs so each `OrchTarget`
   can describe logical actors with attributes.
+- Dispatcher owns spatial/topology retargeting, including single-card versus
+  multi-card mapping from the same `OrchTarget`.
+- Scheduler owns temporal progress policy. For overlap, dispatcher records
+  co-residency mapping constraints and scheduler/platform validate that the
+  linked operator and launch envelope can satisfy them.
 - Dispatcher and scheduler are runtime components called inside the
   orchestrate target.
 - Platform and backend adapters validate native CUDA/NVSHMEM handles and expose
@@ -111,6 +116,10 @@ The PR should produce:
 - Runtime output: compact dispatch state and tile work cursors.
 - Must map virtual participants to local lanes/workers and backend peers from
   the runtime team.
+- Must retarget the same participant annotations for `team_n_pes == 1` and
+  `team_n_pes > 1`.
+- Must record co-residency constraints for overlap schedulers when participant
+  attributes require blocking communication progress.
 - Must enforce participant requirements such as symmetric storage and
   co-resident progress for blocking communication.
 - Must not infer roles by ad hoc scans over event records.

@@ -164,6 +164,23 @@ unsupported: arbitrary PE counts, multi-node performance claims, dynamic
 The same high-level target design must cover single-card and two-card runs.
 Runtime team/backend views decide which path is valid for this call.
 
+`team_view` is the dispatcher input for retargeting. It does not by itself
+choose an algorithm. The linked dispatcher interprets participant annotations
+against `team_n_pes`, `team_my_pe`, and backend capability:
+
+```text
+single-card team_view
+  -> dispatcher emits local work only
+  -> backend validates no remote symmetric peer is required
+
+two-card team_view
+  -> dispatcher emits local and peer work
+  -> backend validates NVSHMEM team identity and symmetric resources
+```
+
+The scheduler sees the resulting dispatch state. It should not recompute rank
+or PE mapping from launcher state.
+
 ## Capability Range Per Config
 
 Every Megacu config must document:

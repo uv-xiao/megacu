@@ -43,6 +43,17 @@ The two Megacu implementations share one `ConfigureTarget` dispatcher. The
 example supplies GEMM+AllReduce-specific virtual-participant annotations to that
 general dispatcher; it does not link a GEMM-specific dispatcher component.
 
+For this example, dispatcher responsibility is visible and testable:
+
+- single-card run: map the GEMM producer and reduction consumer to local work;
+  no remote NVSHMEM peer work is required;
+- two-card run: map the same participants to local tile work plus peer
+  reduction work using the runtime NVSHMEM team;
+- phased target: expose tile readiness so the scheduler can run reduction work
+  as soon as each tile is ready;
+- overlap target: emit co-residency constraints for producer/consumer
+  participants when communication may block on device-side NVSHMEM waits.
+
 ## Phased Runtime Path
 
 Phased does not mean a fake whole-program dependency. It means communication
@@ -78,6 +89,12 @@ persistent/co-resident execution:
 The scheduler must reject blocking communication waits when the linked operator
 or launch shape cannot prove compute and communication progress can happen
 together.
+
+The dispatcher participates by mapping the producer and consumer into
+co-resident lane groups and recording that requirement in `dispatch_state`.
+The scheduler owns the final legality check because it knows whether the linked
+overlap scheduler/operator and CUDA launch envelope can keep those lane groups
+live together.
 
 ## Runtime Components In The Example
 

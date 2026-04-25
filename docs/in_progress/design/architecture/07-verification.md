@@ -26,6 +26,10 @@ Replace materialization tests with runtime component tests:
 
 - dispatcher maps concrete participant annotations, problem view, and
   `team_view` into tile counts, local lanes, and peer ranks;
+- dispatcher retargets the same participant annotations for `team_n_pes == 1`
+  and `team_n_pes == 2` without changing the `OrchTarget`;
+- dispatcher emits co-residency mapping constraints when participant attributes
+  require blocking communication progress;
 - dispatcher rejects unsupported annotation combinations for the linked
   `ConfigureTarget`;
 - blocking communication participants require a co-resident progress-capable

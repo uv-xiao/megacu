@@ -113,10 +113,14 @@ Megacu compilation does not mean:
 
 Runtime may choose values inside the linked envelope:
 
-- single-card versus two-card path based on `team.team_n_pes`;
-- tile iteration based on `problem.m`, `problem.n`, `tile_m`, `tile_n`;
-- peer rank based on the current team;
-- fallback path when an optional backend primitive is unavailable.
+- dispatcher retargeting between single-card and two-card work based on
+  `team.team_n_pes`;
+- dispatcher tile iteration based on `problem.m`, `problem.n`, `tile_m`, and
+  `tile_n`;
+- dispatcher peer identity based on the current team;
+- scheduler progress choices inside the linked scheduler envelope;
+- backend fallback only when the linked backend explicitly advertises the
+  optional primitive and the fallback has the same semantic contract.
 
 Runtime must not choose a different linked component family:
 

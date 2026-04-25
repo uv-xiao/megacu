@@ -112,6 +112,42 @@ into the same loops and launch setup an expert would write by hand.
 - **Platform**: runtime code for accelerator launch constraints and errors.
   For the first platform, that means CUDA stream/device/launch validation.
 
+## Responsibility Partition
+
+The architecture needs a hard split between spatial mapping, temporal progress,
+resource semantics, and validation. Without that split, dispatcher becomes an
+example-specific scheduler or scheduler becomes a hidden distributed mapper.
+
+| Owner | Owns | Does not own |
+| --- | --- | --- |
+| `OrchTarget` | Direct ABI, workload problem/workspace types, virtual participant annotations, native operator symbols. | Backend rank resolution, launch capability checks, global scheduler policy. |
+| `ConfigureTarget` | Linked platform, backend, general dispatcher, scheduler, target runtime, capability envelope. | Workload-specific operator bodies or per-example dispatcher code. |
+| Dispatcher | Spatial/topology mapping: participant to rank/lane/peer/work cursor, single-card versus multi-card retargeting, and mapping constraints derived from participant attributes. | Launch ordering, blocking wait progress, CUDA stream/device validation, NVSHMEM primitive implementation. |
+| Scheduler | Temporal/progress policy: phased versus overlap ordering, tile readiness consumption, persistent/co-resident progress guard validation, operator invocation sequence. | Backend peer identity, rank mapping, symmetric storage ownership. |
+| Backend | Communication resource semantics: NVSHMEM team identity, symmetric storage, device-side signal/wait/reduction primitives. | Participant placement policy or scheduler ordering. |
+| Platform | Accelerator execution feasibility: CUDA stream/device, launch shape, cooperative/persistent capability, error conversion. | Backend rank identity or participant mapping. |
+| Target runtime | Common validation sequence, status propagation, capability checks. | Owning mapping, progress, or communication algorithms. |
+
+The dispatcher is responsible for retargeting the same `OrchTarget` between
+single-card and multi-card runs. For `team_n_pes == 1`, it maps remote peer
+policies to local/no-remote work and marks communication participants as local
+only. For `team_n_pes > 1`, it maps participant peer policies to backend peers
+from `team_view`, validates that the linked backend capability can satisfy the
+mapping, and exposes work cursors that scheduler/operator code can consume.
+
+Overlap co-residency is a shared contract:
+
+1. `OrchTarget` marks communication participants as blocking or
+   co-resident-progress-required through participant attributes.
+2. Dispatcher maps those participants into compatible lane/co-residency groups
+   and records the required progress constraints in `dispatch_state`.
+3. Scheduler chooses an overlap progress model and rejects the call if the
+   dispatch state, operator capability, or launch envelope cannot keep compute
+   and communication participants live together.
+4. Platform validates CUDA launch feasibility for that progress model.
+5. Backend provides the device-side communication primitives; it does not decide
+   whether the progress model is legal.
+
 ## Directory Scope
 
 This in-progress design owns the next implementation direction for:

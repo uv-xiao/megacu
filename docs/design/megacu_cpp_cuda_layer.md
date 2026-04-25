@@ -4,7 +4,7 @@ This is the stable entry point for the picked Megacu device-native layer
 direction.
 
 The first implementation contract was moved back to
-`docs/in_progress/design/implementation_ready_device_native_layer/` during PR
+`docs/in_progress/design/architecture/` during PR
 #3 because the previous implementation-ready design overfit a compiler-like
 materialization path. That active workstream now owns the runtime-linking
 correction.

@@ -77,6 +77,13 @@ struct dispatch_request {
   std::span<const participant_binding> participants;
 };
 
+struct co_residency_group {
+  participant_slot producer;
+  participant_slot consumer;
+  std::int32_t local_lane_group;
+  progress_requirement required_progress;
+};
+
 struct dispatch_state;
 
 megacu::status map(dispatch_state &out, dispatch_request request);
@@ -87,8 +94,12 @@ Contract:
 - compute work cursor ranges from runtime problem shape;
 - map virtual participants to concrete local lanes or workers;
 - map logical peer policies to backend peers from `team_view`;
+- retarget the same participant annotations between single-card and multi-card
+  execution based on `team_view`;
 - enforce annotation constraints such as symmetric storage and co-resident
   progress;
+- record mapping constraints, such as co-residency groups, that the scheduler
+  must honor;
 - avoid heap-heavy tables in the hot path;
 - expose enough information for scheduler/operator loops.
 
@@ -118,6 +129,39 @@ tile_work tile_work_at(
 The dispatcher should be cheap enough to run per orchestrate call. Tile loops
 may be computed on host for launch setup or inside kernels for persistent
 execution, but they must derive from runtime problem/team values.
+
+### Single-Card And Multi-Card Retargeting
+
+The dispatcher owns the first retargeting decision for one `OrchTarget` running
+on different team sizes:
+
+```text
+participant annotations + problem + team_n_pes == 1
+  -> local tile cursors
+  -> no remote peer work
+  -> communication participants mapped to local reduction/no-op semantics
+
+participant annotations + problem + team_n_pes == 2
+  -> local tile cursors
+  -> peer tile cursors
+  -> communication participants mapped to backend PE identities
+```
+
+This is not a scheduler choice. The scheduler sees a `dispatch_state` that
+already tells it which participant/lane/peer work exists for this call.
+
+### Co-Resident Mapping Boundary
+
+The dispatcher should not decide whether overlap is globally safe. It only maps
+the spatial requirement:
+
+- which compute and communication participants must make progress together;
+- which local lanes or worker groups can host them;
+- which backend peers each communication participant may block on;
+- whether the requested mapping needs a co-resident progress guard.
+
+The scheduler consumes those requirements and decides whether the linked
+scheduler/operator/platform envelope can execute them.
 
 The dispatcher must not:
 
@@ -164,6 +208,8 @@ Overlap scheduler contract:
 - run compute and communication with a progress guard;
 - prove the linked operator uses co-resident workers or a persistent loop before
   allowing blocking communication waits;
+- consume dispatcher co-residency groups and reject mappings that cannot be
+  served by the linked scheduler/operator capability;
 - reject invalid launch envelopes at runtime.
 
 The scheduler should not perform numeric correctness checks. Correctness
@@ -206,6 +252,10 @@ Backend validation must distinguish:
 - unsupported team sizes, which return `unsupported` or `invalid_argument`
   before launch.
 
+Backend does not choose single-card versus multi-card mapping. It reports
+native capability and validates resources for the mapping selected by the
+dispatcher.
+
 ## Platform
 
 The CUDA platform owns:
@@ -218,6 +268,8 @@ The CUDA platform owns:
 - CUDA error conversion to `megacu::status`.
 
 CUDA platform code does not own rank mapping or NVSHMEM storage identity.
+It may reject an overlap dispatch if the scheduler asks for a persistent or
+cooperative launch shape that the current device/stream cannot support.
 
 ## Target Runtime
 

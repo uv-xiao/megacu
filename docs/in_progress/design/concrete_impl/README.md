@@ -7,7 +7,7 @@ still thin and under review.
 
 After the 2026-04-25 architecture redirect, the materialization-oriented path
 documented here is diagnostic only. The replacement design lives in
-`docs/in_progress/design/implementation_ready_device_native_layer/` and removes
+`docs/in_progress/design/architecture/` and removes
 `program_ir`, `materialize_program`, static dispatch/schedule sections, and
 compiler-style target lowering from the intended implementation.
 
@@ -24,7 +24,7 @@ The scope is concrete:
 The scope is not:
 
 - a replacement for the active redesign under
-  `docs/in_progress/design/implementation_ready_device_native_layer/`;
+  `docs/in_progress/design/architecture/`;
 - a claim that the current implementation is complete;
 - a new architecture proposal detached from current files.
 

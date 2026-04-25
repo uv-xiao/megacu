@@ -53,9 +53,13 @@ dispatcher that is linked into the `ConfigureTarget`:
 - output: compact `dispatch_state`;
 - helper: iterate tile work without heap-heavy tables;
 - behavior: map logical rank and peer rank from runtime team values.
+- behavior: retarget the same annotated participants for single-card and
+  multi-card teams.
 - behavior: enforce annotation requirements such as symmetric storage,
   supported placement scope, and co-resident progress for blocking
   communication.
+- behavior: emit co-residency mapping constraints for overlap schedulers
+  without owning scheduler progress legality.
 
 GEMM+AllReduce should provide participant annotations and problem/workspace
 types as an `OrchTarget` user. It should not define the dispatcher component

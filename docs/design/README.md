@@ -15,7 +15,7 @@ in-progress drafts should be removed.
 
 ## Moved Back To In-Progress
 
-- `docs/design/implementation_ready_device_native_layer/` was moved back to
-  `docs/in_progress/design/implementation_ready_device_native_layer/` during
-  PR #3 because the previous design described a compiler-like materialization
-  path that is no longer accepted.
+- The first implementation architecture was moved back out of `docs/design/`
+  during PR #3 because the previous design described a compiler-like
+  materialization path that is no longer accepted. The active redesign now
+  lives at `docs/in_progress/design/architecture/`.

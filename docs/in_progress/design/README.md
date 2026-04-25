@@ -13,7 +13,7 @@ multiple files.
   `include/`, `src/`, CMake, and CUDA+NVSHMEM GEMM+AllReduce example call
   paths. This is implementation-facing documentation and must not be promoted
   into `docs/design/` until the PR is ready to merge.
-- `implementation_ready_device_native_layer/`: active redesign of the first
+- `architecture/`: active redesign of the first
   Megacu implementation around runtime-linked dispatcher/scheduler/backend
   components instead of compiler-style IR materialization. This workstream was
   moved back from `docs/design/` on 2026-04-25 after review feedback.
