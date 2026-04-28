@@ -3,6 +3,13 @@
 Dispatcher, scheduler, platform, backend, and target runtime are linked C++
 components that run inside the orchestrate call. They are not compiler passes.
 
+## PR #4 Proof Boundary
+
+This chapter describes the destination component split. PR #4 only needs a tiny
+proof that follows the runtime-linked call shape. It may keep dispatcher or
+scheduler logic problem-specific and example-local, provided those shortcuts are
+not described as reusable Megacu components.
+
 ## Runtime Context
 
 The orchestrate function builds a small context:
@@ -21,7 +28,7 @@ not an executor object and does not own a graph.
 
 ## Dispatcher
 
-The dispatcher is a general `ConfigureTarget` runtime component. It maps
+The general dispatcher is a `ConfigureTarget` runtime component. It maps
 workload-supplied virtual-participant annotations plus the current problem and
 team to executable work:
 
@@ -107,6 +114,10 @@ The current ad-hoc dispatcher that infers compute/communication role by scanning
 events is wrong. The replacement is explicit and annotation-driven, but still
 general. GEMM+AllReduce should be one user of the annotated dispatcher, not the
 dispatcher implementation itself.
+
+For PR #4, a tiny proof can use a GEMM+AllReduce-specific mapper as an
+example-local stand-in. That stand-in must be documented as proof scaffolding
+and must not live in the shared dispatcher component as the final contract.
 
 The dispatcher may expose typed cursor helpers for scheduler/operator code:
 

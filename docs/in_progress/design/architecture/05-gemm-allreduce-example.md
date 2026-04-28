@@ -1,9 +1,73 @@
-# GEMM+AllReduce Example
+# Tiny GEMM+AllReduce Proof Example
 
-The CUDA+NVSHMEM GEMM+AllReduce example is the first proof target for the
-runtime-linked design.
+The PR #4 example is intentionally tiny. Its job is to prove the
+runtime-linked architecture path, not to become the general CUDA+NVSHMEM
+implementation.
 
-Required layout:
+The example may be problem-specific. It may use one fixed dtype, one small
+shape family, one operator symbol, and example-local mapping/scheduling helpers
+if that makes the architecture easier to inspect. Those shortcuts must stay out
+of public Megacu APIs and shared component contracts.
+
+## What Makes It Mighty
+
+Even though the example is tiny, it should cross the important architectural
+boundaries:
+
+```text
+direct orchestrate ABI
+  -> typed runtime views
+  -> linked capability for this target
+  -> runtime validation
+  -> problem/team values mapped to work
+  -> progress policy calls linked native operator
+  -> status returns to caller
+```
+
+The example proves that Megacu is ordinary linked C++/CUDA runtime code. It
+must not prove that the final dispatcher, scheduler, CMake helpers, distributed
+adapters, or GEMM+AllReduce suite are general.
+
+## Minimal Target Shape
+
+One direct ABI is enough:
+
+```cpp
+megacu::status cuda_nvshmem_tiny_gemm_allreduce_orchestrate(
+    tiny_gemm_ar_workspace workspace,
+    megacu::event_storage_view events,
+    megacu::cuda::launch_view launch,
+    megacu::nvshmem::team_view team,
+    tiny_gemm_ar_problem problem);
+```
+
+The problem can be narrow:
+
+- f32 row-major input and output;
+- one local GEMM tile or a tiny fixed tile grid;
+- `team_n_pes == 1` as the minimum proof, with `team_n_pes == 2` optional if
+  it helps validate the distributed boundary;
+- a single linked native operator symbol.
+
+The tiny proof should still name where a future general implementation will
+replace shortcuts:
+
+- example-local mapping becomes the general annotation-driven dispatcher;
+- example-local progress helper becomes scheduler runtime;
+- direct CMake wiring becomes reusable `ConfigureTarget` and `OrchTarget`
+  helpers;
+- narrow validation becomes platform/backend validation contracts.
+
+## Golden, Baseline, And Megacu Roles
+
+For PR #4, keep roles simple:
+
+- `golden`: local expected result generation for the tiny shape;
+- `baseline`: optional handwritten CUDA/NVSHMEM comparison only if it clarifies
+  the proof;
+- `megacu`: the direct runtime-linked Megacu path.
+
+The full future suite remains TODO work:
 
 ```text
 examples/cuda_nvshmem/gemm_allreduce/
@@ -15,206 +79,51 @@ examples/cuda_nvshmem/gemm_allreduce/
   overlap/megacu/
 ```
 
-## Four Native Baselines And Two Megacu Paths
+That full layout belongs with `docs/todo/concrete_impl/` because it requires
+stronger implementation generality and broader verification.
 
-Golden and baseline roles must be separated:
-
-```text
-golden:
-  local expected GEMM results
-
-phased/baseline:
-  pure CUDA/NVSHMEM phased implementation, single-card and two-card
-
-overlap/baseline:
-  pure CUDA/NVSHMEM overlap implementation, single-card and two-card
-
-phased/megacu:
-  direct Megacu orchestrate target linked with runtime dispatcher/scheduler
-
-overlap/megacu:
-  direct Megacu orchestrate target linked with runtime dispatcher/scheduler
-```
-
-There should be two Megacu implementations, not four. Each Megacu target uses
-runtime team/backend views to support single-card and two-card cases.
-
-The two Megacu implementations share one `ConfigureTarget` dispatcher. The
-example supplies GEMM+AllReduce-specific virtual-participant annotations to that
-general dispatcher; it does not link a GEMM-specific dispatcher component.
-
-For this example, dispatcher responsibility is visible and testable:
-
-- single-card run: map the GEMM producer and reduction consumer to local work;
-  no remote NVSHMEM peer work is required;
-- two-card run: map the same participants to local tile work plus peer
-  reduction work using the runtime NVSHMEM team;
-- phased target: expose tile readiness so the scheduler can run reduction work
-  as soon as each tile is ready;
-- overlap target: emit co-residency constraints for producer/consumer
-  participants when communication may block on device-side NVSHMEM waits.
-
-## Phased Runtime Path
-
-Phased does not mean a fake whole-program dependency. It means communication
-does not rely on co-resident blocking progress. The scheduler may still start a
-reduction tile as soon as its input tile is ready.
+## Concrete Tiny Call Path
 
 ```text
-for tile in runtime dispatcher:
-  launch/execute GEMM tile
-  mark tile ready
-  when tile ready and backend permits:
-    execute AR tile
+user/test code
+  -> cuda_nvshmem_tiny_gemm_allreduce_orchestrate(...)
+  -> make runtime_context from launch/team/events/capability
+  -> validate target capability and runtime views
+  -> map this tiny problem/team to local work
+  -> run the tiny progress policy
+  -> call the linked native operator symbol
+  -> return megacu::status
 ```
 
-The first implementation may be conservative if needed, but tests should make
-false whole-program dependencies visible.
+The mapping step may be problem-specific in PR #4. The required architectural
+property is that it happens at runtime from concrete problem/team values, not
+from generated static dispatch or schedule sections.
 
-## Overlap Runtime Path
+## Rejected Path
 
-Overlap requires a progress guard:
+The tiny example must not take this path:
 
 ```text
-persistent/co-resident execution:
-  compute workers:
-    produce tile
-    signal tile-ready event
-
-  communication workers:
-    wait tile-ready event
-    run device-side NVSHMEM reduction
+program_builder
+  -> program_ir
+  -> materialize_program
+  -> dispatch_section/schedule_section/kernel_section/backend_section
+  -> generated or materialized target metadata
+  -> example glue selects native symbol
 ```
 
-The scheduler must reject blocking communication waits when the linked operator
-or launch shape cannot prove compute and communication progress can happen
-together.
+Those steps are the architecture being rejected.
 
-The dispatcher participates by mapping the producer and consumer into
-co-resident lane groups and recording that requirement in `dispatch_state`.
-The scheduler owns the final legality check because it knows whether the linked
-overlap scheduler/operator and CUDA launch envelope can keep those lane groups
-live together.
+## Evidence Expected From The Tiny Example
 
-## Runtime Components In The Example
+The tiny example should provide evidence for:
 
-The Megacu orchestrate wrapper should call runtime components in a visible
-order:
+- the direct ABI can validate bad runtime views and return `megacu::status`;
+- the linked native operator path is called without a materializer;
+- problem/team values are consumed at runtime;
+- any problem-specific shortcut is documented as example-local;
+- no generated metadata section is required for the example to run.
 
-```text
-validate target capability envelope
-validate CUDA launch and NVSHMEM team
-validate workspace and symmetric storage
-declare GEMM producer and reduction consumer participant attributes
-create runtime dispatch state from participant attributes, problem, and team
-call phased or overlap scheduler
-scheduler calls linked native operator symbols
-```
-
-The example must not call a materializer, build metadata sections, or route
-through golden functions as its Megacu implementation once the runtime-linked
-replacement is done.
-
-## Concrete Megacu Phased Pseudocode
-
-```cpp
-auto ctx = make_runtime_context(
-    launch, team, events, cuda_nvshmem_gemm_allreduce_phased_capability());
-MEGACU_TRY(validate_common(ctx, workspace, problem));
-
-constexpr auto participants = gemm_ar_participants(
-    megacu::progress_requirement::nonblocking);
-
-megacu::dispatch_state dispatch;
-MEGACU_TRY(megacu::dispatcher::map(
-    dispatch,
-    megacu::dispatch_request{
-        .context = ctx,
-        .problem = megacu::problem_view::from(problem),
-        .participants = participants}));
-
-return run_phased_gemm_ar(
-    ctx,
-    dispatch,
-    workspace,
-    problem,
-    operators::gemm_ar_phased{
-        .run = megacu_cuda_gemm_allreduce_phased_f32});
-```
-
-## Concrete Megacu Overlap Pseudocode
-
-```cpp
-auto ctx = make_runtime_context(
-    launch, team, events, cuda_nvshmem_gemm_allreduce_overlap_capability());
-MEGACU_TRY(validate_common(ctx, workspace, problem));
-MEGACU_TRY(validate_overlap_progress_guard(ctx.capability, launch));
-
-constexpr auto participants = gemm_ar_participants(
-    megacu::progress_requirement::requires_co_resident_progress);
-
-megacu::dispatch_state dispatch;
-MEGACU_TRY(megacu::dispatcher::map(
-    dispatch,
-    megacu::dispatch_request{
-        .context = ctx,
-        .problem = megacu::problem_view::from(problem),
-        .participants = participants}));
-
-return run_overlap_gemm_ar(
-    ctx,
-    dispatch,
-    workspace,
-    problem,
-    operators::gemm_ar_overlap{
-        .run = megacu_cuda_gemm_allreduce_overlap_f32});
-```
-
-The exact helper names can change, but the call order cannot collapse back into
-metadata validation plus a direct golden function call.
-
-`gemm_ar_participants` is a small constexpr helper owned by the example:
-
-```cpp
-constexpr auto gemm_ar_participants(megacu::progress_requirement comm_progress) {
-  return megacu::participant_list{
-      megacu::participant<gemm_producer_tag>(
-          "gemm_producer",
-          {.role = megacu::participant_role::compute,
-           .placement = megacu::placement_scope::per_rank,
-           .progress = megacu::progress_requirement::nonblocking,
-           .peer_policy = megacu::peer_policy::local_then_remote,
-           .requires = megacu::participant_requirement::none}),
-      megacu::participant<reduce_consumer_tag>(
-          "reduce_consumer",
-          {.role = megacu::participant_role::communication,
-           .placement = megacu::placement_scope::per_peer,
-           .progress = comm_progress,
-           .peer_policy = megacu::peer_policy::all_remote_peers,
-           .requires = megacu::participant_requirement::
-               co_resident_progress_if_blocking})};
-}
-```
-
-The dispatcher decides how those participants map to local workers and backend
-peers for `team_n_pes == 1` and `team_n_pes == 2`. The CMake configuration does
-not contain participant-to-rank mappings.
-
-## Golden And Baseline Separation
-
-The `golden/` directory should provide expected results, not the implementation
-that Megacu calls in production. Native baseline implementations should live
-under `phased/baseline/` and `overlap/baseline/`. Megacu implementations should
-link their own operator symbols under `phased/megacu/` and `overlap/megacu/`.
-
-## Usage Evidence
-
-Each variant README should include:
-
-- what the variant proves;
-- a simple path visualization;
-- pseudocode;
-- build command;
-- single-card run command;
-- two-card `nvshmrun` or Docker command;
-- known unsupported shapes/features.
+Numeric CUDA/NVSHMEM correctness, two-card baseline parity, overlap progress,
+and framework launch adapters are valuable future evidence, but they are not
+the PR #4 gate unless explicitly added back to scope.

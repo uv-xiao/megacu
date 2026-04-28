@@ -104,4 +104,6 @@ program_builder
   -> example glue selects native symbol
 ```
 
-Those steps describe the transitional implementation that PR #4 must replace.
+Those steps describe the transitional implementation rejected by the
+architecture. The future concrete implementation must replace them with a
+general runtime-linked path.

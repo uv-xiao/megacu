@@ -101,7 +101,7 @@ operator path.
 ## Current CMake Gap
 
 `cmake/MegacuTargets.cmake` currently links the materialization source and
-metadata section builders through `megacu_add_components`. The next
+metadata section builders through `megacu_add_components`. The future general
 implementation update should:
 
 1. add or rename to `megacu_add_configure_target`;

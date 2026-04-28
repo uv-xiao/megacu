@@ -13,9 +13,20 @@ The user-facing surface has two layers:
 Component-facing runtime APIs live under `include/megacu/detail/` or
 component-specific headers until they are proven reusable.
 
+## PR #4 Proof Boundary
+
+PR #4 only needs one tiny problem-specific proof example. The proof example may
+hard-code a narrow problem shape, dtype, operator, or mapping helper when that
+keeps the architecture readable. It must not present those shortcuts as the
+general Megacu programming surface.
+
+Reusable APIs in this document are architecture direction. The future general
+implementation work in `docs/todo/concrete_impl/` must prove them with stronger
+generality evidence before they become accepted shared implementation.
+
 ## Direct Orchestrate ABI
 
-The first CUDA+NVSHMEM target exposes direct functions:
+The full CUDA+NVSHMEM design can expose direct functions such as:
 
 ```cpp
 megacu::status cuda_nvshmem_gemm_allreduce_phased_orchestrate(
@@ -37,6 +48,10 @@ The ABI is explicit because framework bindings and native callers need a stable
 call surface. The target name encodes the linked platform/backend/scheduler
 configuration. Runtime parameters provide data and team handles; they do not
 select a different backend or scheduler.
+
+For PR #4, one direct function is enough if it proves the corrected call path.
+Phased and overlap variants can remain architecture examples or future
+implementation work.
 
 The direct ABI should be callable from:
 
@@ -172,7 +187,8 @@ megacu::status cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
 ```
 
 This sketch shows the intended ownership. Exact names can change during
-implementation, but the direction cannot revert to compiler-like IR building.
+implementation, and PR #4 may replace the generic dispatcher call with an
+example-local mapper. The direction cannot revert to compiler-like IR building.
 
 The orchestrator must stay readable top-to-bottom. It should not hide runtime
 state in a generic payload blob.
@@ -237,6 +253,10 @@ lookup. Type tags and the `participant_attrs` values are the semantic input.
 The dispatcher may reject annotations that are unsupported by the linked
 `ConfigureTarget`, such as a blocking communication participant without a
 co-resident progress-capable scheduler.
+
+PR #4 does not need to implement this whole reusable annotation API. It only
+needs to keep any narrower proof helper out of public shared API unless the
+design can defend it.
 
 ## Kernel Operator Code
 

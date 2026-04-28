@@ -5,6 +5,12 @@ integration note. CUDA+NVSHMEM must work under single-process, MPI-launched,
 and torch-distributed-launched programs without changing the Megacu target
 design.
 
+PR #4 must keep this architecture coherent, but it does not need to implement
+every distributed adapter. The tiny proof example may cover only the smallest
+runtime environment that proves the design. Full `nvshmrun`, MPI, and
+torch-distributed implementation evidence belongs to the future general
+implementation work unless PR #4 explicitly adds it.
+
 ## Ownership
 
 Megacu owns:

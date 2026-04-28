@@ -806,3 +806,15 @@ were later promoted into `docs/design/`.
     the runtime-linked implementation path. Treat current `program_ir`,
     materialization, static metadata sections, and target-lowering files as
     transitional gaps to replace, not as the desired implementation contract.
+
+- 2026-04-28 Asia/Shanghai - Split PR #4 scope
+  > Let's split the PR. PR 4 should focus on the architecture redesign and a very tiny but mighty (can be problem-specific) example without generality concerns. For concrete_impl, they should be moved into todo with strong generality requirements. Then, we go back to concentrate on fixing the architecture design.
+  - Context: User corrected PR #4 after the runtime-linked architecture docs
+    and concrete implementation docs had grown into one oversized workstream.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/todo/concrete_impl/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`, PR #4.
+  - Agent interpretation: PR #4 should narrow to architecture repair plus one
+    tiny problem-specific proof example. Broad concrete implementation work is
+    future TODO work and must carry strong generality requirements before it is
+    allowed back into active implementation scope.

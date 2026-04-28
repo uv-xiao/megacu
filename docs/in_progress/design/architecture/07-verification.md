@@ -1,103 +1,62 @@
 # Verification
 
-Verification must prove runtime-linked behavior, not static metadata
-construction.
+PR #4 verification must prove the documentation split and the runtime-linked
+architecture correction. It must not overclaim the future general concrete
+implementation.
 
-## Build Checks
+## Documentation Checks
 
-Required:
+Required for this split:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j"$(nproc)"
+rg -n "docs/in_progress/design/concrete_impl|PR #4 must replace|concrete implementation docs for PR #4" \
+  docs/in_progress docs/todo
 git diff --check
 ```
 
-The build should prove:
+The first check should find only historical human-word entries or deliberate
+split-scope notes. Active architecture docs should point future concrete
+implementation work to `docs/todo/concrete_impl/`.
 
-- no materializer executable is built;
-- no generated CUDA/C++ source is emitted;
-- component runtime libraries link into orchestrate targets;
-- example targets own their local CMake files.
+## Architecture Review Checklist
 
-## Unit Tests
+Before PR #4 is considered ready for design review, check:
 
-Replace materialization tests with runtime component tests:
+- no accepted path requires `program_ir`, `owned_program_ir`,
+  `materialize_program`, static `dispatch_section`, static `schedule_section`,
+  static `kernel_section`, or generated target metadata;
+- direct ABI and typed runtime views are the visible entry point;
+- dispatcher, scheduler, platform, backend, and target runtime ownership is
+  clear at the architecture level;
+- the tiny proof example is explicitly allowed to be problem-specific;
+- problem-specific shortcuts are not promoted into public shared APIs;
+- future generality requirements live in `docs/todo/concrete_impl/`;
+- distributed launch and framework adapters are described as architecture
+  boundaries without becoming hidden PR #4 implementation gates.
 
-- dispatcher maps concrete participant annotations, problem view, and
-  `team_view` into tile counts, local lanes, and peer ranks;
-- dispatcher retargets the same participant annotations for `team_n_pes == 1`
-  and `team_n_pes == 2` without changing the `OrchTarget`;
-- dispatcher emits co-residency mapping constraints when participant attributes
-  require blocking communication progress;
-- dispatcher rejects unsupported annotation combinations for the linked
-  `ConfigureTarget`;
-- blocking communication participants require a co-resident progress-capable
-  scheduler/launch envelope;
-- no `ConfigureTarget` uses a GEMM+AllReduce-specific dispatcher component;
-- phased scheduler permits tile-ready communication without needing a
-  co-resident progress guard;
-- overlap scheduler rejects blocking communication without a valid progress
-  guard;
-- CUDA platform rejects device mismatch and invalid launch envelopes;
-- NVSHMEM backend rejects invalid team and symmetric session mismatch;
-- target runtime rejects unsupported team size, dtype, layout, and problem
-  shape.
+## Tiny Example Evidence
 
-## Runtime Tests
+If PR #4 includes a runnable tiny example, collect focused evidence for:
 
-Required local tests:
+- invalid runtime views return `megacu::status` before native launch;
+- the linked native operator symbol is called without a materializer;
+- runtime problem/team values drive mapping or work selection;
+- no generated metadata section is needed;
+- any problem-specific mapping or scheduling helper is example-local.
 
-- direct ABI validation smoke with null stream;
-- CUDA single-card numeric correctness;
-- CUDA multi-card-capability smoke where hardware is available;
-- two-rank NVSHMEM correctness with `nvshmrun` or Docker.
+Exact commands depend on the final proof files. Record them in
+`docs/in_progress/runtime_linked_megacu_slice.md` or the PR body when the proof
+exists.
 
-Required modes:
+## Future General Implementation Evidence
 
-```text
-golden local result
-baseline phased single-card
-baseline phased two-card
-baseline overlap single-card
-baseline overlap two-card
-Megacu phased single-card
-Megacu phased two-card
-Megacu overlap single-card
-Megacu overlap two-card
-```
+The following checks belong to `docs/todo/concrete_impl/` and should not block
+PR #4 unless the scope is explicitly expanded:
 
-## Distributed Tests
-
-Required before distributed support is claimed:
-
-- `nvshmrun -np 2` single-host two-card run;
-- MPI-launched adapter smoke or documented blocker;
-- torch-distributed adapter smoke or documented blocker;
-- negative tests for wrong PE count, device mismatch, and session mismatch.
-
-## Inspection Checks
-
-Search-based checks should fail the build or be run manually until automated:
-
-```sh
-rg -n "materialize_program|program_ir|owned_program_ir|dispatch_section|schedule_section|kernel_section|target_metadata" include src tests examples
-```
-
-After the runtime-linked replacement, these terms should not be implementation
-dependencies. Historical design notes may still mention them only as rejected
-architecture.
-
-## Design Review Checklist
-
-Before implementation starts, review these design files for:
-
-- no accepted path requiring materialization or static section construction;
-- programming surface shows direct ABI, participant annotation APIs, and
-  runtime component APIs;
-- dispatcher is a general `ConfigureTarget` runtime component, not event-scan
-  ad hoc logic and not an example-specific mapper;
-- scheduler owns phased and overlap progress at runtime;
-- distributed paths all produce the same `launch_view` and `team_view`;
-- verification includes MPI and torch-distributed smoke or documented blockers;
-- example docs separate golden, baseline, and Megacu implementations.
+- reusable annotation-driven dispatcher tests;
+- phased and overlap scheduler tests;
+- CUDA platform validation tests;
+- NVSHMEM backend validation tests;
+- complete GEMM+AllReduce golden, baseline, and Megacu runtime tests;
+- `nvshmrun`, MPI, and torch-distributed smoke tests;
+- broad CMake build and CTest coverage for the full implementation.

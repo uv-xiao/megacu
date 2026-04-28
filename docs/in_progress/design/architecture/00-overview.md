@@ -24,6 +24,19 @@ Megacu is a thin runtime-linked layer:
 - No normal Megacu path builds a program IR, lowers an IR, materializes target
   metadata sections, or generates source.
 
+## PR #4 Split Scope
+
+PR #4 is an architecture-redesign PR, not the full concrete implementation PR.
+It should include one tiny but mighty proof example that may be
+problem-specific and does not need to prove reusable generality.
+
+The broad concrete implementation notes moved to
+`docs/todo/concrete_impl/`. That TODO workstream owns the later requirement to
+turn the architecture into general reusable components. In this architecture
+workstream, any problem-specific shortcut in the tiny proof example must be
+called out as example-local and must not be promoted into public Megacu API or
+shared component contracts.
+
 ## Non-Negotiable Correction
 
 The corrected architecture must not include:
@@ -135,6 +148,11 @@ only. For `team_n_pes > 1`, it maps participant peer policies to backend peers
 from `team_view`, validates that the linked backend capability can satisfy the
 mapping, and exposes work cursors that scheduler/operator code can consume.
 
+This is the destination contract for the general implementation. PR #4's tiny
+proof may use a problem-specific mapper if that keeps the proof focused on the
+architecture correction. Such a mapper is evidence for the call shape only; it
+is not accepted as the reusable dispatcher contract.
+
 Overlap co-residency is a shared contract:
 
 1. `OrchTarget` marks communication participants as blocking or
@@ -150,7 +168,7 @@ Overlap co-residency is a shared contract:
 
 ## Directory Scope
 
-This in-progress design owns the next implementation direction for:
+This in-progress design owns the architecture direction for:
 
 - `include/megacu/`
 - `src/dispatcher/`
@@ -188,5 +206,6 @@ The selected direction is option 2.
 5. `04-distributed-runtime.md`: CUDA+NVSHMEM under MPI, torch-distributed, and
    single-process launch.
 6. `05-gemm-allreduce-example.md`: phased and overlap GEMM+AllReduce path.
-7. `06-implementation-plan.md`: concrete replacement plan for PR #3.
+7. `06-implementation-plan.md`: PR #4 architecture repair plan and scope
+   boundary.
 8. `07-verification.md`: evidence required before claiming a working slice.

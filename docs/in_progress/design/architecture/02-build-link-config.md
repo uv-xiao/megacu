@@ -3,6 +3,13 @@
 CMake configures what implementation is linked. Runtime C++ runs that linked
 implementation. There is no Megacu compiler step between those two facts.
 
+## PR #4 Proof Boundary
+
+PR #4 may link a tiny problem-specific proof target with direct CMake rules or
+minimal helper functions if that keeps the architecture review focused. Those
+rules are proof scaffolding only. The reusable CMake APIs below belong to the
+future general concrete implementation in `docs/todo/concrete_impl/`.
+
 ## ConfigureTarget
 
 The first configured component target remains useful:
@@ -24,6 +31,10 @@ platform/backend/scheduler capability. It consumes virtual-participant
 annotations supplied by each `OrchTarget` at runtime. It must not be named or
 implemented as a GEMM+AllReduce-only dispatcher.
 
+That is the general implementation target. PR #4's proof target may use
+example-local mapping code if the code path still demonstrates normal
+runtime-linked C++/CUDA execution and does not create generated metadata.
+
 Expected linked implementation files:
 
 ```text
@@ -44,7 +55,7 @@ unknown. It should not silently link a default placeholder.
 
 ## OrchTarget
 
-Each example variant links a direct target:
+Each full example variant links a direct target:
 
 ```cmake
 megacu_add_orchestrate_target(
@@ -69,8 +80,8 @@ supported dtype/layout: f32 row-major first slice
 
 This envelope can be exposed through target properties, a generated config
 header, or linked constant data. Prefer linked constant data in handwritten
-source for the first implementation. It must be small and static. It should not
-contain dispatch tables or schedule entries.
+source for the first general implementation. It must be small and static. It
+should not contain dispatch tables or schedule entries.
 
 The `OrchTarget` supplies workload-specific facts that are not part of the
 reusable `ConfigureTarget`:
