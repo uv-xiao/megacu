@@ -50,7 +50,7 @@ stay concise if the runtime/configuration layer owns lowering details.
 
 - The core authoring surface should look like ordinary orchestration code, not a
   meta-language built around `task_traits`.
-- Users should submit registered operations through small builder APIs instead of
+- Users should submit registered operations through small APIs instead of
   manually constructing low-level descriptors.
 - Raw descriptors are execution artifacts built during prepare/lower, not the
   primary authoring surface.
@@ -60,3 +60,27 @@ stay concise if the runtime/configuration layer owns lowering details.
 - Kernel authors should still be able to write raw CUDA/native kernels; the thin
   orchestration layer should reference those kernels through configuration
   registries and compact operation handles.
+
+## 2026-04-29 Superseded PR #4 ABI Conclusions
+
+The 2026-04-28 ABI conclusions from the Simpler/PTO reading are rejected where
+they contradict the active runtime-linked Megacu design. They are preserved here
+only as source-reading history, not as current design evidence.
+
+Rejected conclusions:
+
+- Megacu should use a compact frame-like object for target arguments.
+- Megacu task submission should use `input`/`output`/`inout` argument builders
+  or typed wrappers as the public task argument abstraction.
+- Megacu should infer dependencies from input/output/inout access.
+
+Current active conclusion:
+
+- Megacu orchestrate is a host-called function:
+  `orchestrate(driver, target_arg0, target_arg1, ...)`.
+- The driver owns platform/backend execution and distributed resources, not
+  target arguments or linked component state.
+- Target and operator arguments are passed as raw pointers, scalars, or small
+  descriptors shaped like CUDA kernel arguments.
+- Dependencies are explicit attributes such as `scheduler::depends_on(...)`.
+  Megacu does not infer dependency edges from tensor access or pointer aliasing.

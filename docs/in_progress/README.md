@@ -13,4 +13,5 @@ Rules:
 
 ## Active Tasks
 
-No active task files after the implementation-ready design closeout.
+No active task files are currently checked in. Completed runtime-linked design
+content has been promoted to `docs/design/runtime_linked_device_native_layer/`.

@@ -3,8 +3,10 @@
 This is the stable entry point for the picked Megacu device-native layer
 direction.
 
-Implementation-ready contracts for the first implementation live under
-`docs/design/implementation_ready_device_native_layer/`.
+The first implementation contract is the runtime-linked device-native layer in
+`docs/design/runtime_linked_device_native_layer/`. It replaces the rejected
+compiler-like materialization path with linked dispatcher, scheduler, platform,
+backend, target runtime, and native operator code.
 
 ## Accepted Direction
 
@@ -21,7 +23,7 @@ The key implementation rule is:
 That means:
 
 - runtime C++ does not expose build steps;
-- reusable dispatcher, scheduler, kernel lowering, platform, and backend
+- reusable dispatcher, scheduler, platform, backend, and native operator
   implementations are organized as reusable build targets;
 - the authored orchestrate program is compiled/linked against those artifacts;
 - runtime C++ runs the compiled orchestration directly.
@@ -36,8 +38,9 @@ The current design assumes three implementation surfaces:
   compile/link the orchestrate target against them.
 - **Runtime C++/CUDA**: call the compiled orchestration.
 
-This preserves the thin native hot path while keeping materialization and
-packaging outside the runtime process.
+This preserves the thin native hot path while keeping packaging outside the
+runtime process. The implemented runtime-linked path rejects a required
+materialization/lowering pipeline.
 
 ## Source Context
 

@@ -12,6 +12,6 @@ in-progress drafts should be removed.
   source-reading policy, GitHub workflow skills, and human-agent workflow.
 - `docs/design/megacu_cpp_cuda_layer.md` - picked Megacu device-native layer
   direction and current stable boundaries.
-- `docs/design/implementation_ready_device_native_layer/` -
-  implementation-ready API, build, runtime, metadata, examples, and verification
-  contracts for the first Megacu device-native implementation.
+- `docs/design/runtime_linked_device_native_layer/` - implemented
+  runtime-linked dispatcher/scheduler/platform/backend architecture and the
+  CUDA+NVSHMEM GEMM+AllReduce proof.

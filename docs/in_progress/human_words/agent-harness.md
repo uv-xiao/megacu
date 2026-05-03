@@ -82,3 +82,49 @@ were later promoted into `docs/design/`.
     content must be unified into `docs/design/` with updated indexes and
     README entry points, and apply that promotion directly on `main` for the
     accepted Megacu design.
+
+- 2026-04-25 Asia/Shanghai - Example assets mirror platform/backend/example layout
+  > Let's give a rule about examples/ folder organization. First, we need examples/<platform>-<backend>/<example> structure. That is, we need examples/cuda_nvshmem/gemm_allreduce. This should also be applied to docker/ and tools/ . And for every example, it should provide a readme to explain the example details (with visulaization and simple pseudocode) as well as usage or running scripts. This rule should be added for agent and also specified by README.md under each folder (like examples/).
+  - Context: User requested a persistent organization rule while PR #3 already
+    had a CUDA/NVSHMEM GEMM+AllReduce example, Docker image, and run script.
+  - Related: `.agents/rules/example-organization.md`,
+    `examples/README.md`, `docker/README.md`, `tools/README.md`.
+  - Agent interpretation: Example code, Docker support, and scripts should be
+    organized as matching platform/backend/example groups. Each example must be
+    self-explaining through README files, including visualization, pseudocode,
+    usage, and runtime assumptions.
+
+- 2026-04-25 Asia/Shanghai - Add PR-comment fixing skill
+  > I've glanced over the PR. You should read my comments. I think there are large problems about feature implementation (don't see any dispatch/schedule/etc., don't think we've implemented a working version) and file organization. You should look at research/repos/simpler/.claude/skills/fix-pr/ to $skill-creator create a skill about get and fix PR comments, and then rethink about docs/in_progress/public_builder_surface.md, making it a full working slice (aligned with the complete implementation-ready design).
+  - Context: User reviewed PR #3 and asked for a reusable agent workflow for
+    fetching and fixing PR comments, adapted from the Simpler fix-pr skill.
+  - Related: `.agents/skills/fix-pr-comments/SKILL.md`, PR #3.
+  - Agent interpretation: Megacu agents need a local skill that fetches PR
+    feedback from GitHub, classifies it, verifies it against repo reality, fixes
+    implementation/design gaps, and records blocked reply/resolve actions when
+    GitHub permissions are unavailable.
+
+- 2026-04-25 Asia/Shanghai - PR comments can be pending review comments
+  > Why we need a Dockerfile under a specific example? Why not let docker/cuda_nvshmem to have only one Dockerfile
+  >
+  > Same problem, we shouldn't give tool/script for every example
+  - Context: These comments were discovered under a pending GitHub review on PR
+    #3 rather than through the normal submitted-comments endpoints.
+  - Related: `.agents/skills/fix-pr-comments/SKILL.md`,
+    `.agents/rules/example-organization.md`, `docker/README.md`,
+    `tools/README.md`.
+  - Agent interpretation: The PR-comment workflow must query pending reviews
+    explicitly. The example-organization rule should prefer shared
+    platform/backend Docker and tool assets, adding per-example assets only when
+    a specific example truly needs unique operational support.
+
+- 2026-04-25 Asia/Shanghai - Keep GEMM+AllReduce variants under one example family
+  > Better organization is: examples/cuda_nvshmem/gemm_allreduce/{common, phased/{baseline, megacu}, overlap/{baseline, megacu}, golden}
+  - Context: User refined the previous split phased/overlap example layout
+    while PR #3 was being reorganized after review feedback.
+  - Related: `.agents/rules/example-organization.md`,
+    `examples/cuda_nvshmem/gemm_allreduce/`.
+  - Agent interpretation: Phased and overlap are variants of one
+    CUDA+NVSHMEM GEMM+AllReduce example family. Shared descriptors and golden
+    code belong at the family root, while baseline and Megacu implementations
+    are separated under each variant.
