@@ -59,18 +59,7 @@ golden_status golden_phased_single_card_gemm_allreduce_f32(
     golden_gemm_ar_launch launch,
     golden_gemm_ar_problem problem);
 
-golden_status golden_overlap_single_card_gemm_allreduce_f32(
-    golden_gemm_ar_workspace workspace,
-    golden_gemm_ar_launch launch,
-    golden_gemm_ar_problem problem);
-
 golden_status golden_phased_multi_card_gemm_allreduce_f32(
-    golden_gemm_ar_workspace workspace,
-    golden_gemm_ar_launch launch,
-    golden_gemm_ar_team team,
-    golden_gemm_ar_problem problem);
-
-golden_status golden_overlap_multi_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_team team,

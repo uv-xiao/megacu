@@ -4,7 +4,7 @@
 - Purpose: make the CUDA+NVSHMEM multi-GPU launch and framework-integration
   contract concrete enough for implementation.
 - Related design:
-  `docs/in_progress/design/architecture/09-distributed-launch-and-framework-integration.md`
+  `docs/design/runtime_linked_device_native_layer/04-distributed-runtime.md`
 
 ## Sources Read
 

@@ -37,7 +37,7 @@ These are facts about the current branch, not accepted architecture.
    - retargets `team_n_pes == 1` and multi-card teams;
    - emits co-residency constraints for overlap.
 5. Implement runtime schedulers:
-   - phased scheduler consumes tile readiness;
+   - ASAP scheduler consumes explicit dependency/event readiness;
    - overlap scheduler enforces co-resident/persistent progress guard.
 6. Move common target runtime validation out of example headers into
    `src/target/`.
@@ -66,8 +66,8 @@ Missing evidence:
 
 Missing evidence:
 
-- phased scheduler permits AR tile execution after matching GEMM tile readiness;
-- phased scheduler does not force a whole-GEMM-before-AR dependency unless
+- ASAP scheduler permits AR tile execution after matching GEMM tile readiness;
+- ASAP scheduler does not force a whole-GEMM-before-AR dependency unless
   capability requires it;
 - overlap scheduler rejects blocking waits without valid co-resident progress;
 - overlap scheduler validates operator and platform launch capability before

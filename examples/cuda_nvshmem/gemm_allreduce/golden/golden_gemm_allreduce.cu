@@ -172,48 +172,6 @@ __global__ void wait_copy_tiles_kernel(
   }
 }
 
-__global__ void fused_overlap_kernel(
-    float const *a,
-    float const *b,
-    float volatile *partial,
-    float *out,
-    int *barriers,
-    std::int64_t m,
-    std::int64_t n,
-    std::int64_t k,
-    std::int32_t tile_m,
-    std::int32_t tile_n,
-    std::int64_t tiles,
-    std::int32_t comm_ctas,
-    int ready_base) {
-  if (blockIdx.x < comm_ctas) {
-    for (auto tile_id = static_cast<std::int64_t>(blockIdx.x);
-         tile_id < tiles;
-         tile_id += comm_ctas) {
-      auto ready_value = ready_base + static_cast<int>(tile_id + 1);
-      while (atomicAdd(barriers + tile_id, 0) != ready_value) {
-      }
-      copy_tile(partial, out, tile_id, m, n, tile_m, tile_n);
-    }
-    return;
-  }
-
-  auto compute_ctas = gridDim.x - comm_ctas;
-  auto compute_id = blockIdx.x - comm_ctas;
-  for (auto tile_id = static_cast<std::int64_t>(compute_id);
-       tile_id < tiles;
-       tile_id += compute_ctas) {
-    compute_tile(a, b, partial, tile_id, m, n, k, tile_m, tile_n);
-    __syncthreads();
-    __threadfence_system();
-    __syncthreads();
-    if (threadIdx.x == 0) {
-      atomicExch(barriers + tile_id, ready_base + static_cast<int>(tile_id + 1));
-    }
-    __syncthreads();
-  }
-}
-
 #ifdef MEGACU_GEMM_AR_HAS_DEVICE_NVSHMEM
 __device__ void wait_tile_ready(
     int const *barriers,
@@ -390,51 +348,6 @@ golden_status launch_phased_local(
   return cuda_status(cudaStreamSynchronize(stream), 18);
 }
 
-golden_status launch_overlap_local(
-    golden_gemm_ar_workspace workspace,
-    golden_gemm_ar_launch launch,
-    golden_gemm_ar_problem problem) {
-  auto status = validate(workspace, launch, problem);
-  if (status.code != golden_status_code::ok) {
-    return status;
-  }
-  status = cuda_status(cudaSetDevice(launch.device_ordinal), 20);
-  if (status.code != golden_status_code::ok) {
-    return status;
-  }
-
-  auto stream = static_cast<cudaStream_t>(launch.stream);
-  auto tiles = ceil_div(problem.m, problem.tile_m) *
-               ceil_div(problem.n, problem.tile_n);
-  auto *barriers = static_cast<int *>(workspace.barriers);
-  status = cuda_status(
-      cudaMemsetAsync(barriers, 0, tiles * sizeof(int), stream), 21);
-  if (status.code != golden_status_code::ok) {
-    return status;
-  }
-
-  auto blocks = problem.comm_ctas + problem.compute_ctas;
-  fused_overlap_kernel<<<blocks, kThreads, 0, stream>>>(
-      static_cast<float const *>(workspace.a.data),
-      static_cast<float const *>(workspace.b.data),
-      static_cast<float *>(workspace.partial.data),
-      static_cast<float *>(workspace.c.data),
-      barriers,
-      problem.m,
-      problem.n,
-      problem.k,
-      problem.tile_m,
-      problem.tile_n,
-      tiles,
-      problem.comm_ctas,
-      0);
-  status = cuda_status(cudaGetLastError(), 22);
-  if (status.code != golden_status_code::ok) {
-    return status;
-  }
-  return cuda_status(cudaStreamSynchronize(stream), 23);
-}
-
 #ifdef MEGACU_GEMM_AR_HAS_DEVICE_NVSHMEM
 golden_status enter_collective_after_local_reset(
     cudaStream_t stream,
@@ -537,13 +450,6 @@ golden_status launch_phased_multi_card_device(
   return status;
 }
 
-golden_status launch_overlap_multi_card_device(
-    golden_gemm_ar_workspace workspace,
-    golden_gemm_ar_launch launch,
-    golden_gemm_ar_team team,
-    golden_gemm_ar_problem problem) {
-  return launch_phased_multi_card_device(workspace, launch, team, problem);
-}
 #endif
 
 }  // namespace
@@ -553,13 +459,6 @@ golden_status golden_phased_single_card_gemm_allreduce_f32(
     golden_gemm_ar_launch launch,
     golden_gemm_ar_problem problem) {
   return launch_phased_local(workspace, launch, problem);
-}
-
-golden_status golden_overlap_single_card_gemm_allreduce_f32(
-    golden_gemm_ar_workspace workspace,
-    golden_gemm_ar_launch launch,
-    golden_gemm_ar_problem problem) {
-  return launch_overlap_local(workspace, launch, problem);
 }
 
 golden_status golden_phased_multi_card_gemm_allreduce_f32(
@@ -577,25 +476,6 @@ golden_status golden_phased_multi_card_gemm_allreduce_f32(
   return {
       golden_status_code::unsupported,
       60,
-      "device-side NVSHMEM path was not built"};
-#endif
-}
-
-golden_status golden_overlap_multi_card_gemm_allreduce_f32(
-    golden_gemm_ar_workspace workspace,
-    golden_gemm_ar_launch launch,
-    golden_gemm_ar_team team,
-    golden_gemm_ar_problem problem) {
-#ifdef MEGACU_GEMM_AR_HAS_DEVICE_NVSHMEM
-  return launch_overlap_multi_card_device(workspace, launch, team, problem);
-#else
-  (void)workspace;
-  (void)launch;
-  (void)team;
-  (void)problem;
-  return {
-      golden_status_code::unsupported,
-      61,
       "device-side NVSHMEM path was not built"};
 #endif
 }

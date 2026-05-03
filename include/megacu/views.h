@@ -21,8 +21,7 @@ enum class status_code : std::uint8_t {
   invalid_argument,
   unsupported,
   backend_error,
-  launch_error,
-  metadata_error
+  launch_error
 };
 
 struct status {

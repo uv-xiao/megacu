@@ -103,13 +103,11 @@ int main() {
   void *b = nullptr;
   void *c = nullptr;
   void *partial = nullptr;
-  void *scratch = nullptr;
   void *events = nullptr;
   require_cuda(cudaMalloc(&a, kABytes));
   require_cuda(cudaMalloc(&b, kBBytes));
   require_cuda(cudaMalloc(&c, kCBytes));
   require_cuda(cudaMalloc(&partial, kPartialBytes));
-  require_cuda(cudaMalloc(&scratch, 128));
   require_cuda(cudaMalloc(&events, 128));
 
   require_cuda(cudaMemcpyAsync(
@@ -148,66 +146,24 @@ int main() {
   check_expected(host_a, host_b, host_c, 1.0f, "golden_phased_single");
 
   reset_outputs(c, partial, events, stream);
-  golden_status = golden_overlap_single_card_gemm_allreduce_f32(
-      golden_workspace, golden_launch, golden_problem);
-  assert(golden_status.code == golden_status_code::ok);
-  require_cuda(cudaMemcpyAsync(
-      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
-  require_cuda(cudaStreamSynchronize(stream));
-  check_expected(host_a, host_b, host_c, 1.0f, "golden_overlap_single");
 
-  reset_outputs(c, partial, events, stream);
-
-  megacu::backend_id backend{1};
-  megacu::session_id session{7};
-
-  gemm_ar_workspace workspace{
-      .a = {
-          .data = a,
-          .bytes = static_cast<std::int64_t>(kABytes),
-          .type = megacu::dtype::f32},
-      .b = {
-          .data = b,
-          .bytes = static_cast<std::int64_t>(kBBytes),
-          .type = megacu::dtype::f32},
-      .partial = {
-          .buffer = {
-              .data = partial,
-              .bytes = static_cast<std::int64_t>(kPartialBytes),
-              .backend = backend,
-              .session = session},
-          .type = megacu::dtype::f32},
-      .c = {
-          .data = c,
-          .bytes = static_cast<std::int64_t>(kCBytes),
-          .type = megacu::dtype::f32},
-      .scratch = megacu::span<std::byte>{
-          static_cast<std::byte *>(scratch),
-          128}};
-  megacu::event_storage_view event_storage{
-      .buffer = {
-          .data = events,
-          .bytes = 128,
-          .backend = backend,
-          .session = session}};
-  megacu::cuda::launch_view launch{
-      .stream = stream,
-      .device_ordinal = device};
-  megacu::nvshmem::team_view team{
-      .team = nullptr,
-      .team_my_pe = 0,
-      .team_n_pes = 1,
-      .world_my_pe = 0,
-      .world_n_pes = 1,
-      .cuda_device_ordinal = device,
-      .backend = backend,
-      .session = session};
+  gemm_ar_driver driver{
+      .launch = {.stream = stream, .device_ordinal = device},
+      .team = {
+          .team = nullptr,
+          .team_my_pe = 0,
+          .team_n_pes = 1,
+          .world_my_pe = 0,
+          .world_n_pes = 1,
+          .cuda_device_ordinal = device}};
 
   auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
-      workspace,
-      event_storage,
-      launch,
-      team,
+      driver,
+      static_cast<float const *>(a),
+      static_cast<float const *>(b),
+      static_cast<float *>(partial),
+      static_cast<float *>(c),
+      events,
       gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = 1, .tile_n = 2});
   assert(status.code == megacu::status_code::ok);
 
@@ -216,22 +172,7 @@ int main() {
   require_cuda(cudaStreamSynchronize(stream));
   check_expected(host_a, host_b, host_c, 1.0f, "megacu_phased_single");
 
-  reset_outputs(c, partial, events, stream);
-  status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-      workspace,
-      event_storage,
-      launch,
-      team,
-      gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = 1, .tile_n = 2});
-  assert(status.code == megacu::status_code::ok);
-
-  require_cuda(cudaMemcpyAsync(
-      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
-  require_cuda(cudaStreamSynchronize(stream));
-  check_expected(host_a, host_b, host_c, 1.0f, "megacu_overlap_single");
-
   require_cuda(cudaFree(events));
-  require_cuda(cudaFree(scratch));
   require_cuda(cudaFree(partial));
   require_cuda(cudaFree(c));
   require_cuda(cudaFree(b));

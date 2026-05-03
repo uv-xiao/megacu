@@ -7,15 +7,14 @@ Use a short top-level entry point for each workstream, then keep the detailed
 chapters in one ordered subdirectory when the topic has enough depth to need
 multiple files.
 
-## Active Workstreams
+## Current State
 
-- `architecture/`: active redesign of the first
-  Megacu implementation around runtime-linked dispatcher/scheduler/backend
-  components instead of compiler-style IR materialization. This workstream was
-  moved back from `docs/design/` on 2026-04-25 after review feedback.
+No active design workstreams are currently checked in. The runtime-linked
+device-native layer was promoted to
+`docs/design/runtime_linked_device_native_layer/`.
 
 ## Split Scope
 
 On 2026-04-28, PR #4 was narrowed to architecture redesign plus one tiny but
 mighty example. The broader concrete implementation notes moved to
-`docs/todo/concrete_impl/` and are no longer part of active PR #4 scope.
+`docs/todo/concrete_impl/` and remain future work.

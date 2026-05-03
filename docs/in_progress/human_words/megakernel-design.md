@@ -818,3 +818,263 @@ were later promoted into `docs/design/`.
     tiny problem-specific proof example. Broad concrete implementation work is
     future TODO work and must carry strong generality requirements before it is
     allowed back into active implementation scope.
+
+- 2026-04-28 Asia/Shanghai - Fix PR #4 programming surface and scope
+  > 1. Should our orchestrate ABI to have fixed arguments? This is too restricted for programmers. Also, `cuda_nvshmem_gemm_allreduce_overlap_orchestrate`'s arguments are platform/backend-specific, this is also wierd. You might look at simpler to see how it specifies orch signature.
+  > 2. Runtime views are also platform/backend-specific (`cuda::launch_view launch;nvshmem::team_view team;`), which is strange.
+  > 3. "The orchestrate call then uses the `ConfigureTarget` dispatcher through a
+  > generic API": This is very bad. We don't want to let programmers to write such boilerplates. They might be the execution reality, but shouldn't appear for programming.
+  > 4. Participant attribute mechanism should be very flexible and extensible, not fixed things in megacu. The principle is that specific compoenet (dispatcher, scheduler, platform, backend, etc) can provide more attribute option/candidates, and they can be composed during programming and each component might read and utilize the ones they provide. That is, megacu itself only provides interface for components to provide and programmer to write such attributes.
+  > 5. Operators also should have configurable arguments in their signature.
+  > 6. Another problem is the dependency model between tasks. How megacu handles this?
+  > 7. Let's simplify the example in PR4 to be only phased. For overlap case, the kernels with communication should be merged into one fused kernel, rather than several standalone ones to trouble dispatcher and scheduler. However, this conclusion only holds for PR4, and more discussion is needed in future.
+  > 8. Both scheduler and dispatcher should be general. But in PR4, they can be minimal and naive.
+  > 9. For the PR4, make components in docs/in_progress/design/architecture/03-runtime-components.md tiny but mighty. No need to give so many participant attributes, since we need to change the mechanism.
+  > 10. No need to cover MPI and torch-distributed in PR4.
+  > 11. For PR4, we need 1-host-1-device and 1-host-2-device for implementation and example.
+  - Context: User reviewed the split PR #4 architecture docs and identified
+    remaining over-specific ABI, runtime-view, attribute, dispatcher/scheduler,
+    operator, dependency, and example-scope problems.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`,
+    `docs/notes/orchestration_surface_sources.md`, PR #4.
+  - Agent interpretation: The programming surface must be target-argument
+    configurable and avoid platform/backend-specific public arguments. Runtime
+    component calls are execution reality, not author boilerplate. Attributes
+    are component-provided and composable, not fixed Megacu enums. Operators
+    need configurable signatures. Task dependencies must be modeled explicitly.
+    PR #4 should implement only the phased tiny example with minimal general
+    dispatcher/scheduler components and both 1-host/1-device and
+    1-host/2-device coverage; MPI, torch-distributed, and overlap are future
+    work.
+
+- 2026-04-29 Asia/Shanghai - Kernel-like orchestrate arguments and explicit dependency attributes
+  > Look at the new design. I found the problems:
+  > 1. What should be the arguments? We need to be very clear about how megacu things should be used. For a specific platform + backend, using CUDA + NVSHMEM as the example, the megacu orchestrate is called from the host code. Generally, host code includes Asynchronous Execution things like CUDA streams to dispatch and synchronize tasks, where the orchestrate will become ONE mega-kernel. So the arguments should be like arguments that a CUDA kernel can take, and we don't need to over-wrap them. We should also make it very clear about the abstraction of driver (especially for distributed execution).
+  > 2. Of course scheduler or dispatcher require dependencies between tasks. However, we don't use the way like simpler's tensormap_and_ringbuffer runtime, where dependencies are determined by looking up operations on tensors. Instead, megacu should be very thin to only treat dependencies as one kind of attributes in the explicit way.
+  - Context: User reviewed the active PR #4 runtime-linked architecture draft
+    after it introduced `orchestrate_args`, `target_env`, and dependency
+    derivation from submitted tensor accesses.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`,
+    `docs/todo/concrete_impl/README.md`, PR #4.
+  - Agent interpretation: Public orchestrate entries should look like host
+    functions that enqueue one target megakernel using a driver plus
+    CUDA-kernel-like payload arguments, not an over-wrapped generic argument
+    frame. The driver abstraction owns asynchronous execution and distributed
+    platform/backend resources. Task inputs, outputs, and inouts describe
+    operator arguments, but scheduling dependencies must be explicit typed
+    attributes rather than inferred by looking up tensor operations.
+
+- 2026-04-29 Asia/Shanghai - Raw task arguments without input/output/inout abstraction
+  > I don't think tasks need to have explicit input, output, inout. Such pointers can be passed raw, without a new arg abstraction.
+  - Context: User corrected the active PR #4 programming-surface draft after it
+    replaced inferred dependencies with explicit dependency attributes but still
+    modeled task arguments through `input`, `output`, `inout`, and `op_args`.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`,
+    `docs/todo/concrete_impl/README.md`, PR #4.
+  - Agent interpretation: Task submission should not introduce a Megacu
+    input/output/inout argument abstraction. The orchestrator should pass raw
+    pointers, scalars, or small descriptors directly to linked operators, while
+    dependencies and other scheduling/dispatch/backend facts remain explicit
+    typed attributes.
+
+- 2026-04-29 Asia/Shanghai - Remove payload argument as a design concept
+  > Do we still need the payload argument?
+
+  > Yes go.
+  - Context: User questioned whether the active PR #4 design still needed the
+    `payload argument` term after task arguments were reduced to raw pointers,
+    scalars, and descriptors, then approved removing that concept.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`,
+    `docs/todo/concrete_impl/README.md`, PR #4.
+  - Agent interpretation: The public model should be `orchestrate(driver,
+    target_arg0, target_arg1, ...)`. `driver` is the special execution object;
+    all following values are normal target arguments shaped like CUDA kernel
+    arguments. Public docs should use terms such as target arguments, target
+    signature, or target argument schema instead of payload arguments.
+
+- 2026-04-29 Asia/Shanghai - Review fixes for driver, notes, megakernel, submit, and dependencies
+  > 1. Explicitly mark outdate notes that contradict with current design as rejected.
+  > 2. Remove them clearly. Also, avoid any unnecessary checking.
+  > 3. Discuss carefully about what should be included in the driver and why.
+  > 4. The one mega-kernel includes multiple kernels inside. The kernels are dispatched and scheduled by the megakernel.
+  > 5. Pick the thin option.
+  > 6. Let user take responsibility about avoid missing things. Megacu does not do any fallback checking.
+  > 7. Update.
+  - Context: User reviewed the architecture-risk report and selected concrete
+    fixes for the remaining design risks.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`,
+    `docs/notes/orchestration_surface_sources.md`,
+    `docs/todo/concrete_impl/README.md`, PR #4.
+  - Agent interpretation: Supersede contradictory source-note conclusions,
+    narrow `driver` to execution/distributed resources, define the Megacu
+    megakernel as one target operation that may dispatch and schedule multiple
+    native kernels internally, parse `submit` by linked operator signature
+    arity, and make missing explicit dependencies the user's responsibility
+    rather than a Megacu fallback-checking obligation.
+
+- 2026-04-29 Asia/Shanghai - Standalone intuitive flow explanation
+  > I need a very intuitive explanation (put in a standalone file) about the program, compilation, execution all flow, describing how megacu is used to construct the megakernel from invocations of small kernel operators, and make it runnable on a distributed environment (CUDA + NVSHMEM).
+  - Context: User requested a standalone explanation after the runtime-linked
+    architecture was corrected around driver, direct target arguments, raw
+    operator arguments, explicit dependency attributes, and one Megacu
+    megakernel that internally dispatches native kernels.
+  - Related: `docs/in_progress/design/architecture/`, PR #4.
+  - Agent interpretation: Add an intuitive narrative document that explains
+    authoring/programming, CMake compile/link, and runtime execution for the
+    CUDA+NVSHMEM distributed path without introducing new abstractions.
+
+- 2026-04-30 Asia/Shanghai - Implement PR reset architecture
+  > Let's move on the implementation of the PR's reset architecture. The existing codebase should be fully reset and moved towards the new architecture.
+  - Context: User approved the corrected runtime-linked architecture direction
+    and asked to start replacing the existing compiler-like implementation.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`, PR #4.
+  - Agent interpretation: Replace the current program-IR/materialization/static
+    metadata implementation path with a runtime-linked path around direct target
+    arguments, a narrow driver, raw operator submissions, explicit dependency
+    attributes, and linked runtime components.
+
+- 2026-04-30 Asia/Shanghai - Merge gate requires runnable GEMM-AR examples and strict review
+  > For the PR's merging, we need: 1. an expected example to run successfully on the GEMM-AR for both 1-host-1-gpu and 1-host-2-gpu, with the expected architecture; 2. perfect review on the codebase and example code to meet the design.
+  - Context: User clarified the merge-readiness bar after the reset
+    architecture implementation pass.
+  - Related: `docs/in_progress/design/architecture/`,
+    `docs/in_progress/runtime_linked_megacu_slice.md`, PR #4.
+  - Agent interpretation: PR #4 should not be merged on build-only evidence.
+    It needs runnable GEMM+AllReduce evidence for both single-GPU and two-GPU
+    local host configurations, and a strict review of code and examples against
+    the runtime-linked design contract.
+
+- 2026-04-30 Asia/Shanghai - Remove overlap GEMM-AR example from PR4
+  > Remove any overlap gemm-ar example since we don't need it in PR4.
+  - Context: User tightened PR #4 scope after merge-readiness review found
+    leftover overlap example surfaces.
+  - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
+    `docs/in_progress/design/architecture/`, PR #4.
+  - Agent interpretation: Remove overlap GEMM+AllReduce example code and docs
+    from the active PR #4 tree rather than leaving placeholder or baseline
+    examples that imply overlap is part of the merge gate.
+
+- 2026-04-30 Asia/Shanghai - Current implementation is too fake
+  > The implementation of megacu looks completely fake yet. We need real, working implementation.
+  - Context: User reviewed the reset implementation and found that the API and
+    tests were still too close to link anchors and golden-wrapper delegation.
+  - Related: `include/megacu/runtime.h`,
+    `examples/cuda_nvshmem/gemm_allreduce/`, PR #4.
+  - Agent interpretation: Replace no-op runtime behavior with a real minimal
+    task execution path, and make the GEMM+AllReduce Megacu example execute
+    through submitted linked operators instead of bypassing Megacu through
+    golden wrappers.
+
+- 2026-04-30 Asia/Shanghai - Megacu phased README must show run environment
+  > examples/cuda_nvshmem/gemm_allreduce/phased/megacu/README.md doesn't make it clear how to run the compiled binaries with the environment setup.
+  - Context: User reviewed the phased Megacu example documentation after the
+    real CUDA+NVSHMEM implementation was added.
+  - Related:
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/README.md`,
+    `tools/cuda_nvshmem/run_two_card_docker.sh`, PR #4.
+  - Agent interpretation: The example README must show direct executable paths
+    and environment setup for CUDA single-process runs and two-rank NVSHMEM
+    runs, not only CTest commands.
+
+- 2026-04-30 Asia/Shanghai - PR4 keeps platform/backend validation thin
+  > in this pr, we dont want the heavy validation logic at all. other fixes are as you suggest.
+  - Context: User reviewed the code/design review findings about scheduler
+    generality, dispatcher/component reality, platform/backend shortness, and
+    validation scope.
+  - Related: `include/megacu/runtime.h`, `src/dispatcher/`,
+    `src/scheduler/`, `src/platform/cuda/`, `src/backends/nvshmem/`,
+    `docs/in_progress/design/architecture/`, PR #4.
+  - Agent interpretation: Do not add a heavy platform/backend validation layer
+    in PR #4. Keep platform/backend as thin execution-fact helpers, while
+    still making dispatcher, scheduler, and target runtime real general
+    components instead of GEMM+AllReduce-specific or link-marker-only code.
+
+- 2026-05-02 Asia/Shanghai - Add native sync-only tasks from Event Tensor gap
+  > one missing feature compared to event tensor is that it can flexibily define a task to be non-logic but only for sync. Reread the event tensor paper/notes, to make sure we have it in megacu in a seamless/native way.
+  >
+  > good
+  >
+  > go agead
+  - Context: User reviewed the Megacu/Event Tensor alignment and approved the
+    design that represents Event Tensor's middle readiness node as a native
+    sync-only task.
+  - Related: `include/megacu/runtime.h`,
+    `src/scheduler/explicit_phase.cc`,
+    `docs/in_progress/design/architecture/03-runtime-components.md`,
+    `docs/notes/megakernel_cuda_layer_sources.md`, PR #4.
+  - Agent interpretation: Megacu should support first-class sync-only tasks
+    that return `task_ref`, carry explicit dependency/sync attributes, and
+    invoke no operator body. Users still do not program scheduler calls, waits,
+    notifies, or backend-specific synchronization intrinsics; those remain
+    Megacu internal platform/backend mechanisms.
+
+- 2026-05-03 Asia/Shanghai - Event Tensor must be orchestration-owned attrs
+  > I think the co-called "runtime-owned event stage kernels" are not good design. Instead, similar to Event Tensor, we should define "event tensor" and the related APIs as orch owned ones. Can this be added as handlers on tasks, using the existing attrs mechanism? That is, one platform/backend can provide attributes about the event tensor operations for orch to use, and orch should use the attrs when submitting tasks, which get lowerered to the sync operations.
+  >
+  > This is good.
+  - Context: User corrected the Event Tensor design before implementation of
+    PR #4 sync lowering.
+  - Related: `include/megacu/runtime.h`,
+    `examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce_orchestrate_common.h`,
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu`,
+    `docs/in_progress/design/architecture/03-runtime-components.md`, PR #4.
+  - Agent interpretation: Reject runtime-owned event stage kernels. The
+    orchestrator should declare event tensors and attach event operations as
+    task attrs, while platform/backend components lower those attrs to concrete
+    CUDA+NVSHMEM waits, signals, fences, and remote operations inside the
+    mega-kernel. Operator bodies should remain free of readiness logic.
+
+- 2026-05-03 Asia/Shanghai - Manual mega-kernel belongs to baseline, not Megacu
+  > we should use the manual-mega-kernel as another baseline, while the megacu one should be composed from operators as tasks into one megakernel.
+  - Context: User reviewed the PR #4 CUDA+NVSHMEM implementation after the
+    Event Tensor attr direction was added.
+  - Related:
+    `examples/cuda_nvshmem/gemm_allreduce/phased/baseline/`,
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/`, PR #4.
+  - Agent interpretation: The handwritten fused mega-kernel is valid as a
+    baseline artifact only. The Megacu path should show composition from
+    submitted operator tasks plus event tensor handlers into one mega-kernel.
+
+- 2026-05-03 Asia/Shanghai - Composer must not be platform ASAP code
+  > yes, the composer should be part of the target (carefully decode where it should locate), not programmed algo in example.
+  >
+  > include/megacu/platform/cuda/asap_tile_composer.cuh looks bad, since asap belongs to scheduler, not what platform should own. I don't understand why we need such a very specific kernel entry, not a general one.
+  >
+  > good.
+  - Context: User clarified the ownership boundary after the manual
+    mega-kernel was split into the baseline, then corrected the first
+    target-owned composer location proposal.
+  - Related: `include/megacu/platform/cuda/megakernel.cuh`,
+    `include/megacu/backends/nvshmem/cuda_event_tensor.cuh`,
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/`, PR #4.
+  - Agent interpretation: Do not put ASAP policy in platform code. CUDA
+    platform should own only a generic mega-kernel launch shell. NVSHMEM
+    backend should own the CUDA-backed event tensor operations. The common
+    device entry should own the running loop that uses those pieces, while the
+    platform entry itself must stay general.
+
+- 2026-05-04 Asia/Shanghai - Megakernel running logic must be common
+  > The megakernel doesn't have a general running logic now. It lives in gemm_allreduce_program (examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu), which is still problem-specific. Let's careful discuss about the pattern here. What should be common? I think megakernel things should be common. It is the scheduler that determines what to run next. And the kernel entry just run the operators in the order that scheduler dynamically gives and on the device/grid/threadblock that dispatcher determiens.
+  >
+  > This is better. But the make_device_program looks tedious. Instead, dispatcher, scheduler, should be linked and the common API/signature should be directly used.
+  >
+  > Good.
+  - Context: User reviewed the refactor that moved the CUDA mega-kernel shell
+    and NVSHMEM event tensor into platform/backend headers, then identified
+    the remaining problem-specific running loop.
+  - Related: `include/megacu/runtime/device_entry.cuh`,
+    `include/megacu/scheduler/explicit_asap_device.cuh`,
+    `include/megacu/dispatcher/tile_grid_device.cuh`,
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu`,
+    PR #4.
+  - Agent interpretation: The common mega-kernel device entry should own the
+    running loop. It should call linked scheduler, dispatcher, backend, and
+    operator-table APIs directly. Avoid a user-facing `make_device_program`
+    builder. The example should instantiate linked components and provide an
+    operator table, not own the scheduler/dispatcher execution algorithm.

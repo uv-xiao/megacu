@@ -568,6 +568,9 @@ Mode 4: `hybrid`
 ### How Megacu Borrows From Event Tensor
 
 - Make event tensors first-class, not ad hoc scalar semaphores.
+- Represent Event Tensor's middle node natively as a sync-only task: it has no
+  operator body, returns a task reference, and can join, split, reshape, or
+  trigger readiness between operator tasks.
 - Support coordinate maps from task coordinates to event coordinates.
 - Support symbolic/bounded shapes for dynamic batch sizes.
 - Keep static and dynamic scheduling as separate transformations/policies.

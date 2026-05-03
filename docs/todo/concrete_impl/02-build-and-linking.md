@@ -42,15 +42,16 @@ named `gemm_ar` and it does not contain example-specific policy.
 
 ## OrchTarget
 
-Each Megacu example variant links one direct target:
+Each Megacu example links one direct target. PR #4 keeps only the phased
+GEMM+AllReduce target active:
 
 ```cmake
 megacu_add_orchestrate_target(
-  TARGET cuda_nvshmem_gemm_allreduce_overlap
+  TARGET cuda_nvshmem_gemm_allreduce_phased
   CONFIGURE_TARGET cuda_nvshmem_static
-  SOURCES gemm_allreduce_overlap_orchestrate.cc
-  OPERATORS megacu_cuda_gemm_allreduce_overlap_f32
-  CAPABILITY cuda_nvshmem_gemm_allreduce_overlap_capability)
+  SOURCES gemm_allreduce_phased_orchestrate.cc
+  OPERATORS megacu_cuda_gemm_allreduce_phased_f32
+  CAPABILITY cuda_nvshmem_gemm_allreduce_phased_capability)
 ```
 
 The `OrchTarget` source supplies:
@@ -76,7 +77,7 @@ For the first CUDA+NVSHMEM configuration:
 ```text
 cuda_nvshmem_static
   -> annotated runtime dispatcher
-  -> static phased/overlap scheduler runtime
+  -> explicit ASAP scheduler runtime
   -> CUDA platform validation
   -> NVSHMEM backend validation and primitive wrappers
   -> common target runtime
@@ -87,11 +88,6 @@ cuda_nvshmem_gemm_allreduce_phased
   -> phased Megacu native operator
   -> common GEMM+AllReduce problem/workspace helpers
 
-cuda_nvshmem_gemm_allreduce_overlap
-  -> cuda_nvshmem_static
-  -> overlap OrchTarget source
-  -> overlap Megacu native operator
-  -> common GEMM+AllReduce problem/workspace helpers
 ```
 
 Golden and baseline libraries are test/example dependencies. The Megacu

@@ -23,5 +23,5 @@ docker run --rm \
       -DMEGACU_ENABLE_NVSHMEM_TESTS=ON && \
     cmake --build '${build_dir}' && \
     ctest --test-dir '${build_dir}' \
-      -R 'cuda_orchestrate_smoke|cuda_multicard_smoke|nvshmem_two_rank_smoke' \
+      -R 'cuda_gemm_allreduce_correctness|nvshmem_two_rank_gemm_ar_correctness_(golden|megacu)' \
       --output-on-failure"

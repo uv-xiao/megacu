@@ -12,10 +12,6 @@ in-progress drafts should be removed.
   source-reading policy, GitHub workflow skills, and human-agent workflow.
 - `docs/design/megacu_cpp_cuda_layer.md` - picked Megacu device-native layer
   direction and current stable boundaries.
-
-## Moved Back To In-Progress
-
-- The first implementation architecture was moved back out of `docs/design/`
-  during PR #3 because the previous design described a compiler-like
-  materialization path that is no longer accepted. The active redesign now
-  lives at `docs/in_progress/design/architecture/`.
+- `docs/design/runtime_linked_device_native_layer/` - implemented
+  runtime-linked dispatcher/scheduler/platform/backend architecture and the
+  CUDA+NVSHMEM GEMM+AllReduce proof.

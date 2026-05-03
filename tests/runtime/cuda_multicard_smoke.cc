@@ -26,7 +26,6 @@ struct device_allocation {
   void *c = nullptr;
   void *partial = nullptr;
   void *events = nullptr;
-  void *scratch = nullptr;
   void *marker = nullptr;
 };
 
@@ -71,7 +70,6 @@ device_allocation allocate_device(int device) {
   require_cuda(cudaMalloc(&allocation.c, kBytes));
   require_cuda(cudaMalloc(&allocation.partial, kBytes));
   require_cuda(cudaMalloc(&allocation.events, kBytes));
-  require_cuda(cudaMalloc(&allocation.scratch, kBytes));
   require_cuda(cudaMalloc(&allocation.marker, sizeof(std::uint32_t)));
   return allocation;
 }
@@ -79,7 +77,6 @@ device_allocation allocate_device(int device) {
 void free_device(device_allocation allocation) {
   require_cuda(cudaSetDevice(allocation.device));
   require_cuda(cudaFree(allocation.marker));
-  require_cuda(cudaFree(allocation.scratch));
   require_cuda(cudaFree(allocation.events));
   require_cuda(cudaFree(allocation.partial));
   require_cuda(cudaFree(allocation.c));
@@ -104,67 +101,27 @@ void enable_peer_access_if_available(int from, int to) {
   require_cuda(status);
 }
 
-gemm_ar_workspace workspace_for(device_allocation allocation,
-                                megacu::backend_id backend,
-                                megacu::session_id session) {
-  return {
-      .a = {
-          .data = allocation.a,
-          .bytes = static_cast<std::int64_t>(kBytes),
-          .type = megacu::dtype::f32},
-      .b = {
-          .data = allocation.b,
-          .bytes = static_cast<std::int64_t>(kBytes),
-          .type = megacu::dtype::f32},
-      .partial = {
-          .buffer = {
-              .data = allocation.partial,
-              .bytes = static_cast<std::int64_t>(kBytes),
-              .backend = backend,
-              .session = session},
-          .type = megacu::dtype::f32},
-      .c = {
-          .data = allocation.c,
-          .bytes = static_cast<std::int64_t>(kBytes),
-          .type = megacu::dtype::f32},
-      .scratch = megacu::span<std::byte>{
-          static_cast<std::byte *>(allocation.scratch),
-          kBytes}};
-}
-
-megacu::event_storage_view events_for(device_allocation allocation,
-                                      megacu::backend_id backend,
-                                      megacu::session_id session) {
-  return {
-      .buffer = {
-          .data = allocation.events,
-          .bytes = static_cast<std::int64_t>(kBytes),
-          .backend = backend,
-          .session = session}};
-}
-
 megacu::status orchestrate_on(device_allocation allocation,
-                              int logical_pe,
-                              megacu::backend_id backend,
-                              megacu::session_id session) {
-  megacu::cuda::launch_view launch{
-      .stream = allocation.stream,
-      .device_ordinal = allocation.device};
-  megacu::nvshmem::team_view team{
-      .team = nullptr,
-      .team_my_pe = 0,
-      .team_n_pes = 1,
-      .world_my_pe = logical_pe,
-      .world_n_pes = 2,
-      .cuda_device_ordinal = allocation.device,
-      .backend = backend,
-      .session = session};
+                              int logical_pe) {
+  gemm_ar_driver driver{
+      .launch = {
+          .stream = allocation.stream,
+          .device_ordinal = allocation.device},
+      .team = {
+          .team = nullptr,
+          .team_my_pe = 0,
+          .team_n_pes = 1,
+          .world_my_pe = logical_pe,
+          .world_n_pes = 2,
+          .cuda_device_ordinal = allocation.device}};
 
-  return cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-      workspace_for(allocation, backend, session),
-      events_for(allocation, backend, session),
-      launch,
-      team,
+  return cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+      driver,
+      static_cast<float const *>(allocation.a),
+      static_cast<float const *>(allocation.b),
+      static_cast<float *>(allocation.partial),
+      static_cast<float *>(allocation.c),
+      allocation.events,
       small_problem());
 }
 
@@ -207,12 +164,8 @@ int main() {
   require_cuda(cudaStreamSynchronize(second.stream));
   assert(host_marker == 0x31313131);
 
-  megacu::backend_id backend{1};
-  megacu::session_id session{7};
-  assert(orchestrate_on(first, 0, backend, session).code ==
-         megacu::status_code::ok);
-  assert(orchestrate_on(second, 1, backend, session).code ==
-         megacu::status_code::ok);
+  assert(orchestrate_on(first, 0).code == megacu::status_code::ok);
+  assert(orchestrate_on(second, 1).code == megacu::status_code::ok);
 
   free_device(second);
   free_device(first);

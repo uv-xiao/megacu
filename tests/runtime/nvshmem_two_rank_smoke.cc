@@ -89,11 +89,9 @@ int main(int argc, char **argv) {
   void *a = nullptr;
   void *b = nullptr;
   void *c = nullptr;
-  void *scratch = nullptr;
   require_cuda(cudaMalloc(&a, kABytes));
   require_cuda(cudaMalloc(&b, kBBytes));
   require_cuda(cudaMalloc(&c, kCBytes));
-  require_cuda(cudaMalloc(&scratch, 128));
 
   void *partial = nvshmem_malloc(kPartialBytes);
   void *events = nvshmem_malloc(128);
@@ -136,52 +134,15 @@ int main(int argc, char **argv) {
       .compute_ctas = 2,
       .comm_ctas = 1};
 
-  megacu::backend_id backend{1};
-  megacu::session_id session{7};
-
-  gemm_ar_workspace workspace{
-      .a = {
-          .data = a,
-          .bytes = static_cast<std::int64_t>(kABytes),
-          .type = megacu::dtype::f32},
-      .b = {
-          .data = b,
-          .bytes = static_cast<std::int64_t>(kBBytes),
-          .type = megacu::dtype::f32},
-      .partial = {
-          .buffer = {
-              .data = partial,
-              .bytes = static_cast<std::int64_t>(kPartialBytes),
-              .backend = backend,
-              .session = session},
-          .type = megacu::dtype::f32},
-      .c = {
-          .data = c,
-          .bytes = static_cast<std::int64_t>(kCBytes),
-          .type = megacu::dtype::f32},
-      .scratch = megacu::span<std::byte>{
-          static_cast<std::byte *>(scratch),
-          128}};
-
-  megacu::event_storage_view event_storage{
-      .buffer = {
-          .data = events,
-          .bytes = 128,
-          .backend = backend,
-          .session = session}};
-
-  megacu::cuda::launch_view launch{
-      .stream = stream,
-      .device_ordinal = device};
-  megacu::nvshmem::team_view team{
-      .team = nullptr,
-      .team_my_pe = pe,
-      .team_n_pes = npes,
-      .world_my_pe = pe,
-      .world_n_pes = npes,
-      .cuda_device_ordinal = device,
-      .backend = backend,
-      .session = session};
+  gemm_ar_driver driver{
+      .launch = {.stream = stream, .device_ordinal = device},
+      .team = {
+          .team = nullptr,
+          .team_my_pe = pe,
+          .team_n_pes = npes,
+          .world_my_pe = pe,
+          .world_n_pes = npes,
+          .cuda_device_ordinal = device}};
 
   if (std::strcmp(mode, "golden_phased") == 0) {
     auto golden_status = golden_phased_multi_card_gemm_allreduce_f32(
@@ -196,21 +157,17 @@ int main(int argc, char **argv) {
     }
     assert(golden_status.code == golden_status_code::ok);
     check_expected("golden phased", pe, c, stream);
-  } else if (std::strcmp(mode, "golden_overlap") == 0) {
-    auto golden_status = golden_overlap_multi_card_gemm_allreduce_f32(
-        golden_workspace, golden_launch, golden_team, golden_problem);
-    assert(golden_status.code == golden_status_code::ok);
-    check_expected("golden overlap", pe, c, stream);
   } else if (std::strcmp(mode, "megacu_phased") == 0) {
     auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
-        workspace, event_storage, launch, team, correctness_problem());
+        driver,
+        static_cast<float const *>(a),
+        static_cast<float const *>(b),
+        static_cast<float *>(partial),
+        static_cast<float *>(c),
+        events,
+        correctness_problem());
     assert(status.code == megacu::status_code::ok);
     check_expected("megacu phased", pe, c, stream);
-  } else if (std::strcmp(mode, "megacu_overlap") == 0) {
-    auto status = cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-        workspace, event_storage, launch, team, correctness_problem());
-    assert(status.code == megacu::status_code::ok);
-    check_expected("megacu overlap", pe, c, stream);
   } else {
     assert(false && "unknown nvshmem smoke mode");
   }
@@ -218,7 +175,6 @@ int main(int argc, char **argv) {
   nvshmem_free(events);
   nvshmem_free(partial);
 
-  require_cuda(cudaFree(scratch));
   require_cuda(cudaFree(c));
   require_cuda(cudaFree(b));
   require_cuda(cudaFree(a));

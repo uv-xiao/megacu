@@ -1,48 +1,51 @@
 # CUDA+NVSHMEM GEMM+AllReduce
 
-This example family validates Megacu's CUDA+NVSHMEM path with one logical
-GEMM+AllReduce design and two scheduling variants.
+This example family validates the PR #4 Megacu CUDA+NVSHMEM path with a tiny
+phased GEMM+AllReduce target.
 
 ## Layout
 
 ```text
-common/             shared descriptors and runtime helpers
+common/             shared direct target signature and runtime helper
 golden/             Megacu-free golden and baseline entrypoints
 phased/baseline/    phased pure CUDA/NVSHMEM baseline ownership point
 phased/megacu/      phased Megacu target
-overlap/baseline/   overlap pure CUDA/NVSHMEM baseline ownership point
-overlap/megacu/     co-resident persistent Megacu target
 ```
 
 ## Execution
 
 ```text
-GEMM tiles produce partial C
+host calls cuda_nvshmem_gemm_allreduce_phased_orchestrate(driver, raw args...)
         |
         v
-tile-ready events release communication work
+orchestrate submits GEMM and AllReduce operators with raw args
         |
         v
-single-card local reduction or two-card device-side NVSHMEM reduction
+sync-only readiness task carries scheduler::depends_on(gemm)
+        |
+        v
+AllReduce carries scheduler::depends_on(sync)
+        |
+        v
+linked CUDA/NVSHMEM phased native path runs one fused Megacu launcher
 ```
 
-The phased Megacu variant allows reduction work to consume ready tiles without
-requiring a co-resident persistent launch. The overlap Megacu variant uses a
-persistent schedule with compute and communication workers in one residency
-group so blocking communication waits have a progress guard.
+The active Megacu proof is phased only. It covers single-GPU CUDA execution and
+two-GPU device-side NVSHMEM execution when the NVSHMEM test option is enabled.
 
 ## Usage
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --target cuda_nvshmem_gemm_allreduce_phased
-cmake --build build --target cuda_nvshmem_gemm_allreduce_overlap
-MEGACU_TEST_CUDA_DEVICE=6 \
-  ctest --test-dir build -R 'cuda_gemm_allreduce_correctness|nvshmem_two_rank_smoke' --output-on-failure
+ctest --test-dir build -R 'cuda_gemm_allreduce_correctness' --output-on-failure
 ```
 
-Two-card Docker validation uses the shared platform/backend script:
+Two-GPU NVSHMEM validation requires `MEGACU_ENABLE_NVSHMEM_TESTS=ON` and a
+working `nvshmrun` installation:
 
 ```sh
-tools/cuda_nvshmem/run_two_card_docker.sh
+cmake -S . -B build-nvshmem -DMEGACU_ENABLE_NVSHMEM_TESTS=ON
+cmake --build build-nvshmem --target megacu_nvshmem_two_rank_smoke
+ctest --test-dir build-nvshmem -R 'nvshmem_two_rank_gemm_ar_correctness_(golden|megacu)' --output-on-failure
 ```

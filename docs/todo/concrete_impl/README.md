@@ -14,6 +14,13 @@ They are not a stable design and they are not a description of accepted
 implemented behavior. They are implementation-facing requirements for replacing
 the current compiler-like path with general runtime-linked components.
 
+This README is the current TODO contract. The child files were moved from the
+older concrete-implementation draft and may still contain stale names such as
+fixed direct ABIs, `participant_attrs`, or platform/backend runtime views. Any
+future implementation pass must update those child files to match the
+architecture in `docs/design/runtime_linked_device_native_layer/` before using
+them as a plan.
+
 ## Generality Requirements
 
 Future concrete implementation work must not treat the PR #4 tiny example as
@@ -22,18 +29,29 @@ scope, it must satisfy these requirements:
 
 - The shared runtime components must be reusable `ConfigureTarget` components,
   not GEMM+AllReduce-only code moved into shared directories.
-- Problem-specific code belongs in `OrchTarget` example files: direct ABI,
-  problem/workspace types, participant annotations, native operator symbols,
-  and example-local validation.
-- Dispatcher APIs must be driven by typed participant annotations plus runtime
-  problem/team views. A dispatcher may have platform/backend-specific
+- Problem-specific code belongs in `OrchTarget` example files: argument schema,
+  workload orchestration code, operator schemas, component attributes, native
+  operator symbols, and example-local validation.
+- Workload ABI arguments must be configurable by target schema. Future concrete
+  implementation must not standardize fixed arguments such as workspace,
+  events, CUDA launch view, NVSHMEM team view, and problem.
+- Platform/backend resources must live in component-owned driver resources, not
+  Megacu core runtime-view fields or target arguments.
+- Dispatcher APIs must be driven by submitted tasks and typed
+  component-provided attributes. A dispatcher may have platform/backend-specific
   algorithms, but it must not depend on example names, debug strings, or
   hard-coded GEMM+AllReduce roles.
 - Scheduler APIs must consume dispatch state and linked operator capabilities,
-  not recompute rank/peer placement or depend on one example's tensor layout.
+  plus task dependencies represented as explicit scheduler attributes. They
+  must not infer dependencies from input/output/inout declarations, tensor
+  lookup, pointer aliasing, or one example's tensor layout, and must not
+  recompute rank/peer placement. Missing dependency attributes are target-author
+  errors; Megacu should not add fallback dependency inference.
 - Platform and backend validation must be independent of the example workload.
   CUDA and NVSHMEM code may be first, but their public views must not encode
   GEMM+AllReduce assumptions.
+- Operator boundaries must support configurable argument schemas rather than
+  one global fixed native signature.
 - CMake target helpers must reject unknown component names and unsupported
   combinations without silently falling back to example-specific defaults.
 - Verification must include at least one nontrivial reuse check: either a
@@ -45,27 +63,20 @@ scope, it must satisfy these requirements:
 
 ## Current Correction
 
-The checked-in implementation still contains transitional files such as:
-
-- `include/megacu/program.h`
-- `include/megacu/detail/program_ir.h`
-- `include/megacu/detail/materialize.h`
-- `include/megacu/detail/target_metadata.h`
-- `src/program/materialize.cc`
-- metadata-section builders under `src/dispatcher/`, `src/scheduler/`,
-  `src/lowering/`, and `src/backends/nvshmem/`
-
-Those files are useful evidence of what must be replaced, but they are not the
-intended implementation contract. The intended implementation is:
+PR #4 removed the compiler-like program/materializer path from the active
+implementation. Future concrete implementation should build on the
+runtime-linked contract:
 
 ```text
-direct OrchTarget ABI
-  -> typed runtime views and target capability
-  -> virtual participant annotations from the OrchTarget
-  -> ConfigureTarget runtime dispatcher maps participants/problem/team
-  -> scheduler consumes dispatch state and chooses progress actions
-  -> platform/backend validate native resources
-  -> linked native CUDA/NVSHMEM operators run
+OrchTarget entry
+  -> driver plus target argument schema
+  -> submitted tasks with raw arguments and explicit dependency attributes
+  -> component-provided attributes from the OrchTarget
+  -> ConfigureTarget runtime dispatcher maps tasks/resources
+  -> scheduler consumes dispatch state and explicit dependency attributes
+  -> platform/backend expose thin driver facts and device primitives
+  -> one Megacu mega-kernel uses linked scheduler, dispatcher, backend, and
+     operator-table APIs
 ```
 
 ## Scope
@@ -81,8 +92,7 @@ This directory owns concrete implementation documentation for:
 
 It must stay aligned with:
 
-- `docs/in_progress/design/architecture/`;
-- `docs/in_progress/runtime_linked_megacu_slice.md`;
+- `docs/design/runtime_linked_device_native_layer/`;
 - example organization rules under `.agents/rules/example-organization.md`.
 
 ## Reading Order
@@ -91,7 +101,7 @@ It must stay aligned with:
    remove or repurpose.
 2. `02-build-and-linking.md`: concrete CMake target shape for
    `ConfigureTarget` and `OrchTarget`.
-3. `03-runtime-call-path.md`: call-by-call runtime path for phased and overlap
+3. `03-runtime-call-path.md`: call-by-call runtime path for phased
    GEMM+AllReduce.
 4. `04-component-contracts.md`: concrete implementation contracts per
    component.

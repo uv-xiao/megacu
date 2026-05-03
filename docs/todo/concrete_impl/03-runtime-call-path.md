@@ -22,39 +22,11 @@ user/test/framework code
   -> ConfigureTarget dispatcher maps attrs + problem + team to dispatch_state
        team_n_pes == 1: local tile work, no remote peer work
        team_n_pes == 2: local tile work plus peer reduction work
-  -> phased scheduler consumes dispatch_state
-       permits reduction tile after matching GEMM tile readiness
+  -> ASAP scheduler consumes explicit dependency/event readiness
+       permits reduction work after matching GEMM tile readiness
        does not require co-resident blocking progress
   -> scheduler calls linked phased operator symbol
   -> operator uses CUDA/NVSHMEM backend primitives as needed
-  -> status returns through target runtime
-```
-
-## Overlap Orchestrate Call
-
-```cpp
-cuda_nvshmem_gemm_allreduce_overlap_orchestrate(
-    workspace, events, launch, team, problem);
-```
-
-Concrete call path:
-
-```text
-user/test/framework code
-  -> cuda_nvshmem_gemm_allreduce_overlap_orchestrate(...)
-  -> make runtime_context from launch/team/events/capability
-  -> target runtime validates capability and common runtime views
-  -> example supplies GEMM producer + reduction consumer participant attrs
-       reduction consumer may block on device-side NVSHMEM waits
-  -> ConfigureTarget dispatcher maps attrs + problem + team to dispatch_state
-       emits local/peer tile work
-       emits co-residency groups for producer/consumer progress
-  -> overlap scheduler consumes dispatch_state
-       validates co-residency groups against scheduler/operator capability
-       asks CUDA platform to validate persistent/cooperative launch feasibility
-  -> scheduler calls linked overlap operator symbol
-  -> operator keeps compute and communication participants live together
-  -> backend device primitives perform NVSHMEM signal/wait/reduction
   -> status returns through target runtime
 ```
 

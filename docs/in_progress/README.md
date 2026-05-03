@@ -13,6 +13,5 @@ Rules:
 
 ## Active Tasks
 
-- `docs/in_progress/runtime_linked_megacu_slice.md` - implement the
-  runtime-linked Megacu slice for the GEMM+AllReduce phased and overlap
-  targets.
+No active task files are currently checked in. Completed runtime-linked design
+content has been promoted to `docs/design/runtime_linked_device_native_layer/`.

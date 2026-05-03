@@ -3,11 +3,10 @@
 This is the stable entry point for the picked Megacu device-native layer
 direction.
 
-The first implementation contract was moved back to
-`docs/in_progress/design/architecture/` during PR
-#3 because the previous implementation-ready design overfit a compiler-like
-materialization path. That active workstream now owns the runtime-linking
-correction.
+The first implementation contract is the runtime-linked device-native layer in
+`docs/design/runtime_linked_device_native_layer/`. It replaces the rejected
+compiler-like materialization path with linked dispatcher, scheduler, platform,
+backend, target runtime, and native operator code.
 
 ## Accepted Direction
 
@@ -40,7 +39,7 @@ The current design assumes three implementation surfaces:
 - **Runtime C++/CUDA**: call the compiled orchestration.
 
 This preserves the thin native hot path while keeping packaging outside the
-runtime process. The active implementation redesign rejects a required
+runtime process. The implemented runtime-linked path rejects a required
 materialization/lowering pipeline.
 
 ## Source Context

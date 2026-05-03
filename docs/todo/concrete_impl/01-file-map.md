@@ -55,9 +55,7 @@ implementation dependencies:
 | `examples/cuda_nvshmem/gemm_allreduce/common/` | Problem/workspace types, direct ABI declarations, participant annotation helpers, shared example-only validation. |
 | `examples/cuda_nvshmem/gemm_allreduce/golden/` | Expected local GEMM results only. Must not be the implementation called by Megacu targets. |
 | `examples/cuda_nvshmem/gemm_allreduce/phased/baseline/` | Pure CUDA/NVSHMEM phased implementation for single-card and two-card runs. |
-| `examples/cuda_nvshmem/gemm_allreduce/overlap/baseline/` | Pure CUDA/NVSHMEM overlap implementation for single-card and two-card runs. |
 | `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/` | Megacu phased `OrchTarget`, participant annotations, linked phased operator symbol. |
-| `examples/cuda_nvshmem/gemm_allreduce/overlap/megacu/` | Megacu overlap `OrchTarget`, participant annotations, linked overlap operator symbol. |
 
 ## Concrete Ownership Rule
 

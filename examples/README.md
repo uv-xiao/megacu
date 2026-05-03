@@ -21,8 +21,6 @@ examples/cuda_nvshmem/gemm_allreduce/
   golden/
   phased/baseline/
   phased/megacu/
-  overlap/baseline/
-  overlap/megacu/
 ```
 
 Operational assets are shared at the platform/backend level by default:
