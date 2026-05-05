@@ -22,6 +22,13 @@ docker run --rm \
       -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DMEGACU_ENABLE_NVSHMEM_TESTS=ON && \
     cmake --build '${build_dir}' && \
+    MEGACU_BUILD_DIR='${build_dir}' tools/cuda_nvshmem/run_direct.sh && \
+    OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+      MEGACU_BUILD_DIR='${build_dir}' MEGACU_MPI_NP=2 \
+      tools/cuda_nvshmem/run_mpi.sh && \
+    MEGACU_BUILD_DIR='${build_dir}' MEGACU_SKIP_BUILD=1 \
+      torchrun --standalone --nproc_per_node=2 \
+      tools/cuda_nvshmem/run_torch.py && \
     ctest --test-dir '${build_dir}' \
       -R 'cuda_gemm_allreduce_correctness|nvshmem_two_rank_gemm_ar_correctness_(golden|megacu)' \
       --output-on-failure"

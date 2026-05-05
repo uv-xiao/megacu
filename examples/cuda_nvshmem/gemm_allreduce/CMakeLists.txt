@@ -152,6 +152,70 @@ add_test(
   NAME runtime_components_contracts
   COMMAND megacu_runtime_components_contracts)
 
+add_executable(megacu_runtime_execution_models_contracts
+  ${PROJECT_SOURCE_DIR}/tests/build/runtime_execution_models_contracts.cc)
+target_link_libraries(megacu_runtime_execution_models_contracts PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME runtime_execution_models_contracts
+  COMMAND megacu_runtime_execution_models_contracts)
+
+add_executable(megacu_runtime_strategy_selection_contracts
+  ${PROJECT_SOURCE_DIR}/tests/build/runtime_strategy_selection_contracts.cc)
+target_link_libraries(megacu_runtime_strategy_selection_contracts PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME runtime_strategy_selection_contracts
+  COMMAND megacu_runtime_strategy_selection_contracts)
+
+add_executable(megacu_adapter_contracts
+  ${PROJECT_SOURCE_DIR}/tests/build/adapter_contracts.cc)
+target_link_libraries(megacu_adapter_contracts PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME adapter_local_shape_contract
+  COMMAND megacu_adapter_contracts)
+
+add_test(
+  NAME mpi_adapter_env_contract
+  COMMAND bash -lc
+          "MEGACU_ADAPTER_CONTRACT_MODE=mpi OMPI_COMM_WORLD_RANK=1 OMPI_COMM_WORLD_SIZE=2 OMPI_COMM_WORLD_LOCAL_RANK=1 $<TARGET_FILE:megacu_adapter_contracts>")
+
+add_test(
+  NAME mpi_adapter_requires_local_rank
+  COMMAND bash -lc
+          "! MEGACU_ADAPTER_CONTRACT_MODE=mpi OMPI_COMM_WORLD_RANK=1 OMPI_COMM_WORLD_SIZE=2 $<TARGET_FILE:megacu_adapter_contracts>")
+
+add_test(
+  NAME torch_adapter_env_contract
+  COMMAND bash -lc
+          "MEGACU_ADAPTER_CONTRACT_MODE=torch RANK=1 WORLD_SIZE=2 LOCAL_RANK=1 $<TARGET_FILE:megacu_adapter_contracts>")
+
+add_test(
+  NAME cuda_nvshmem_script_layout
+  COMMAND bash -lc
+          "test -x ${PROJECT_SOURCE_DIR}/tools/cuda_nvshmem/run_direct.sh && test -x ${PROJECT_SOURCE_DIR}/tools/cuda_nvshmem/run_mpi.sh && test -x ${PROJECT_SOURCE_DIR}/tools/cuda_nvshmem/run_torch.py")
+
+if(MEGACU_HAS_CUDA_LANGUAGE)
+  add_executable(megacu_runtime_device_persistent_contract
+    ${PROJECT_SOURCE_DIR}/tests/build/runtime_device_persistent_contract.cu)
+  target_link_libraries(megacu_runtime_device_persistent_contract PRIVATE
+    megacu_headers
+    CUDA::cudart)
+  target_compile_options(megacu_runtime_device_persistent_contract PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+
+  add_test(
+    NAME runtime_device_persistent_contract
+    COMMAND megacu_runtime_device_persistent_contract)
+endif()
+
 add_test(
   NAME megacu_native_does_not_call_golden
   COMMAND bash -lc
@@ -175,7 +239,7 @@ add_test(
 add_test(
   NAME megakernel_running_logic_is_common
   COMMAND bash -lc
-          "grep -R \"struct entry\" ${PROJECT_SOURCE_DIR}/include/megacu/runtime && grep -R \"struct explicit_asap\" ${PROJECT_SOURCE_DIR}/include/megacu/scheduler && grep -R \"struct tile_grid\" ${PROJECT_SOURCE_DIR}/include/megacu/dispatcher && ! grep -R \"gemm_allreduce_program\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "grep -R \"struct block_tile_runtime\" ${PROJECT_SOURCE_DIR}/include/megacu/runtime && grep -R \"struct explicit_asap\" ${PROJECT_SOURCE_DIR}/include/megacu/scheduler && grep -R \"struct tile_grid\" ${PROJECT_SOURCE_DIR}/include/megacu/dispatcher && ! grep -R \"gemm_allreduce_program\\|runtime::device::entry\\|device_entry.cuh\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu ${PROJECT_SOURCE_DIR}/include/megacu/runtime")
 
 add_test(
   NAME nvshmem_event_tensor_is_backend_code
@@ -191,6 +255,16 @@ add_test(
   NAME megacu_event_tensor_is_not_scheduler_attr
   COMMAND bash -lc
           "! grep -R --include='*.h' --include='*.cc' --include='*.cu' \"scheduler::event_shape\\|scheduler_event_shape\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce ${PROJECT_SOURCE_DIR}/tests/build")
+
+add_test(
+  NAME runtime_strategy_selection_contracts_examples_do_not_call_scheduler_run
+  COMMAND bash -lc
+          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' --include='*.cuh' \"scheduler\\.run\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/common ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+
+add_test(
+  NAME megacu_event_tensor_uses_decoupled_api
+  COMMAND bash -lc
+          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' \"runtime::events\\|cuda_nvshmem::events\\|event_publish\\|event_acquire\\|event_join\\|event_publish_attrs\\|event_acquire_attrs\\|event_join_attrs\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/common ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu ${PROJECT_SOURCE_DIR}/tests/build")
 
 add_executable(megacu_direct_orchestrate_smoke
   ${PROJECT_SOURCE_DIR}/tests/runtime/direct_orchestrate_smoke.cc)

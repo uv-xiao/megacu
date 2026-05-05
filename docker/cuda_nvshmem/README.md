@@ -6,10 +6,16 @@ communication backend.
 Shared CUDA+NVSHMEM images should live here by default. Use an example
 subdirectory only when that example needs a unique image or container asset.
 
+## Dependencies
+
+MPI, NVSHMEM, and PyTorch are required PR dependencies in this Docker image.
+The shared image installs Open MPI from apt and installs both NVSHMEM and
+PyTorch from pip for adapter contract validation.
+
 ## Examples
 
 - `Dockerfile`: shared CUDA 12.8 development image with Open MPI, Ninja, and
-  NVSHMEM host packages for CUDA+NVSHMEM validations.
+  required NVSHMEM and PyTorch packages for CUDA+NVSHMEM validations.
 
 Matching paths:
 

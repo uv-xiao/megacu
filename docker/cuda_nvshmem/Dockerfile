@@ -16,7 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ${NVSHMEM_PACKAGE} \
   && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir nvidia-nvshmem-cu12==3.6.5 \
+RUN python3 -m pip install --no-cache-dir \
+    nvidia-nvshmem-cu12==3.6.5 \
+    torch \
   && mkdir -p /opt/nvidia \
   && NVSHMEM_PY_HOME="$(python3 -c 'import nvidia, os; print(next(os.path.join(root, "nvshmem") for root in nvidia.__path__ if os.path.isdir(os.path.join(root, "nvshmem"))))')" \
   && ln -s "${NVSHMEM_PY_HOME}" /opt/nvidia/nvshmem
