@@ -45,9 +45,9 @@ bool has_dependency(megacu::runtime::linked_task const &task) {
   return false;
 }
 
-bool has_event_join(megacu::runtime::linked_task const &task) {
+bool has_event_wait(megacu::runtime::linked_task const &task) {
   for (auto attr : task.attributes.entries()) {
-    if (attr.kind == megacu::runtime::attr_kind::event_join) {
+    if (attr.kind == megacu::runtime::attr_kind::event_wait) {
       return true;
     }
   }
@@ -132,26 +132,29 @@ int main() {
   auto sync_phase = megacu::runtime::make_phase(
       runtime_driver, megacu::runtime::progress_model::asap);
   auto ready_events = sync_phase.event_tensor(megacu::runtime::attrs(
-      megacu::runtime::events::shape(2, 3),
-      megacu::cuda_nvshmem::events::symmetric_i32_storage(ready),
-      megacu::cuda_nvshmem::events::team_scope()));
+      megacu::runtime::event_tensor::shape(2, 3),
+      megacu::runtime::event_tensor::wait_count(1),
+      megacu::cuda_nvshmem::event_tensor::symmetric_storage(ready),
+      megacu::cuda_nvshmem::event_tensor::scope::team{}));
   auto sync_producer = sync_phase.submit(
       megacu::runtime::op("first", &first), &sync_log,
-      megacu::runtime::attrs(megacu::runtime::events::publish(ready_events)));
+      megacu::runtime::attrs(
+          megacu::runtime::event_tensor::notify(ready_events)));
   auto sync_only = sync_phase.sync(megacu::runtime::attrs(
       megacu::runtime::scheduler::depends_on(sync_producer),
-      megacu::runtime::events::join(ready_events)));
+      megacu::runtime::event_tensor::wait(ready_events)));
   sync_phase.submit(
       megacu::runtime::op("second", &second), &sync_log,
-      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(sync_only),
-                             megacu::runtime::events::acquire(ready_events)));
+      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(sync_only)));
 
   auto sync_tasks = sync_phase.tasks();
   assert(sync_tasks.size() == 3);
   assert(sync_tasks[1].kind == megacu::runtime::task_kind::sync_only);
   assert(sync_tasks[1].raw_arg_count == 0);
   assert(has_dependency(sync_tasks[1]));
-  assert(has_event_join(sync_tasks[1]));
+  assert(has_event_wait(sync_tasks[1]));
+  assert(has_dependency(sync_tasks[2]));
+  assert(!has_event_wait(sync_tasks[2]));
   megacu::runtime::dispatcher::dispatch_state sync_dispatch;
   assert(megacu::runtime::dispatcher::map_explicit_attrs(
              sync_dispatch, sync_tasks, sync_phase.event_tensors())
@@ -159,16 +162,16 @@ int main() {
   assert(sync_dispatch.sync_task_count == 1);
   assert(sync_dispatch.event_tensor_count == 1);
   assert(sync_dispatch.sync_event_count == 6);
-  assert(sync_dispatch.event_publish_attrs == 1);
-  assert(sync_dispatch.event_acquire_attrs == 1);
-  assert(sync_dispatch.event_join_attrs == 1);
+  assert(sync_dispatch.event_notify_attrs == 1);
+  assert(sync_dispatch.event_wait_attrs == 1);
+  assert(sync_dispatch.event_trigger_attrs == 0);
   assert(sync_phase.run().code == megacu::status_code::ok);
   assert(sync_log.first == 1);
   assert(sync_log.second == 1);
   assert(sync_log.observed_first_before_second == 1);
 
   auto unsupported_phase = megacu::runtime::make_phase(
-      runtime_driver, megacu::runtime::progress_model::co_resident_persistent);
+      runtime_driver, megacu::runtime::progress_model::device_persistent);
   unsupported_phase.submit(megacu::runtime::op("first", &first), &log);
   assert(unsupported_phase.run().code == megacu::status_code::unsupported);
 

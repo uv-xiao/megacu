@@ -7,11 +7,12 @@ This example owns the phased Megacu target:
 - host call shape: `driver + raw target arguments`
 
 The orchestrate entrypoint constructs one Megacu runtime phase from small
-operator submissions. GEMM is submitted first, a sync-only readiness task is
-submitted second, and AllReduce depends on that sync task. The target runtime
+operator submissions. GEMM is submitted first and notifies EventTensor
+readiness, a sync-only task is submitted second and waits on that EventTensor,
+and AllReduce depends on that sync task. The target runtime
 validates the submitted graph and lowers this PR #4 proof to one native phased
 Megacu launcher instead of launching each submitted operator from the host.
-That launcher links the common device-entry pieces: the explicit ASAP scheduler
+That launcher links the common runtime-strategy pieces: the explicit ASAP scheduler
 under `include/megacu/scheduler/`, the tile-grid dispatcher under
 `include/megacu/dispatcher/`, the generic CUDA mega-kernel shell under
 `include/megacu/platform/cuda/`, and the NVSHMEM event tensor handler under
@@ -131,7 +132,7 @@ This example proves the phased runtime-linked target ABI and numeric
 correctness. It does not infer dependencies from pointers; missing dependency
 attributes are the target author's responsibility. It is intentionally tiny:
 the linked CUDA path composes GEMM and AllReduce operator task bodies with
-event tensor publish/acquire handlers into one mega-kernel for the authored
-GEMM -> event tensor sync-only readiness -> AllReduce task graph. The same
+EventTensor notify/wait handlers into one mega-kernel for the authored
+GEMM -> EventTensor sync-only readiness -> AllReduce task graph. The same
 code path targets both 1-host/1-GPU and 1-host/2-GPU; only the backend
-lowering changes how event tensor acquire reads peer readiness and data.
+lowering changes how EventTensor wait reads peer readiness and data.

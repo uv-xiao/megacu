@@ -16,7 +16,7 @@ struct event_tensor_i32 {
   int my_pe = 0;
   int n_pes = 1;
 
-  __device__ void publish(std::int64_t tile_id, int ready_value) const {
+  __device__ void notify(std::int64_t tile_id, int ready_value) const {
     megacu::cuda::device::fence_system();
     auto slot = static_cast<std::int64_t>(my_pe) * tiles + tile_id;
     for (int pe = 0; pe < n_pes; ++pe) {
@@ -30,7 +30,7 @@ struct event_tensor_i32 {
     }
   }
 
-  __device__ void acquire(std::int64_t tile_id, int ready_value) const {
+  __device__ void wait(std::int64_t tile_id, int ready_value) const {
     for (int pe = 0; pe < n_pes; ++pe) {
       auto slot = static_cast<std::int64_t>(pe) * tiles + tile_id;
       megacu::cuda::device::wait_ready(events, slot, ready_value);
@@ -40,20 +40,20 @@ struct event_tensor_i32 {
 
 struct task_event_tensor_i32 {
   event_tensor_i32 event_tensor;
-  int publish_task = -1;
-  int acquire_task = -1;
+  int notify_task = -1;
+  int wait_task = -1;
 
   template <class Context, class Task, class Work>
   __device__ void before(Context, Task task, Work work) const {
-    if (task.value == acquire_task && threadIdx.x == 0) {
-      event_tensor.acquire(work.tile_id, static_cast<int>(work.tile_id + 1));
+    if (task.value == wait_task && threadIdx.x == 0) {
+      event_tensor.wait(work.tile_id, static_cast<int>(work.tile_id + 1));
     }
   }
 
   template <class Context, class Task, class Work>
   __device__ void after(Context, Task task, Work work) const {
-    if (task.value == publish_task && threadIdx.x == 0) {
-      event_tensor.publish(work.tile_id, static_cast<int>(work.tile_id + 1));
+    if (task.value == notify_task && threadIdx.x == 0) {
+      event_tensor.notify(work.tile_id, static_cast<int>(work.tile_id + 1));
     }
   }
 };

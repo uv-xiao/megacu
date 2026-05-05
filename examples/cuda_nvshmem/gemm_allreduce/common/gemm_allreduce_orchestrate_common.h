@@ -37,27 +37,27 @@ inline megacu::status orchestrate_impl(megacu::runtime::progress_model progress,
                      : (problem.n + problem.tile_n - 1) / problem.tile_n;
 
   auto ready_events = phase.event_tensor(megacu::runtime::attrs(
-      megacu::runtime::events::shape(m_tiles, n_tiles),
-      megacu::cuda_nvshmem::events::symmetric_i32_storage(events),
-      megacu::cuda_nvshmem::events::team_scope()));
+      megacu::runtime::event_tensor::shape(m_tiles, n_tiles),
+      megacu::runtime::event_tensor::wait_count(driver.team.team_n_pes),
+      megacu::cuda_nvshmem::event_tensor::symmetric_storage(events),
+      megacu::cuda_nvshmem::event_tensor::scope::team{}));
 
   auto gemm = phase.submit(
       megacu::runtime::op<gemm_tile_produce_sig>(ops::gemm_tile_produce::name),
       driver, a, b, partial, problem,
       megacu::runtime::attrs(
           megacu::runtime::dispatcher::tile_grid(m_tiles, n_tiles),
-          megacu::runtime::events::publish(ready_events)));
+          megacu::runtime::event_tensor::notify(ready_events)));
 
   auto ready = phase.sync(
       megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(gemm),
-                             megacu::runtime::events::join(ready_events)));
+                             megacu::runtime::event_tensor::wait(ready_events)));
 
   phase.submit(
       megacu::runtime::op<allreduce_tile_consume_sig>(
           ops::allreduce_tile_consume::name),
       driver, partial, out, problem,
-      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(ready),
-                             megacu::runtime::events::acquire(ready_events)));
+      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(ready)));
 
   return phase.run(megacu::runtime::op(ops::phased_megakernel::name,
                                        &megacu_cuda_gemm_allreduce_phased_f32),

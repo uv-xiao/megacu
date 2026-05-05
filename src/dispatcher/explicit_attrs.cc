@@ -26,12 +26,12 @@ status map_explicit_attrs(dispatch_state &out,
       if (attr.kind == attr_kind::dispatch_tile_grid) {
         ++out.tile_grid_attrs;
         out.total_tile_count += attr.first * attr.second;
-      } else if (attr.kind == attr_kind::event_publish) {
-        ++out.event_publish_attrs;
-      } else if (attr.kind == attr_kind::event_acquire) {
-        ++out.event_acquire_attrs;
-      } else if (attr.kind == attr_kind::event_join) {
-        ++out.event_join_attrs;
+      } else if (attr.kind == attr_kind::event_notify) {
+        ++out.event_notify_attrs;
+      } else if (attr.kind == attr_kind::event_wait) {
+        ++out.event_wait_attrs;
+      } else if (attr.kind == attr_kind::event_trigger) {
+        ++out.event_trigger_attrs;
       }
     }
   }

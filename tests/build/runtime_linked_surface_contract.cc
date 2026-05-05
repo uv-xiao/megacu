@@ -50,23 +50,23 @@ megacu::status orchestrate(fake_driver &driver, float const *a, float const *b,
   auto phase = megacu::runtime::make_phase(
       driver, megacu::runtime::progress_model::asap);
   auto ready_events = phase.event_tensor(
-      megacu::runtime::attrs(megacu::runtime::events::shape(m, n)));
+      megacu::runtime::attrs(megacu::runtime::event_tensor::shape(m, n)));
 
   auto gemm = phase.submit(
       megacu::runtime::op("gemm_tile_produce", &produce), a, b, partial, m, n,
       k,
       megacu::runtime::attrs(megacu::runtime::dispatcher::tile_grid(m, n),
-                             megacu::runtime::events::publish(ready_events)));
+                             megacu::runtime::event_tensor::notify(
+                                 ready_events)));
 
   auto ready = phase.sync(
       megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(gemm),
-                             megacu::runtime::events::join(ready_events)));
+                             megacu::runtime::event_tensor::wait(ready_events)));
 
   phase.submit(
       megacu::runtime::op("allreduce_tile_consume", &consume), partial, out, m,
       n,
-      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(ready),
-                             megacu::runtime::events::acquire(ready_events)));
+      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(ready)));
 
   return phase.run();
 }
@@ -76,18 +76,18 @@ megacu::status orchestrate_as_single_megakernel(fake_driver &driver,
   auto phase = megacu::runtime::make_phase(
       driver, megacu::runtime::progress_model::asap);
   auto ready_events = phase.event_tensor(
-      megacu::runtime::attrs(megacu::runtime::events::shape(1, 1)));
+      megacu::runtime::attrs(megacu::runtime::event_tensor::shape(1, 1)));
 
   auto produced = phase.submit(
       megacu::runtime::op("recorded_produce", &recorded_produce), log,
-      megacu::runtime::attrs(megacu::runtime::events::publish(ready_events)));
+      megacu::runtime::attrs(
+          megacu::runtime::event_tensor::notify(ready_events)));
   auto ready = phase.sync(
       megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(produced),
-                             megacu::runtime::events::join(ready_events)));
+                             megacu::runtime::event_tensor::wait(ready_events)));
   phase.submit(
       megacu::runtime::op("recorded_consume", &recorded_consume), log,
-      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(ready),
-                             megacu::runtime::events::acquire(ready_events)));
+      megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(ready)));
 
   return phase.run(
       megacu::runtime::op("recorded_megakernel", &recorded_megakernel), log);

@@ -7,7 +7,7 @@
 #include <megacu/backends/nvshmem/cuda_event_tensor.cuh>
 #include <megacu/dispatcher/tile_grid_device.cuh>
 #include <megacu/platform/cuda/megakernel.cuh>
-#include <megacu/runtime/device_entry.cuh>
+#include <megacu/runtime/block_tile_runtime.cuh>
 #include <megacu/scheduler/explicit_asap_device.cuh>
 
 #ifdef MEGACU_GEMM_AR_HAS_DEVICE_NVSHMEM
@@ -206,8 +206,8 @@ extern "C" megacu::status megacu_cuda_gemm_allreduce_phased_f32(
                        .tiles = tiles,
                        .my_pe = driver.team.team_my_pe,
                        .n_pes = n_pes},
-      .publish_task = 0,
-      .acquire_task = 2};
+      .notify_task = 0,
+      .wait_task = 1};
   auto dispatcher = megacu::dispatcher::device::tile_grid{.tiles = tiles};
   auto scheduler = megacu::scheduler::device::explicit_asap{.task_count = 3};
   auto consumer = allreduce_tile_consume_task{.partial = partial,
@@ -217,13 +217,14 @@ extern "C" megacu::status megacu_cuda_gemm_allreduce_phased_f32(
                                               .n_pes = n_pes};
   auto operators =
       gemm_allreduce_operators{.producer = producer, .consumer = consumer};
-  auto entry = megacu::runtime::device::entry{.scheduler = scheduler,
-                                              .dispatcher = dispatcher,
-                                              .backend = event_tensor,
-                                              .operators = operators};
+  auto runtime = megacu::runtime::device::block_tile_runtime{
+      .scheduler = scheduler,
+      .dispatcher = dispatcher,
+      .event_tensor = event_tensor,
+      .operators = operators};
 
   status = cuda_status(megacu::platform::cuda::launch_megakernel(
-                           stream, {.blocks = 2, .threads = kThreads}, entry),
+                           stream, {.blocks = 2, .threads = kThreads}, runtime),
                        14);
   if (status.code != megacu::status_code::ok) {
     return status;
