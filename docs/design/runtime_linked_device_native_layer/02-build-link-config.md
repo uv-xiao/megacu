@@ -141,7 +141,7 @@ Runtime may choose values inside the linked envelope:
 Runtime must not choose a different linked component family:
 
 - no switching from NVSHMEM to MPI collectives inside this target;
-- no switching from phased to overlap scheduler in PR #4;
+- no switching from phased to another scheduler family in PR #4;
 - no loading kernels by string or path.
 - no choosing scheduler/backend through a runtime registry.
 - no dispatch by opaque string names.

@@ -7,11 +7,27 @@ Use a short top-level entry point for each workstream, then keep the detailed
 chapters in one ordered subdirectory when the topic has enough depth to need
 multiple files.
 
-## Current State
+## Active Workstreams
 
-No active design workstreams are currently checked in. The runtime-linked
-device-native layer was promoted to
-`docs/design/runtime_linked_device_native_layer/`.
+- `general_runtime_linked_components.md` - active design for required
+  MPI/Torch launch adapters, strategy selection, reusable runtime-linked
+  component contracts, and the GEMM-RS/AG-GEMM/tiny-decode example scope.
+- `overall_runtime_architecture.md` - active overall architecture view for the
+  orchestration frame, task/event model, runtime execution model, runtime loop,
+  linked components, and comparison with related systems. Promote accepted content into
+  `docs/design/` only during PR closeout.
+- `execution_model_study.md` - standalone study of runtime execution models:
+  who builds task records, when tasks become visible to the runtime, and how
+  `host-orch`, `seeded-orch`, future device-orch, and distributed execution
+  models compare.
+- `runtime_execution_model_implementation_design.md` - implementation design
+  for the PR-required `host-orch` and `seeded-orch` runtime execution models,
+  including arena records, runtime composition, example layout, and
+  verification gates.
+- `stable_docs_recreation_plan.md` - closeout plan for recreating stable
+  `docs/design/` documentation during PR merge, replacing the current
+  `runtime_linked_device_native_layer/` folder with a clearer audience-facing
+  structure.
 
 ## Split Scope
 

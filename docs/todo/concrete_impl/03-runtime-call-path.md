@@ -24,7 +24,7 @@ user/test/framework code
        team_n_pes == 2: local tile work plus peer reduction work
   -> ASAP scheduler consumes explicit dependency/event readiness
        permits reduction work after matching GEMM tile readiness
-       does not require co-resident blocking progress
+       does not require special blocking-progress legality
   -> scheduler calls linked phased operator symbol
   -> operator uses CUDA/NVSHMEM backend primitives as needed
   -> status returns through target runtime

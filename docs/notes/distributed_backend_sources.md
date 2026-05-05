@@ -163,8 +163,9 @@ the fused GEMM+AllReduce kernel:
   and the selected AllReduce method.
 - `kernel_fused_gemm_allreduce` launches one cooperative grid. Program ids
   below `NUM_COMM_SMS` run communication work; the remaining program ids run
-  persistent GEMM work. This is the key overlap structure: communication CTAs
-  and GEMM CTAs are resident at the same time.
+  long-running GEMM work. The important Megacu lesson is that compute and
+  communication roles can be represented as explicit participants without
+  making the dispatcher own scheduler policy.
 - `kernel_persistent_gemm_notify` is the compute side. Each GEMM CTA loops over
   output tiles assigned by `tile_id += NUM_GEMM_SMS`, computes one tile, stores
   the tile into a symmetric GEMM output buffer, then releases readiness through
@@ -185,30 +186,29 @@ the fused GEMM+AllReduce kernel:
 - `low_latency_gemm_allreduce_op` double-buffers the context phase, resets
   barriers when needed, and launches the fused kernel with grid size
   `NUM_COMM_SMS + min(NUM_GEMM_SMS, num_output_tiles)`.
-- `gemm_allreduce_op` is the two-kernel stream-overlap variant. It launches the
-  persistent GEMM notifier on the current stream, launches the consumer
+- `gemm_allreduce_op` is the two-kernel stream variant. It launches the
+  long-running GEMM notifier on the current stream, launches the consumer
   AllReduce on a separate high-priority communication stream, and then makes the
-  current stream wait on the communication stream. This still overlaps compute
-  and communication, but it relies on separate kernels/streams rather than a
-  single cooperative fused kernel.
+  current stream wait on the communication stream. Megacu should not rely on
+  stream sequencing inside the scheduler design.
 
 The Megacu example should mirror the important semantics, not the Triton syntax:
-reserve logical compute and communication participants, use a persistent tile
-loop for GEMM work, signal tile readiness, have communication work wait on
-readiness before reducing, and keep backend-specific reduction mechanics behind
-a narrow target ops interface.
+reserve logical compute and communication participants, use a tiled GEMM work
+loop, signal tile readiness, have communication work wait on readiness before
+reducing, and keep backend-specific reduction mechanics behind a narrow target
+ops interface.
 
 ## What UniEP Contributes
 
 UniEP is a focused mega-kernel system for expert-parallel MoE training. It is
 important because it demonstrates that mega-kernel fusion is not only an
 inference trick: for training, it can fuse Dispatch+GroupGEMM and
-GroupGEMM+Combine to overlap communication and computation while preserving
+GroupGEMM+Combine to coordinate communication and computation while preserving
 bitwise numerical consistency.
 
 The paper's core techniques are:
 
-- persistent worker threadblocks, one per physical SM;
+- long-running worker threadblocks, one per physical SM;
 - dynamic SM role assignment among communication, computation, relay, and
   reduction work;
 - token-level deterministic global mapping so parallel dispatch preserves the
@@ -477,7 +477,7 @@ include/megacu/
   platform/cuda/ # CUDA platform adapter, launch, streams, inspection
   task/          # task concept, task metadata, task_ctx, task registry traits
   schedule/      # static schedules, optional dynamic queues, descriptors
-  kernel/        # persistent kernel templates and launch descriptors
+  kernel/        # long-running kernel templates and launch descriptors
   backend/       # backend concepts and common semantic wrappers
   backend/nvshmem/
   backend/mscclpp/

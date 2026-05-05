@@ -9,7 +9,7 @@ must be closed before claiming a working runtime-linked Megacu slice.
 - CMake still uses `megacu_add_components`, not the intended
   `megacu_add_configure_target`.
 - `megacu_add_components` links `src/program/materialize.cc`,
-  `src/lowering/persistent_stitch.cc`, and metadata section builders.
+  `src/lowering/static_stitch.cc`, and metadata section builders.
 - Public authoring still exposes `program_builder` and `program_ir`.
 - Runtime examples still validate linked metadata headers.
 - Dispatcher and scheduler logic are implemented as static metadata builders,
@@ -34,11 +34,10 @@ These are facts about the current branch, not accepted architecture.
 3. Replace materializer-linked sources with runtime component sources.
 4. Implement the annotated dispatcher:
    - maps participant annotations to tile/lane/peer work;
-   - retargets `team_n_pes == 1` and multi-card teams;
-   - emits co-residency constraints for overlap.
+   - retargets `team_n_pes == 1` and multi-card teams.
 5. Implement runtime schedulers:
    - ASAP scheduler consumes explicit dependency/event readiness;
-   - overlap scheduler enforces co-resident/persistent progress guard.
+   - static scheduler variants preserve explicit dependencies without queues.
 6. Move common target runtime validation out of example headers into
    `src/target/`.
 7. Implement backend runtime primitives and validation under
@@ -59,7 +58,6 @@ Missing evidence:
 - same participant annotations map correctly for `team_n_pes == 2`;
 - communication participants become local/no-remote work in single-card mode;
 - communication participants map to backend PEs in multi-card mode;
-- overlap participants produce co-residency groups that scheduler can consume;
 - unsupported annotation combinations return `megacu::status`.
 
 ## Scheduler-Specific Gaps
@@ -69,9 +67,7 @@ Missing evidence:
 - ASAP scheduler permits AR tile execution after matching GEMM tile readiness;
 - ASAP scheduler does not force a whole-GEMM-before-AR dependency unless
   capability requires it;
-- overlap scheduler rejects blocking waits without valid co-resident progress;
-- overlap scheduler validates operator and platform launch capability before
-  native execution.
+- static scheduler variants respect explicit dependency order.
 
 ## Backend And Platform Gaps
 
@@ -81,8 +77,8 @@ Missing evidence:
   runs;
 - NVSHMEM backend permits local execution without remote peer requirements;
 - device-side NVSHMEM primitive wrappers are used by baseline and Megacu paths;
-- CUDA platform validates stream presence, device identity, and persistent or
-  cooperative launch requirements.
+- CUDA platform validates stream presence, device identity, and launch
+  requirements.
 
 ## Non-Goals For This Documentation Slice
 

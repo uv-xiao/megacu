@@ -5,7 +5,6 @@
   the example root and put variants underneath it. For PR #4 CUDA+NVSHMEM
   GEMM+AllReduce, the required active shape is
   `examples/cuda_nvshmem/gemm_allreduce/{common,golden,phased/{baseline,megacu}}`.
-  Future overlap work may add a separate variant when it returns to scope.
 - Shared Docker assets live under `docker/<platform>_<backend>/` by default.
   Add `docker/<platform>_<backend>/<example>/` only when an example truly needs
   a unique image or container asset.

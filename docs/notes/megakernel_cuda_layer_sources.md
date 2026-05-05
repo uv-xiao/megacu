@@ -8,7 +8,7 @@ below as historical source-reading context. The active design position is a
 platform-neutral device-native core with CUDA/NVSHMEM as the first proof point;
 see `docs/design/megacu_cpp_cuda_layer.md`.
 
-This note summarizes two closely related systems, Mirage Persistent Kernel (MPK)
+This note summarizes two closely related systems, Mirage Long-running Kernel (MPK)
 and Event Tensor, then proposed the first Megacu direction: a thin C++/CUDA
 layer for writing megakernels with CUDA-native performance and no abstraction
 tax on the hot path. That performance goal remains, but the core API boundary is
@@ -67,14 +67,14 @@ the MPK-related source boundary above:
   `moe_w13_linear_sm90`, `mla_decode_sm100`, `mla_reduce_sm100`,
   `nvshmem_allgather_strided_put`, and `nvshmem_tile_allreduce`.
 - `src/kernel/runtime.cc` constructs task/event graphs, assigns event ids,
-  handles NVSHMEM event cases, and emits/initializes persistent-kernel task
+  handles NVSHMEM event cases, and emits/initializes long-running kernel task
   metadata.
 - `src/kernel/task_register.cc` registers CUDA task variants for RMSNorm,
   paged attention, Hopper/SM100 linear paths, MLA decode/reduce, and NVSHMEM
   allgather/tile-allreduce.
 - `src/kernel/cuda/*.cu` contains CUDA-side operator kernels such as matmul,
   all-reduce, RMSNorm, reduction, input/output, and customized kernels.
-- `python/mirage/mpk/persistent_kernel.py` owns the MPK Python persistent-kernel
+- `python/mirage/mpk/persistent_kernel.py` owns the MPK Python long-running kernel
   construction path, task registration calls, NVSHMEM compile flags, and
   generation/launch/finalization flow.
 - `python/mirage/mpk/multigpu.py` registers MPK multi-GPU tasks such as
@@ -114,11 +114,11 @@ MPK argues that the kernel-per-operator model blocks three optimizations:
    kernels.
 2. It inserts implicit full-kernel barriers, even when downstream work only
    depends on a tile of upstream output.
-3. It prevents fine-grained compute/communication overlap, especially around
-   collectives such as AllReduce or ReduceScatter.
+3. It prevents fine-grained readiness between compute and communication,
+   especially around collectives such as AllReduce or ReduceScatter.
 
 CUDA Graphs reduce launch overhead, but they still operate at kernel granularity.
-MPK instead makes the whole model run inside a persistent kernel.
+MPK instead makes the whole model run inside a long-running kernel.
 
 ### Core Abstraction: SM-Level Task Graph
 
@@ -136,12 +136,12 @@ start as soon as their precise input tile is ready.
 In the MPK-related source boundary, this maps to:
 
 - `src/kernel/runtime.cc`, which builds `all_tasks`, `all_events`,
-  `first_tasks`, event counters, and the persistent-kernel initialization path;
+  `first_tasks`, event counters, and the long-running kernel initialization path;
 - `src/kernel/task_register.cc`, which registers task variants and emits the
-  concrete CUDA task bodies used by the persistent runtime;
+  concrete CUDA task bodies used by the long-running runtime;
 - `python/mirage/mpk/persistent_kernel.py`, which constructs MPK persistent
   kernels, registers tasks, compiles with CUDA/NVSHMEM flags, and launches the
-  persistent runtime.
+  long-running runtime.
 
 The task descriptor is intentionally low-level: task type, variant id, input
 and output pointers, one dependent event, one trigger event, and a small metadata
@@ -150,13 +150,13 @@ union for expert/request/KV/split information.
 ### Compiler and Graph Construction
 
 MPK's compiler takes a tensor program and inference configuration, decomposes
-operators into SM tasks, analyzes producer-consumer tile overlap, generates
+operators into SM tasks, analyzes producer-consumer tile readiness, generates
 events, and emits a linearized task graph plus CUDA code.
 
 Important details:
 
 - Operator decomposition chooses task grids, usually proportional to SM count.
-- Dependency analysis creates events based on overlapping tensor regions between
+- Dependency analysis creates events based on tensor regions between
   producer and consumer task tiles.
 - Event fusion merges redundant synchronization nodes.
 - Graph normalization ensures tasks have a simple dependency shape, reducing
@@ -187,7 +187,7 @@ The public runtime has two launch modes:
 - Combined `persistent_kernel`, where workers and schedulers are CTAs in one
   kernel.
 - Split `worker_kernel` and `scheduler_kernel` launched on streams, which is
-  still a persistent execution model but operationally uses two kernels.
+  still a long-running execution model but operationally uses two kernels.
 
 Important implementation details:
 
@@ -226,8 +226,8 @@ From the paper:
   serving systems.
 - Cross-task pipelining gives about 1.2x to 1.3x on the evaluated final linear
   layer.
-- Compute/communication overlap reduces per-iteration latency by about 1.1x in
-  their multi-GPU ablation.
+- Multi-GPU communication scheduling reduces per-iteration latency by about
+  1.1x in their multi-GPU ablation.
 
 ### Strengths
 
@@ -324,7 +324,7 @@ transformations.
 Static scheduling:
 
 - Host/compiler computes per-SM queues.
-- Persistent kernel loops through assigned tasks.
+- Long-running kernel loops through assigned tasks.
 - Event Tensor lowers to integer counters.
 - Producers call `notify`; consumers call `wait`.
 - Best for predictable work because it avoids scheduler queue overhead.
@@ -420,7 +420,7 @@ want Python graph capture, a heavy compiler IR, or hidden scheduling decisions.
    groups, and NVSHMEM directly.
 
 2. Static schedule first.
-   The default path should compile to a single persistent CUDA kernel with
+   The default path should compile to a single long-running CUDA kernel with
    precomputed per-SM queues and direct `wait/notify` counters. No scheduler CTA
    is present unless requested.
 
@@ -491,6 +491,12 @@ policy around it.
    `wait(coord)` in device code. Shape can be static, bounded symbolic, or
    runtime-provided within a max extent.
 
+   Megacu should adapt this as orchestration attrs rather than user-written
+   operator calls. The public design should expose event tensor objects and
+   `notify`/`wait`/future `trigger` attrs, while the linked EventTensor
+   component lowers those attrs into counter, atomic, spin-wait, or backend
+   communication operations around task issue.
+
 3. `tile_map`
    A coordinate mapping layer. This is the thin equivalent of Event Tensor's
    lambda/einsum maps. It defines which event coordinate a task coordinate
@@ -498,7 +504,7 @@ policy around it.
 
 4. `static_schedule`
    Host-generated per-SM queues. Best for regular pipelines and compute/comm
-   overlap. Queue entries should be compact and type-specialized.
+   Queue entries should be compact and type-specialized.
 
 5. `dynamic_queue`
    Optional GPU queue for irregular workloads. This should be a separate policy,
@@ -594,17 +600,18 @@ Megacu should be precise about "zero overhead":
 
 Build a minimal C++/CUDA prototype with:
 
-1. One persistent kernel launcher.
+1. One long-running kernel launcher.
 2. One worker CTA per SM.
 3. Static per-SM queues.
 4. `event_tensor<1>` and `event_tensor<2>` counter buffers.
 5. Two user-defined CUDA tasks with direct `wait/notify`.
 6. A GEMM-like producer plus reduction/elementwise consumer microbenchmark.
-7. A baseline handwritten persistent kernel to prove no measurable wrapper
+7. A baseline handwritten long-running kernel to prove no measurable wrapper
    overhead.
 
 Do not start with full LLM serving. The first correctness/performance target
-should be a small graph where expected overlap is easy to inspect in Nsight.
+should be a small graph where the expected execution timeline is easy to
+inspect in Nsight.
 
 ### Second Milestone
 
@@ -614,7 +621,7 @@ Add:
 - Graph dump and timeline profiling.
 - Event fan-out contiguous range encoding.
 - Shape-bounded event tensors.
-- One compute/communication overlap demo using NVSHMEM or CUDA multimem if
+- One small multi-GPU communication demo using NVSHMEM or CUDA multimem if
   available.
 
 ### Third Milestone

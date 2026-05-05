@@ -32,10 +32,11 @@ but they should still be components. It should not expose CUDA launch handles
 or NVSHMEM team handles as target arguments. Those execution resources belong
 to the driver.
 
-Overlap is out of PR #4. For this PR, kernels that include communication should
+The retired communication-progress variant is out of PR #4. For this PR,
+kernels that include communication should
 be represented as one fused phased operator rather than split into several
 standalone operators that force dispatcher/scheduler complexity. Whether the
-general design needs finer overlap decomposition remains future work.
+general design needs finer communication decomposition remains future work.
 
 ## Orchestrate Entry
 
@@ -357,4 +358,4 @@ dispatch/schedule/kernel sections.
 - Task dependencies are explicit dependency attributes. They are not inferred
   from tensor access lookup, read/write declarations, or pointer aliasing.
 - PR #4 proves phased 1-host/1-device and 1-host/2-device paths without MPI,
-  torch-distributed, or overlap scope.
+  torch-distributed, or retired communication-progress scope.

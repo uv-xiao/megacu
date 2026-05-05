@@ -47,7 +47,7 @@ Before PR #4 is considered ready for design review, check:
 - 1-host/1-device and 1-host/2-device are PR #4 implementation/example gates;
 - problem-specific shortcuts are not promoted into public shared APIs;
 - future generality requirements live in `docs/todo/concrete_impl/`;
-- MPI, torch-distributed, and overlap are out of PR #4.
+- MPI and torch-distributed are out of PR #4.
 
 ## Tiny Example Evidence
 
@@ -75,7 +75,7 @@ PR #4 unless the scope is explicitly expanded:
 
 - reusable annotation-driven dispatcher tests;
 - full component-provided attribute tests;
-- reusable phased and overlap scheduler tests;
+- reusable scheduler tests;
 - CUDA platform validation tests;
 - NVSHMEM backend validation tests;
 - complete GEMM+AllReduce golden, baseline, and Megacu runtime tests;

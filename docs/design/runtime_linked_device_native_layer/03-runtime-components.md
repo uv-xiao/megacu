@@ -12,7 +12,7 @@ PR #4 should make these components tiny but mighty:
 - minimal and naive in implementation;
 - phased only;
 - enough for 1-host/1-device and 1-host/2-device GEMM+AllReduce;
-- no MPI, torch-distributed, or overlap support.
+- no MPI or torch-distributed support.
 
 Problem-specific shortcuts may live in the example only. Shared component APIs
 must not bake in GEMM+AllReduce names, CUDA launch arguments, NVSHMEM team
@@ -128,7 +128,7 @@ PR #4 dispatcher:
 - maps single-device work locally;
 - maps two-device work to local plus peer reduction work using backend
   resources from the driver;
-- does not support overlap co-residency.
+- does not add future progress policies.
 
 ## Scheduler
 
@@ -164,7 +164,6 @@ PR #4 scheduler:
 - use submission order only as a deterministic tie-breaker among ready tasks;
 - one explicit dependency path from GEMM to sync-only readiness to phased
   all-reduce;
-- no overlap progress guard;
 - no dynamic queues.
 
 ## Dependency Model

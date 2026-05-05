@@ -13,7 +13,7 @@ The CMake API should move from `megacu_add_components` toward an explicit
 megacu_add_configure_target(
   NAME cuda_nvshmem_static
   DISPATCHER annotated_runtime
-  SCHEDULER static_phased_or_overlap
+  SCHEDULER explicit_asap
   PLATFORM cuda
   BACKEND nvshmem)
 ```
@@ -33,7 +33,7 @@ It must not link:
 
 ```text
 src/program/materialize.cc
-src/lowering/persistent_stitch.cc
+src/lowering/static_stitch.cc
 metadata section builders as the main execution contract
 ```
 

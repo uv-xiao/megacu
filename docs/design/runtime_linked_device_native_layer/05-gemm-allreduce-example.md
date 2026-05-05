@@ -28,8 +28,9 @@ target orchestrate entry with direct target args
 ```
 
 The example proves that Megacu is ordinary linked C++/CUDA runtime code with a
-programmable authoring surface. It must not prove overlap, MPI,
-torch-distributed, arbitrary team sizes, or the final general attribute system.
+programmable authoring surface. It must not prove MPI, torch-distributed,
+arbitrary team sizes, retired communication-progress variants, or the final
+general attribute system.
 It also clarifies the PR #4 meaning of one Megacu megakernel: one host
 orchestrate call can dispatch and schedule the linked native GEMM and phased
 all-reduce kernels internally.

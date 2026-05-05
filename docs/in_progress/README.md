@@ -13,5 +13,6 @@ Rules:
 
 ## Active Tasks
 
-No active task files are currently checked in. Completed runtime-linked design
-content has been promoted to `docs/design/runtime_linked_device_native_layer/`.
+- `docs/in_progress/general_runtime_linked_components.md` - generalize the
+  runtime-linked implementation with required Docker-backed MPI and Torch
+  adapters plus multiple dispatcher/scheduler/runtime strategies.

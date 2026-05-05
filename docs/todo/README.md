@@ -9,8 +9,8 @@
 - [x] Megacu C++/CUDA layer design
 - [x] Implementation-ready device-native design
 - [x] Minimal build and verification tooling
-- [ ] First executable persistent-kernel slice
-- [ ] General runtime-linked concrete implementation
+- [ ] General runtime-linked concrete implementation (active:
+      `docs/in_progress/general_runtime_linked_components.md`)
 - [ ] Benchmark and profiling harness
 
 Each future feature should have clear input, output, and verification criteria.

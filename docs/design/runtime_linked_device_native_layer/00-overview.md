@@ -188,11 +188,6 @@ proof may use a problem-specific mapper if that keeps the proof focused on the
 architecture correction. Such a mapper is evidence for the call shape only; it
 is not accepted as the reusable dispatcher contract.
 
-Overlap co-residency is future work. For PR #4, communication in the phased
-example should be represented by one fused native mega-kernel when that keeps
-the proof small. The design should not force several standalone communication
-kernels just to exercise dispatcher and scheduler complexity.
-
 ## Directory Scope
 
 This design owns the architecture direction for:

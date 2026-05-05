@@ -115,7 +115,6 @@ The following are future general implementation work:
 - torch-distributed adapter;
 - multi-node claims;
 - arbitrary PE counts;
-- overlap scheduling;
 - host-side collectives as Megacu communication.
 
 Future adapters should still produce the same driver resources and call the
@@ -135,7 +134,7 @@ communication: device-side NVSHMEM for 2-device path
 dtypes: f32 first proof
 layouts: row-major contiguous first proof
 scheduler: ASAP explicit-dependency only
-unsupported: MPI, torch-distributed, overlap, arbitrary PE counts,
+unsupported: MPI, torch-distributed, arbitrary PE counts,
              multi-node performance claims, host-side collectives as Megacu
              communication
 ```

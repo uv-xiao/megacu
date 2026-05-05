@@ -23,7 +23,7 @@ Future TODO work owns:
 - full component-provided attribute vocabulary and general dispatcher
   implementation;
 - reusable scheduler runtime families;
-- complete CUDA+NVSHMEM GEMM+AllReduce phased and overlap examples;
+- complete reusable CUDA+NVSHMEM GEMM+AllReduce examples;
 - MPI and torch-distributed adapters;
 - broad include/src cleanup and verification.
 
@@ -59,7 +59,7 @@ The review should check:
 - 1-host/1-device and 1-host/2-device are PR #4 gates;
 - future general implementation requirements point to
   `docs/todo/concrete_impl/`;
-- MPI, torch-distributed, and overlap are future work, not hidden PR #4 gates.
+- MPI and torch-distributed are future work, not hidden PR #4 gates.
 
 ## Tiny Proof Example Bar
 

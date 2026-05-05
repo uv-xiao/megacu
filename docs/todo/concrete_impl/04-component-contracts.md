@@ -41,7 +41,6 @@ Contract:
 - retargets one `OrchTarget` between `team_n_pes == 1` and multi-card teams;
 - maps participants to local lanes/workers and backend peers;
 - emits tile work cursors;
-- records co-residency mapping constraints required by overlap schedulers;
 - rejects unsupported participant annotation combinations for the linked
   `ConfigureTarget`.
 
@@ -65,9 +64,6 @@ Contract:
   symbols;
 - phased mode consumes tile readiness without introducing false whole-program
   dependencies when tile readiness is available;
-- overlap mode consumes dispatcher co-residency groups;
-- rejects overlap when scheduler, operator, or platform capability cannot keep
-  blocking communication and compute progress live together;
 - invokes native operator symbols directly.
 
 Must not:
@@ -88,8 +84,6 @@ Contract:
 
 - validates device identity and stream requirements;
 - validates launch shape for scheduler requirements;
-- validates cooperative or persistent launch feasibility when overlap requires
-  it;
 - converts CUDA failures into `megacu::status`.
 
 Must not:
@@ -117,7 +111,7 @@ Contract:
 Must not:
 
 - choose single-card versus multi-card participant mapping;
-- choose phased versus overlap ordering;
+- choose scheduler ordering;
 - own CUDA launch feasibility.
 
 ## Target Runtime
@@ -148,6 +142,6 @@ contracts:
 - `program_builder` producing `program_ir`;
 - `materialize_program` producing `target_metadata`;
 - `build_tiled_compute_comm_dispatch` producing `dispatch_section`;
-- `build_static_persistent_schedule` producing `schedule_section`;
-- `build_persistent_stitch_kernel_section` producing `kernel_section`;
+- `build_static_static_schedule` producing `schedule_section`;
+- `build_static_stitch_kernel_section` producing `kernel_section`;
 - `build_nvshmem_backend_section` producing backend metadata.

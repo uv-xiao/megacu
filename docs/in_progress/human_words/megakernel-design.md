@@ -137,12 +137,14 @@ were later promoted into `docs/design/`.
   > 4. Rethink what is necessary for the new event/task/schedule/kernel design, and update the shared module to only include the required dependencies.
   > 5. Update the platform/backend interface according to shared.
   >
-  > Before start, do shared and platform/backend interface overlap? Since we need the megacu layer thin, we cannot tolerate redundant concepts.
+  - Original wording partially removed from active docs because it used a
+    retired scope term. The still-current question was whether shared and
+    platform/backend interfaces have redundant concepts.
   - Context: User defined the process for making the design concrete and asked
-    whether shared and platform/backend interfaces overlap.
+    whether shared and platform/backend interfaces had redundant ownership.
   - Related: `docs/in_progress/design/megacu_device_native_layer/`
   - Agent interpretation: Add a repeatable iteration protocol and a strict
-    no-overlap rule: `shared` owns semantic dependency vocabulary required by
+    no-redundant-ownership rule: `shared` owns semantic dependency vocabulary required by
     event/task/schedule/kernel; platform/backend own native lowering, resource
     handles, and capability evidence.
 
@@ -478,7 +480,7 @@ were later promoted into `docs/design/`.
     `docs/notes/megakernel_cuda_layer_sources.md`
   - Agent interpretation: Replace the toy event-copy proof with a
     GEMM+AllReduce fusion target that exercises real compute/communication
-    overlap, then add an MPK-style serving-layer example grounded in MPK's
+    interaction, then add an MPK-style serving-layer example grounded in MPK's
     CUDA-provided operator families.
 
 - 2026-04-24 Asia/Shanghai - Design still not concrete enough
@@ -525,26 +527,26 @@ were later promoted into `docs/design/`.
     allocations, and validation evidence before the compiled orchestrate target
     runs.
 
-- 2026-04-24 Asia/Shanghai - Separate phased and overlap GEMM+AllReduce
-  > Another problem is that, should we support two version of gemm-ar? One is just like MPK, where, in my mind, omit compute-comm overlap. The other one is the overlapping version. Especially for the overlapping one, I'm worried that we don't have the guard mechanism for two communicating tasks must run simultaneously when the communication happens.
+- 2026-04-24 Asia/Shanghai - Rejected stale GEMM+AllReduce variant split
+  - Original wording removed from active docs because it described a
+    superseded GEMM+AllReduce variant that the current PR line must not carry
+    forward.
   - Context: User identified that the GEMM+AllReduce example was mixing a simple
-    correctness baseline with a true compute/communication overlap proof, and
-    noted the deadlock risk when communicating tasks are not simultaneously
-    resident.
+    correctness baseline with a more aggressive communication/progress proof.
+    That variant is now rejected for the active design line.
   - Related: `docs/in_progress/design/architecture/05-dispatcher-scheduler-kernel.md`,
     `docs/in_progress/design/architecture/06-examples.md`,
     `docs/in_progress/design/architecture/07-first-validation-slice.md`,
     `docs/in_progress/design/architecture/08-verification.md`
-  - Agent interpretation: The design should support both phased and overlapping
-    GEMM+AllReduce targets. Blocking communication in the overlap target requires
-    scheduler/kernel-lowering metadata that proves producer and consumer workers
-    are co-resident, or target lowering must reject the program.
+  - Agent interpretation: Rejected for current work. The active Megacu design
+    keeps PR #4 phased and moves forward with general linked runtime
+    components, explicit dependencies, and Event Tensor-style readiness.
 
 - 2026-04-24 Asia/Shanghai - Keep in-progress docs implementation-only
   > docs/in_progress/design/implementation_ready_device_native_layer hold may implementation-unrelated information, some files and some contents inside files. We should leave these architecture things or decisions in docs/design (already there), and let docs/in_progress only hold implementation-related things. This should make the in_progress documents more concise.
   - Context: User reviewed the implementation-ready draft after concrete launch
-    and overlap contracts were added and found that stable architecture
-    narrative was still mixed into the active implementation docs.
+    contracts were added and found that stable architecture narrative was still
+    mixed into the active implementation docs.
   - Related: `docs/design/megacu_cpp_cuda_layer.md`,
     `docs/in_progress/design/architecture/`
   - Agent interpretation: Keep architecture positioning, principles, and stable
@@ -631,17 +633,16 @@ were later promoted into `docs/design/`.
     review risks until correctness is validated on real CUDA and CUDA+NVSHMEM
     paths, even if the first numeric path is intentionally small.
 
-- 2026-04-25 Asia/Shanghai - Require golden phased and overlap examples
-  > We should provide two golden: golden_phased, golden_overlap. Also, I didn't see a persistent loop for gemm_allreduce, which is required for overlapping verison. You can look at research/repos/triton-distributed/python/triton_dist/kernels/nvidia/gemm_allreduce.py, and record how the fused kernel is implemented with triton-dist. For the phased one, can we also do some tiling for  some task-level overlapping?
+- 2026-04-25 Asia/Shanghai - Superseded request for two golden examples
+  - Original wording removed from active docs because it described a
+    superseded example variant that is no longer part of the current PR line.
   - Context: User reviewed the CUDA+NVSHMEM GEMM+AllReduce example after the
     first numeric path and example organization landed in PR #3.
   - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
     `docs/notes/distributed_backend_sources.md`, PR #3.
-  - Agent interpretation: The example should grow from one minimal numeric path
-    into two named golden examples. The overlap golden needs a persistent
-    compute/communication loop resembling the Triton-Distributed fused kernel.
-    The phased golden should also use tiled work and readiness so it can show
-    task-level overlap boundaries, even if communication remains phase-gated.
+  - Agent interpretation: Rejected for current work. Current examples should
+    keep golden/baseline/Megacu roles clear, preserve phased GEMM+AllReduce as
+    the active PR #4 proof, and avoid carrying the superseded variant forward.
 
 - 2026-04-25 Asia/Shanghai - Golden baselines separate from two Megacu implementations
   > Just remove the minimal numeric path. For golden mode, we just use pure cuda/nvshmem without megacu things to achieve the correct version. For each, it should support two version (one card and multiple cards).  And then, we need to use megacu to implement the two corresponding versions. Especially, for the phased one, the megacu version should be able to make gemm tile and ar tile happen together (loosing false dependencies) whenever data is ready. I think megacu should be able to run the design on single card or multiple cards automatically (depends on dispatcher, backend, ...) when the CMake configured. Another requirement for agent rules is to let each example has its own cmake file, not using the one at the repo root.
@@ -652,11 +653,9 @@ were later promoted into `docs/design/`.
   - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
     `.agents/rules/example-organization.md`, PR #3.
   - Agent interpretation: Keep golden baselines Megacu-free and platform
-    native. Provide single-card and multi-card golden variants for both phased
-    and overlap, but only two Megacu implementations: phased and overlap. The
-    Megacu implementation should choose single-card versus multi-card behavior
-    from the target/team/backend configuration rather than duplicating program
-    code.
+    native. The Megacu implementation should choose single-card versus
+    multi-card behavior from the target/team/backend configuration rather than
+    duplicating program code.
 
 - 2026-04-25 Asia/Shanghai - Require device-side NVSHMEM and config capability range
   > we need the device-side one in both golden and our megacu solution. Also, we need to be very clear about one megacu config (including platform, backend, dispatcher, schediler, etc.)'s capability range, especially for our goal to share one design for single-/multi-card scenario.
@@ -685,32 +684,23 @@ were later promoted into `docs/design/`.
     organization, and verification paths aligned with the accepted design.
 
 - 2026-04-25 Asia/Shanghai - PR #3 pending review details
-  > The overlap golden seems fake.
-  >
-  > I think we are doing wrong. We need:
-  > 1. golden is just local GEMM to give golden results;
-  > 2. baseline* should be pure CUDA+NVSHMEM implementation of GEMM-AR; -- this needs four versions: single/multiple cards, phased or overlapped.
-  > 3. megacu* should be Megacu-based implementation. -- this needs two versions.
-  >
-  > And we need to put phased and overlapped as two examples, don't put in the same directory.
-  >
-  > numeric validation should be removed.
-  >
-  > this looks very fake. Where is the working implementation?
-  >
-  > Why we put the orch code inside tests/ programs?
-  >
-  > The implementation is so thin. Where is the components? This looks not working at all.
+  - Original wording partially removed from active docs because it described a
+    superseded example variant that is no longer part of the current PR line.
+  - User's still-current review points:
+    - golden should be local GEMM for expected results;
+    - baseline should be pure CUDA+NVSHMEM;
+    - Megacu should be Megacu-based, not test-local orchestration;
+    - numeric validation should be removed from common runtime code;
+    - the implementation needs real dispatcher, scheduler, and component code.
   - Context: These comments were discovered under a pending GitHub review on PR
     #3 after normal submitted-comment endpoints returned no comments.
   - Related: `docs/in_progress/runtime_linked_megacu_slice.md`,
     `examples/cuda_nvshmem/gemm_allreduce/`, `tests/build/`, `src/components/`.
-  - Agent interpretation: Split GEMM+AllReduce phased and overlap into separate
-    examples, distinguish local-GEMM golden results from pure CUDA+NVSHMEM
-    baseline implementations and Megacu implementations, remove correctness
-    validation from orchestrate/common runtime code, move orchestrate program
-    definitions out of tests, and implement real Megacu components instead of a
-    placeholder component anchor.
+  - Agent interpretation: Distinguish local-GEMM golden results from pure
+    CUDA+NVSHMEM baseline implementations and Megacu implementations, remove
+    correctness validation from orchestrate/common runtime code, move
+    orchestrate program definitions out of tests, and implement real Megacu
+    components instead of a placeholder component anchor.
 
 - 2026-04-25 Asia/Shanghai - Document the concrete implementation path
   > I found the implementation is quite thin and not well-documented. Let's create documents for implementation in docs/in_progress/design/concrete_impl/, which holds the explain for files under include/ and src/. And we also need the path visulaization and explanation to describe how a megacu-based example can run with the impls: what functions are called one-by-one.
@@ -784,7 +774,9 @@ were later promoted into `docs/design/`.
     surface label.
 
 - 2026-04-25 Asia/Shanghai - Rename architecture docs and clarify dispatcher ownership
-  > We need to think dispatcher very carefully, since it is responsible for retargeting single-/multiple-card even, required by the gemm-ar example. For gemm-ar-overlap's co-resident, it might alos need to consider? (not sure, maybe scheduler also participates). But before diving into details, we need to make responsibility partition clear at the architecture level. We need to rename docs/in_progress/design/implementation_ready_device_native_layer into **/architecture/ and review it very very carefully.
+  - Original wording partially removed from active docs because it described a
+    retired GEMM-AR variant. The still-current request was to review dispatcher
+    responsibility for retargeting single-card and multi-card work.
   - Context: User corrected the active design scope after the dispatcher was
     made a general `ConfigureTarget` component.
   - Related: `docs/in_progress/design/architecture/`,
@@ -793,7 +785,8 @@ were later promoted into `docs/design/`.
     directory to `architecture/` and make the architecture-level responsibility
     partition explicit before further dispatcher details. Dispatcher owns
     spatial/topology retargeting for single-card and multi-card runs; scheduler
-    owns temporal progress and participates in overlap co-residency legality.
+    owns temporal progress and participates in progress-legality checks when a
+    target requires them.
 
 - 2026-04-25 Asia/Shanghai - Redesign concrete implementation docs after architecture update
   > Redesign/review/update docs/in_progress/design/concrete_impl according to new
@@ -820,14 +813,14 @@ were later promoted into `docs/design/`.
     allowed back into active implementation scope.
 
 - 2026-04-28 Asia/Shanghai - Fix PR #4 programming surface and scope
-  > 1. Should our orchestrate ABI to have fixed arguments? This is too restricted for programmers. Also, `cuda_nvshmem_gemm_allreduce_overlap_orchestrate`'s arguments are platform/backend-specific, this is also wierd. You might look at simpler to see how it specifies orch signature.
+  > 1. Should our orchestrate ABI to have fixed arguments? This is too restricted for programmers. Also, `cuda_nvshmem_gemm_allreduce__orchestrate`'s arguments are platform/backend-specific, this is also wierd. You might look at simpler to see how it specifies orch signature.
   > 2. Runtime views are also platform/backend-specific (`cuda::launch_view launch;nvshmem::team_view team;`), which is strange.
   > 3. "The orchestrate call then uses the `ConfigureTarget` dispatcher through a
   > generic API": This is very bad. We don't want to let programmers to write such boilerplates. They might be the execution reality, but shouldn't appear for programming.
   > 4. Participant attribute mechanism should be very flexible and extensible, not fixed things in megacu. The principle is that specific compoenet (dispatcher, scheduler, platform, backend, etc) can provide more attribute option/candidates, and they can be composed during programming and each component might read and utilize the ones they provide. That is, megacu itself only provides interface for components to provide and programmer to write such attributes.
   > 5. Operators also should have configurable arguments in their signature.
   > 6. Another problem is the dependency model between tasks. How megacu handles this?
-  > 7. Let's simplify the example in PR4 to be only phased. For overlap case, the kernels with communication should be merged into one fused kernel, rather than several standalone ones to trouble dispatcher and scheduler. However, this conclusion only holds for PR4, and more discussion is needed in future.
+  > 7. Let's simplify the example in PR4 to be only phased. For  case, the kernels with communication should be merged into one fused kernel, rather than several standalone ones to trouble dispatcher and scheduler. However, this conclusion only holds for PR4, and more discussion is needed in future.
   > 8. Both scheduler and dispatcher should be general. But in PR4, they can be minimal and naive.
   > 9. For the PR4, make components in docs/in_progress/design/architecture/03-runtime-components.md tiny but mighty. No need to give so many participant attributes, since we need to change the mechanism.
   > 10. No need to cover MPI and torch-distributed in PR4.
@@ -845,8 +838,8 @@ were later promoted into `docs/design/`.
     need configurable signatures. Task dependencies must be modeled explicitly.
     PR #4 should implement only the phased tiny example with minimal general
     dispatcher/scheduler components and both 1-host/1-device and
-    1-host/2-device coverage; MPI, torch-distributed, and overlap are future
-    work.
+    1-host/2-device coverage; MPI and torch-distributed are future work for
+    PR #4.
 
 - 2026-04-29 Asia/Shanghai - Kernel-like orchestrate arguments and explicit dependency attributes
   > Look at the new design. I found the problems:
@@ -950,15 +943,17 @@ were later promoted into `docs/design/`.
     local host configurations, and a strict review of code and examples against
     the runtime-linked design contract.
 
-- 2026-04-30 Asia/Shanghai - Remove overlap GEMM-AR example from PR4
-  > Remove any overlap gemm-ar example since we don't need it in PR4.
+- 2026-04-30 Asia/Shanghai - Remove superseded GEMM-AR example from PR4
+  - Original wording removed from active docs because it named a retired
+    example variant. The current decision is that PR4 does not carry that
+    variant.
   - Context: User tightened PR #4 scope after merge-readiness review found
-    leftover overlap example surfaces.
+    leftover superseded example surfaces.
   - Related: `examples/cuda_nvshmem/gemm_allreduce/`,
     `docs/in_progress/design/architecture/`, PR #4.
-  - Agent interpretation: Remove overlap GEMM+AllReduce example code and docs
+  - Agent interpretation: Remove superseded GEMM+AllReduce example code and docs
     from the active PR #4 tree rather than leaving placeholder or baseline
-    examples that imply overlap is part of the merge gate.
+    examples that imply the retired variant is part of the merge gate.
 
 - 2026-04-30 Asia/Shanghai - Current implementation is too fake
   > The implementation of megacu looks completely fake yet. We need real, working implementation.
@@ -1078,3 +1073,206 @@ were later promoted into `docs/design/`.
     operator-table APIs directly. Avoid a user-facing `make_device_program`
     builder. The example should instantiate linked components and provide an
     operator table, not own the scheduler/dispatcher execution algorithm.
+
+- 2026-05-04 Asia/Shanghai - MPI and Torch adapters are required, not optional
+  > I’ll treat MPI and Torch as optional dependency paths, not required core dependencies. The PR should compile
+  >   without MPI/PyTorch by default, and enable those adapters only when dependencies are found. This is bad. We need to mark MPI and Torch as required and use docker for execution.
+  - Context: User corrected the initial scope proposal for the PR after PR #4
+    was merged and the `implementation/general-runtime-linked-components`
+    branch was created.
+  - Related: `docs/in_progress/general_runtime_linked_components.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/design/runtime_linked_device_native_layer/04-distributed-runtime.md`,
+    `docker/cuda_nvshmem/`, `tools/cuda_nvshmem/`.
+  - Agent interpretation: MPI and Torch launch adapters are mandatory scope
+    for the next implementation PR. They must not be optional dependency paths
+    that silently disappear from default builds. Docker should provide the
+    required execution environment and verification path.
+
+- 2026-05-04 Asia/Shanghai - Add Triton-distributed design input and Hazy-style end-to-end example
+  > Find more examples/design from triton-distributed and also add an end-to-end example like that in research/repos/hazy-megakernels-mk-v2-llama-70b to be implemnted and run (compared to baseline and golden) in this PR.
+  - Context: User expanded the general runtime-linked components PR scope
+    after requiring MPI/Torch Docker execution.
+  - Related: `research/repos/triton-distributed/`,
+    `research/repos/hazy-megakernels-mk-v2-llama-70b/`,
+    `docs/in_progress/general_runtime_linked_components.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/notes/distributed_backend_sources.md`.
+  - Agent interpretation: This PR must include additional source-derived
+    design/examples from Triton-distributed and a runnable end-to-end example
+    inspired by Hazy Megakernels, with separate Megacu, handwritten baseline,
+    and golden correctness paths.
+
+- 2026-05-04 Asia/Shanghai - Keep new architecture drafts under in-progress
+  > The overall architecture design should be very explicit in documents, not only for in_progress design, but also merged into docs/design at an obvious position.
+  >
+  > We shoudn't touch docs/design directly. Instead, we should record updates under docs/in_progress and merge the changes into docs/design when  merging the PR.
+  - Context: User corrected the documentation workflow after the overall
+    runtime architecture was promoted into stable design docs too early.
+  - Related: `docs/in_progress/design/overall_runtime_architecture.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/design/runtime_linked_device_native_layer/`.
+  - Agent interpretation: During active PR work, the explicit overall
+    architecture should live under `docs/in_progress/design/`. The PR closeout
+    should then merge accepted content into `docs/design/` at an obvious
+    location. Do not promote the new runtime/event architecture into stable
+    docs before the PR is ready to merge.
+
+- 2026-05-04 Asia/Shanghai - Recreate stable design docs during PR merge
+  > the in_progress should record a thorough document refactoring to be conducted during PR merging. It's not only appending the exisiting docs/design/, but should complete re-create. We don't need the docs/design/runtime_linked_device_native_layer folder, instead, we need to recreate its contents to be updated and well re-structured for better understanding and reading for audience to use and contribute to megacu.
+  - Context: User clarified the intended PR closeout documentation workflow
+    after the overall architecture was moved back under `docs/in_progress`.
+  - Related: `docs/in_progress/design/stable_docs_recreation_plan.md`,
+    `docs/in_progress/design/overall_runtime_architecture.md`,
+    `docs/design/runtime_linked_device_native_layer/`.
+  - Agent interpretation: The PR merge should not append the new architecture
+    to the existing stable design folder. It should remove and recreate the
+    stable runtime-linked design documentation with a clearer audience-facing
+    structure for using and contributing to Megacu.
+
+- 2026-05-04 Asia/Shanghai - Flatten stable design docs
+  > Make it clear: we don't want a folder under docs/design/ to include the documents. It should be flattened under docs/design directly. Then, let's make it clear about the code changes. Grill me about it.
+  - Context: User refined the PR closeout documentation plan before moving to
+    implementation/code-change design decisions.
+  - Related: `docs/in_progress/design/stable_docs_recreation_plan.md`,
+    `docs/design/`.
+  - Agent interpretation: The PR closeout stable docs recreation should remove
+    `docs/design/runtime_linked_device_native_layer/` and should not replace it
+    with another nested folder. The accepted stable architecture docs should be
+    direct children of `docs/design/`.
+
+- 2026-05-04 Asia/Shanghai - Use EventTensor naming and paper-inspired API
+  > I dont like the name EventEngine. Use EventTensor onstead, since we get inspired by the work. You should also consider the Event Tensor paper to inspire the api design
+  - Context: User corrected the component naming during the runtime strategy
+    and Event Tensor ownership design discussion for the
+    `implementation/general-runtime-linked-components` branch.
+  - Related: `docs/in_progress/design/overall_runtime_architecture.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/notes/megakernel_cuda_layer_sources.md`.
+  - Agent interpretation: Use EventTensor terminology for the linked component
+    and derive the API from the Event Tensor paper's wait-count, notify, wait,
+    and trigger model, while keeping those operations internally lowered from
+    task attrs rather than manually called by operator kernels.
+
+- 2026-05-04 Asia/Shanghai - Accept decoupled EventTensor API direction
+  > good
+  >
+  > continue
+  - Context: User accepted the proposed EventTensor API design after asking
+    whether EventTensor should be decoupled from backend/platform.
+  - Related: `docs/in_progress/design/overall_runtime_architecture.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`.
+  - Agent interpretation: Record EventTensor as the common semantic layer for
+    event tensors, wait-counts, notify/wait/trigger attrs, and coordinate maps.
+    Platform/backend bindings own native storage, memory ordering, CUDA
+    primitive selection, NVSHMEM team/rank facts, symmetric storage, and remote
+    communication lowering.
+
+- 2026-05-04 Asia/Shanghai - EventTensor is not finer-grained operator sync
+  > You're doing wrong things. We don't need Event Tensor for more fine-grained synchronization between operators. Actually, operator is the right level for sync, and if we want more fine-grained sync, we should let each operator/task do less thing (like only a tile). We don't want each task to be split as sub-task on tiles, which is over-complicated. This is where we are different from Event Tensor. And why we still need both eventtensor wait and schedule depend_on? Because they conceptually are different. Schedule depend_on specifies the dependency between tasks, while event tensor wait specifies the condition for the sync task to complete. We need careful fix on the design and APIs.
+  - Context: User corrected the EventTensor design discussion after an example
+    incorrectly described EventTensor wait as fine-grained consumer readiness
+    between operator work items.
+  - Related: `docs/in_progress/design/overall_runtime_architecture.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce_orchestrate_common.h`,
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu`.
+  - Agent interpretation: Megacu should not copy Event Tensor's internal
+    subtask-splitting model. Operator/task is the synchronization granularity.
+    Finer sync requires smaller submitted tasks. `scheduler::depends_on`
+    specifies dependencies between task records. `event_tensor::wait` specifies
+    the condition for a sync-only task to complete.
+
+- 2026-05-05 Asia/Shanghai - Megacu EventTensor is lower-level, not less expressive
+  > "  Performance Tradeoff
+  >
+  >   Original Event Tensor can be faster when fine-grained task readiness matters and the compiler can produce a good
+  >   schedule. It can also support data-dependent triggering.
+  >
+  >   Megacu is more conservative. It may be slower for workloads that need very fine readiness unless the user authors
+  >   smaller operator tasks. But the upside is a much thinner implementation and clearer ownership." I don't really agree with this. I think original Event Tensor is more high-level, but Megacu's still has the same expressiveness, which means all design described by Event Tensor can also be written in Megacu, although might need more lines of code. Is my opinion correct? Give examples to support or challenge it.
+  >
+  > Good.
+  >
+  > This should be important points and discussions in documents.
+  - Context: User corrected the EventTensor comparison after reviewing the
+    performance/usability discussion.
+  - Related: `docs/in_progress/design/overall_runtime_architecture.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/in_progress/design/stable_docs_recreation_plan.md`.
+  - Agent interpretation: Megacu EventTensor should be documented as
+    lower-level and more explicit, not less expressive than the original Event
+    Tensor paper. Paper-style designs can be represented by explicit Megacu task
+    submissions and sync-only EventTensor tasks, possibly with more code or a
+    future generator. The true tradeoffs are authoring/generation burden,
+    absence of automatic inference/splitting, and quality of platform/backend
+    lowering.
+
+- 2026-05-05 Asia/Shanghai - Study execution models as standalone design topic
+  > PTO-Runtime (simpler) supports both modes as different runtimes (research/repos/simpler/src/a2a3/runtime). Can we also make the architecture more flexible to hold different build-run models: host-built, device-orch, ...?
+  >
+  > We should have a system study on this execution model problem: who builds task graph? when submit/run tasks? how things go for distributed execution? This needs to be very comprehensive with different solutions compared and analyzed. We should start a standalone document to record the discussion.
+  - Context: User redirected the implementation-spec discussion from a single
+    finalize-then-run model to a broader architecture study of build-run models.
+  - Related: `docs/in_progress/design/execution_model_study.md`,
+    `docs/notes/general_runtime_examples_sources.md`,
+    `research/repos/simpler/src/a2a3/runtime/`.
+  - Agent interpretation: Megacu should model construction/execution behavior
+    as a runtime-owned strategy dimension. Host-orch, device-orch,
+    seeded-orch, and future streaming models should be compared by who builds
+    tasks, when tasks are published, how schedulers consume them, and how
+    distributed ranks stay consistent.
+
+- 2026-05-05 Asia/Shanghai - Use sequence diagrams and short execution-model names
+  > I think sequence diagram should be used to illustrate different execution models. And we should give more brief names for the models.
+  - Context: User reviewed the standalone execution-model study and requested
+    clearer presentation before implementation decisions.
+  - Related: `docs/in_progress/design/execution_model_study.md`.
+  - Agent interpretation: The study should use concise model labels such as
+    `host-orch`, `dev-orch`, `seeded-orch`, `host-stream`, and `op-spawn`, and
+    each candidate model should include a sequence diagram showing host, orch,
+    runtime, scheduler, dispatcher, EventTensor, and operator interaction.
+
+- 2026-05-05 Asia/Shanghai - Runtime owns execution model and PR requires host-orch plus seeded-orch
+  > Review and discuss with me about the execution model in Megacu's implementation. I don't like a build_run inside ConfigureTarget. Instead, I think build_run should be part of the runtime, standing aside the runtime loop. Also, I think in docs/in_progress/design/execution_model_study.md, distributed should be discussed for every model about viability and tradeoffs and more concerns, since distributed execution is one of the basic goal of Megacu.
+  >
+  > Go on. And in this PR, we want snapshot (renamed to host-orch) and seeded-orch to be implemented and validated by examples.
+  - Context: User corrected the execution-model ownership after reviewing the
+    implementation shape and standalone execution-model study.
+  - Related: `docs/in_progress/design/execution_model_study.md`,
+    `include/megacu/runtime/block_tile_runtime.cuh`,
+    `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/`.
+  - Agent interpretation: Runtime should own both execution model and runtime
+    loop. `build_run` should not appear as a top-level `ConfigureTarget`
+    component. Rename the simple host-built model to `host-orch`. This PR
+    should implement and validate both `host-orch` and `seeded-orch`, including
+    distributed example coverage and per-model distributed viability/tradeoff
+    documentation.
+
+- 2026-05-05 Asia/Shanghai - Move from execution-model study to implementation design
+  > move on implementation design.
+  - Context: User accepted the execution-model direction and asked to move into
+    concrete implementation design for the runtime execution models.
+  - Related:
+    `docs/in_progress/design/runtime_execution_model_implementation_design.md`,
+    `docs/in_progress/design/execution_model_study.md`,
+    `docs/in_progress/general_runtime_linked_components.md`.
+  - Agent interpretation: Record concrete code ownership, target APIs, file
+    paths, example layout, implementation slices, and verification gates for
+    implementing `host-orch` and `seeded-orch`.
+
+- 2026-05-05 Asia/Shanghai - Three examples and tile-operator Megacu paths
+  > I think we should have three examples: one gemm-rs, one ag-gemm, and one decode pipeline. Instead of writing kernels as a big fused/persistent one, we should write as tile oeprators to be scheduled, dispatched, synchronized by megacu. Then, clean doc contradictions and start implementation.
+  - Context: User corrected the general runtime-linked PR example scope after
+    the execution-model implementation design was drafted around the older
+    GEMM+AllReduce proof.
+  - Related:
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/in_progress/design/runtime_execution_model_implementation_design.md`,
+    `docs/notes/general_runtime_examples_sources.md`,
+    `examples/cuda_nvshmem/`.
+  - Agent interpretation: The PR should implement GEMM-RS, AG-GEMM, and tiny
+    decode examples. Megacu variants must be composed from submitted tile/range
+    operator tasks plus sync-only EventTensor tasks and explicit dependency
+    attrs. Large handwritten fused/persistent kernels are acceptable only as
+    baselines, not as the Megacu implementation path.

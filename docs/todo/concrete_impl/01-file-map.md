@@ -40,9 +40,9 @@ implementation dependencies:
 
 | Path | Intended ownership | Current status |
 | --- | --- | --- |
-| `src/dispatcher/` | General `ConfigureTarget` dispatcher implementation. Input: participant annotations, problem view, runtime context. Output: compact `dispatch_state` with tile/lane/peer work and co-residency constraints. | Currently builds `dispatch_section` from `owned_program_ir`; replace. |
-| `src/scheduler/` | Runtime phased/overlap scheduler implementations. Input: `runtime_context`, `dispatch_state`, workload views, linked operator symbols. | Currently builds `schedule_section`; replace with runtime scheduler calls. |
-| `src/platform/cuda/` | CUDA validation and launch feasibility checks, including persistent/cooperative constraints for overlap. | Current device check can remain but must grow beyond link anchors. |
+| `src/dispatcher/` | General `ConfigureTarget` dispatcher implementation. Input: participant annotations, problem view, runtime context. Output: compact `dispatch_state` with tile/lane/peer work. | Currently builds `dispatch_section` from `owned_program_ir`; replace. |
+| `src/scheduler/` | Runtime scheduler implementations. Input: `runtime_context`, `dispatch_state`, workload views, linked operator symbols. | Currently builds `schedule_section`; replace with runtime scheduler calls. |
+| `src/platform/cuda/` | CUDA validation and launch feasibility checks. | Current device check can remain but must grow beyond link anchors. |
 | `src/backends/nvshmem/` | NVSHMEM team/resource validation and device-side primitive wrappers. | Current validation can remain; backend metadata builder must be replaced. |
 | `src/target/` | Common target-runtime glue: validation sequence, capability checks, status propagation, reusable fast-path helpers. | Currently mostly a link anchor; move reusable example glue here. |
 | `src/operators/` | Planned home for reusable operator wrappers if a second example proves common ownership. | `src/lowering/` should not remain as a compiler-stage name. |

@@ -119,12 +119,12 @@ were later promoted into `docs/design/`.
     a specific example truly needs unique operational support.
 
 - 2026-04-25 Asia/Shanghai - Keep GEMM+AllReduce variants under one example family
-  > Better organization is: examples/cuda_nvshmem/gemm_allreduce/{common, phased/{baseline, megacu}, overlap/{baseline, megacu}, golden}
-  - Context: User refined the previous split phased/overlap example layout
-    while PR #3 was being reorganized after review feedback.
+  - Original wording partially removed from active docs because it described a
+    superseded example variant that current docs must not carry forward.
+  - Context: User refined the previous split example layout while PR #3 was
+    being reorganized after review feedback.
   - Related: `.agents/rules/example-organization.md`,
     `examples/cuda_nvshmem/gemm_allreduce/`.
-  - Agent interpretation: Phased and overlap are variants of one
-    CUDA+NVSHMEM GEMM+AllReduce example family. Shared descriptors and golden
-    code belong at the family root, while baseline and Megacu implementations
-    are separated under each variant.
+  - Agent interpretation: CUDA+NVSHMEM GEMM+AllReduce examples should keep
+    shared descriptors and golden code at the family root, while baseline and
+    Megacu implementation variants live below the family when active.
