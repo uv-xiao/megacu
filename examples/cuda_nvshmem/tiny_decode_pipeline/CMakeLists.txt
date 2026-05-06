@@ -11,6 +11,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA::cudart)
 
   add_library(cuda_nvshmem_tiny_decode_megacu STATIC
+    megacu/tiny_decode_arena.cc
     megacu/tiny_decode_megacu.cu)
   target_link_libraries(cuda_nvshmem_tiny_decode_megacu PUBLIC
     megacu_headers

@@ -62,8 +62,8 @@ Component status:
 | Public authoring surface | Host-callable orchestration with raw kernel-like arguments and explicit attrs | `runtime::phase`, `submit`, `sync`, and attrs exist, but examples do not all use the intended end-to-end path | Partial | Runtime headers and tests compile in the previous implementation pass |
 | Attr system | Shared carrier for scheduling, dispatch, operator, and EventTensor metadata | Central enum/union attr path exists; component-owned attr extensibility is still limited | Partial | Attr contract tests and runtime headers |
 | Task/Event records | Compact records for host-orch and seeded-orch execution | Arena and record types exist and the first runtime arena execution checkpoint consumes sealed task/event records | Mostly complete | `task_arena` contracts and runtime arena execution contracts |
-| `host-orch` model | Host builds task records, runtime launches a snapshot | Frame contracts exist and shared recipe topology is proven in host-only/CUDA smoke; not integrated into required examples | Partial | Host-orch contract tests and shared recipe smoke, not required examples |
-| `seeded-orch` model | Host seeds device arena; persistent runtime can build/consume work dynamically | Device publication contracts exist and shared recipe equivalence CUDA smoke exists; not integrated into required examples | Partial | CUDA contract proof and shared recipe smoke, not end-to-end examples |
+| `host-orch` model | Host builds task records, runtime launches a snapshot | Frame contracts exist and tiny decode now uses a host-built arena in a CUDA megakernel; distributed examples remain incomplete | Partial | Host-orch contracts plus `tiny_decode_correctness` |
+| `seeded-orch` model | Host seeds device arena; persistent runtime can build/consume work dynamically | Device publication contracts exist and tiny decode now uses device-side recipe publication in a CUDA megakernel; distributed examples remain incomplete | Partial | Seeded-orch contracts plus `tiny_decode_correctness` |
 | Runtime composition | Link scheduler, dispatcher, EventTensor, and operators behind a common runtime API | `device_persistent<ExecutionModel, Loop, ...>` provides a composition point | Mostly complete | Compile contracts for loop candidates |
 | Runtime loops | Overrideable internal loops owned by runtime | `block_tile` now drives arena execution smoke; other loop candidates remain compile/runtime contracts | Mostly complete for arena execution smoke | Runtime arena execution CUDA smoke |
 | Scheduler, host side | ASAP readiness from explicit dependencies only | `explicit_asap` exists as a host-side contract | Partial | Contract tests |
@@ -78,7 +78,7 @@ Component status:
 | Docker environment | Required execution envelope for MPI/Torch/CUDA+NVSHMEM | Helper scripts exist, but do not prove all required examples | Partial | Docker/tooling findings below |
 | GEMM-RS example | Required end-to-end distributed example | Directory/build skeleton exists | Missing | No golden/baseline/Megacu correctness binary |
 | AG-GEMM example | Required end-to-end distributed example | Directory/build skeleton exists | Missing | No golden/baseline/Megacu correctness binary |
-| Tiny decode example | Required end-to-end decode pipeline example | Golden/baseline/Megacu host-phase correctness path exists | Partial | Not yet runtime-owned CUDA path |
+| Tiny decode example | Required end-to-end decode pipeline example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness path exists | Partial | Distributed tiny decode path still missing |
 | Stable docs closeout | Recreate flattened `docs/design/` at merge time | Active in-progress docs record this requirement | Process/deferred | Stable docs were touched early; see finding |
 
 Task completion status:
@@ -95,7 +95,7 @@ Task completion status:
 | MPI/Torch required adapters | Required by PR and Docker path, not optional dependency paths | Adapter normalization exists | Partial |
 | GEMM-RS | Tile-operator Megacu example with golden and baseline comparison | Skeleton only | Missing |
 | AG-GEMM | Tile-operator Megacu example with golden and baseline comparison | Skeleton only | Missing |
-| Tiny decode | Pipeline example with golden, baseline, and Megacu comparison | Host-phase path exists | Partial |
+| Tiny decode | Pipeline example with golden, baseline, and Megacu comparison | Local CUDA host-orch and seeded-orch paths exist | Partial |
 | Docker verification | Build/run required distributed examples through Docker | Scripts do not yet prove required examples | Missing |
 | `docs/design/` closeout | Recreate flattened stable docs during PR merge, not now | In-progress docs mention this | Process/deferred |
 
@@ -226,7 +226,8 @@ What is implemented:
   seeded-orch shared recipe equivalence.
 - Thin MPI/Torch launch fact adapters that normalize rank/world/local-rank into
   `cuda_nvshmem::driver_view`.
-- Tiny decode golden/baseline/Megacu host-phase correctness path.
+- Tiny decode golden/baseline/Megacu host-orch and seeded-orch local CUDA
+  correctness path.
 - GEMM-RS and AG-GEMM directories and buildable skeleton object targets.
 
 What is not implemented relative to the active design:
@@ -235,7 +236,8 @@ What is not implemented relative to the active design:
 - No GEMM-RS/AG-GEMM golden, baseline, or Megacu correctness binaries exist.
 - No direct/MPI/Torch GEMM-RS correctness path exists.
 - No direct/distributed AG-GEMM correctness path exists.
-- `host-orch` and `seeded-orch` are not integrated into the required examples.
+- `host-orch` and `seeded-orch` are integrated into tiny decode and
+  GEMM-AllReduce, but not into GEMM-RS or AG-GEMM.
 - Runtime arena smoke is not yet the GEMM-AllReduce refit or an end-to-end
   distributed example.
 - EventTensor mapping is still smoke-level, not a general multi-tile distributed
@@ -318,18 +320,15 @@ Implementation evidence:
 - `tests/build/runtime_execution_models_contracts.cc` exercises `host_orch`.
 - `tests/build/runtime_device_persistent_contract.cu` exercises
   `seeded_orch`.
-- `rg` shows `host_orch` and `seeded_orch` are used in tests and headers, but
-  not in the new example targets.
-- `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_megacu.cu:279-304`
-  uses host-side `runtime::phase`, not `runtime::execution::host_orch` or
-  `runtime::execution::seeded_orch`.
+- `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_megacu.cu`
+  now exposes host-orch and seeded-orch CUDA megakernel variants from one shared
+  recipe.
 - GEMM-RS and AG-GEMM Megacu sources are skeletons.
 
 Impact:
 
-- The core ownership claim, that examples are built through runtime execution
-  models rather than manual task assembly or host-only phase execution, is not
-  demonstrated.
+- The core ownership claim is now demonstrated by tiny decode and
+  GEMM-AllReduce, but still not by GEMM-RS or AG-GEMM.
 
 Fix direction:
 
@@ -521,25 +520,24 @@ Design requirement:
 
 Implementation evidence:
 
-- `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_megacu.cu:279-304`
-  builds a host `runtime::phase`, submits five stage functions, and calls
-  `phase.run()`.
-- `examples/cuda_nvshmem/tiny_decode_pipeline/README.md:50-51` states this is
-  local and host-orchestrated and does not launch distributed tiny decode work.
-- `examples/cuda_nvshmem/tiny_decode_pipeline/README.md:63-65` says the current
-  correctness test does not run CUDA kernels or distributed work.
+- `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_runtime_recipe.cuh`
+  defines one shared recipe with operator tasks, sync-only EventTensor waits,
+  explicit `depends_on` attrs, and tile-grid dispatch attrs.
+- `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_megacu.cu`
+  launches the recipe through both host-orch and seeded-orch runtime execution
+  models in CUDA megakernels.
+- `tests/runtime/tiny_decode_correctness.cc` compares golden, baseline,
+  Megacu host-orch, Megacu seeded-orch, and the compatibility Megacu ABI.
 
 Impact:
 
-- Tiny decode is useful as a host-side authoring-surface correctness test, but
-  it does not validate the runtime-owned device loop, `host-orch`, or
-  `seeded-orch`.
+- Tiny decode now validates the runtime-owned device loop, `host-orch`, and
+  `seeded-orch` locally. It still does not validate distributed tiny decode.
 
 Fix direction:
 
-- Keep the current host-phase path as a small correctness oracle if useful, but
-  add Megacu host-orch and seeded-orch variants that use task arena records and
-  runtime loops.
+- Add the distributed 1-host-2-device tiny decode path when the PR reaches the
+  distributed example validation slice.
 
 ### Medium: Stable `docs/design/` Was Edited Despite Active Design Saying To Recreate It At Closeout
 
@@ -594,7 +592,7 @@ Fix direction:
 
 | Design area | Current code status | Correspondence |
 | --- | --- | --- |
-| Thin raw operator arguments | `runtime::phase::submit` accepts native function signatures and raw args in `include/megacu/runtime.h:318-351`; tiny decode submits raw pointer args in `tiny_decode_megacu.cu:285-301`. | Mostly aligned for host surface. Device arena path does not yet carry raw args. |
+| Thin raw operator arguments | `runtime::phase::submit` accepts native function signatures and raw args in `include/megacu/runtime.h:318-351`; runtime-linked examples pass raw pointers through target runtime args and operator tables. | Mostly aligned for the current examples. |
 | Explicit dependencies only | `scheduler::depends_on` exists in `include/megacu/runtime.h:94-100`; host scheduler checks dependency attrs in `src/scheduler/explicit_asap.cc:40-52`; CUDA smoke checks device arena deps. | Mostly aligned for the checkpoint. Missing full example validation. |
 | EventTensor API naming | `event_tensor::shape/wait_count/notify/wait/trigger` exist in `include/megacu/runtime.h:102-126`; stale `runtime::events` guard exists in CMake. | Aligned at API naming level. CUDA attr-lowering smoke exists; distributed mapping remains partial. |
 | EventTensor as sync-task completion condition | The shared GEMM-AllReduce recipe places wait on a sync task; CUDA arena smoke and GEMM-AllReduce direct correctness complete sync-only waits through EventTensor attrs. | Mostly aligned for the checkpoint. Missing distributed example validation. |
@@ -608,7 +606,7 @@ Fix direction:
 | Launch adapters | MPI/Torch adapter headers and env contracts exist. | Partial/aligned for thin normalization; missing real example launch correctness and NVSHMEM bootstrap proof. |
 | GEMM-RS example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
 | AG-GEMM example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
-| Tiny decode example | Golden/baseline/Megacu host-phase correctness exists. | Partial. Not runtime-owned CUDA path, not host-orch/seeded-orch. |
+| Tiny decode example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness exists. | Partial. Distributed tiny decode is still missing. |
 | Docker source of truth | Docker installs MPI/Torch and script runner invokes helpers. | Partial. Helpers do not run required GEMM-RS/AG-GEMM correctness. |
 | Stable docs lifecycle | Closeout plan exists under in-progress. | Partially misaligned because `docs/design/` also changed. |
 
@@ -667,14 +665,11 @@ Fix direction:
 
 1. Should this PR remain scoped to the full active design, or should it be split
    into a smaller runtime-contract PR plus a later distributed-example PR?
-2. Is the current host `runtime::phase` path still allowed as a user-facing
-   convenience, or should all Megacu examples now route through
-   `host-orch`/`seeded-orch` only?
-3. Should the first arena-driven device scheduler be a simple static
+2. Should the first arena-driven device scheduler be a simple static
    dependency scan, or should it include a ready-but-not-issued buffer now?
-4. For MPI/Torch adapters, is rank/local-rank normalization enough for this PR,
+3. For MPI/Torch adapters, is rank/local-rank normalization enough for this PR,
    or must the adapter also prove NVSHMEM bootstrap consistency?
-5. Should stable `docs/design/` edits be reverted until PR closeout?
+4. Should stable `docs/design/` edits be reverted until PR closeout?
 
 ## Residual Risk
 

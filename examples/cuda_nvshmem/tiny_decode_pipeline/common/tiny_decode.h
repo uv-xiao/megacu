@@ -26,5 +26,9 @@ extern "C" int megacu_tiny_decode_golden(
     megacu::examples::tiny_decode::buffers *state);
 extern "C" int megacu_tiny_decode_baseline(
     megacu::examples::tiny_decode::buffers *state);
+extern "C" int megacu_tiny_decode_megacu_host_orch(
+    megacu::examples::tiny_decode::buffers *state);
+extern "C" int megacu_tiny_decode_megacu_seeded_orch(
+    megacu::examples::tiny_decode::buffers *state);
 extern "C" int megacu_tiny_decode_megacu(
     megacu::examples::tiny_decode::buffers *state);
