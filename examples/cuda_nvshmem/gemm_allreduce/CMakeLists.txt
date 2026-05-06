@@ -224,6 +224,18 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   add_test(
     NAME runtime_device_persistent_contract
     COMMAND megacu_runtime_device_persistent_contract)
+
+  add_executable(megacu_runtime_arena_execution_contract
+    ${PROJECT_SOURCE_DIR}/tests/build/runtime_arena_execution_contract.cu)
+  target_link_libraries(megacu_runtime_arena_execution_contract PRIVATE
+    megacu_headers
+    CUDA::cudart)
+  target_compile_options(megacu_runtime_arena_execution_contract PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+
+  add_test(
+    NAME runtime_arena_execution_contract
+    COMMAND megacu_runtime_arena_execution_contract)
 endif()
 
 add_test(

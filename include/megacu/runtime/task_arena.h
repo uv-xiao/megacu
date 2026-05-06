@@ -45,6 +45,8 @@ struct task_arena_view {
   device_event_tensor_record *events = nullptr;
   task_ref *deps = nullptr;
   arena_region *regions = nullptr;
+  std::uint32_t *task_completed = nullptr;
+  std::uint32_t *task_remaining_work = nullptr;
   std::uint32_t task_count = 0;
   std::uint32_t event_count = 0;
   std::uint32_t dep_count = 0;
