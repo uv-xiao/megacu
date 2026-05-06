@@ -14,20 +14,31 @@ int main() {
   assert(status.code == megacu::status_code::ok);
 
   auto arena = storage.view();
+  assert(arena.tasks != nullptr);
+  assert(arena.events != nullptr);
+  assert(arena.deps != nullptr);
+  assert(arena.regions != nullptr);
+  assert(arena.task_completed != nullptr);
+  assert(arena.task_remaining_work != nullptr);
   assert(arena.task_count == 3);
   assert(arena.event_count == 1);
   assert(arena.dep_count == 2);
   assert(arena.region_count == 1);
+  assert(arena.task_capacity == storage.tasks.size());
+  assert(arena.event_capacity == storage.events.size());
+  assert(arena.dep_capacity == storage.deps.size());
+  assert(arena.region_capacity == storage.regions.size());
   assert(arena.regions[0].sealed == 1);
-
-  assert(arena.task_completed[0] == 0);
-  assert(arena.task_completed[1] == 0);
-  assert(arena.task_completed[2] == 0);
 
   std::int64_t tiles =
       gemm_ar::tile_rows(args.problem) * gemm_ar::tile_cols(args.problem);
-  assert(arena.task_remaining_work[0] == static_cast<std::uint32_t>(tiles));
-  assert(arena.task_remaining_work[1] == 1);
-  assert(arena.task_remaining_work[2] == static_cast<std::uint32_t>(tiles));
+  for (std::uint32_t task = 0; task < arena.task_count; ++task) {
+    assert(arena.task_completed[task] == 0);
+    auto expected_remaining =
+        arena.tasks[task].kind == megacu::runtime::task_kind::sync_only
+            ? 1
+            : static_cast<std::uint32_t>(tiles);
+    assert(arena.task_remaining_work[task] == expected_remaining);
+  }
   return 0;
 }
