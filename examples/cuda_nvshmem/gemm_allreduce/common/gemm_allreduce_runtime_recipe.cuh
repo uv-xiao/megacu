@@ -53,11 +53,8 @@ GEMM_AR_HOST_DEVICE megacu::status build_runtime_recipe(Orch &orch,
   auto ready = orch.event_tensor(megacu::runtime::attrs(
       megacu::runtime::event_tensor::shape(m_tiles, n_tiles),
       megacu::runtime::event_tensor::wait_count(args.driver.team.team_n_pes),
-      megacu::runtime::attr{
-          .kind = megacu::runtime::attr_kind::event_tensor_storage,
-          .pointer = args.events},
-      megacu::runtime::attr{
-          .kind = megacu::runtime::attr_kind::event_tensor_scope}));
+      megacu::cuda_nvshmem::event_tensor::symmetric_storage(args.events),
+      megacu::cuda_nvshmem::event_tensor::scope::team{}));
 
   auto gemm = orch.submit(
       runtime_slots::gemm_tile_produce,
