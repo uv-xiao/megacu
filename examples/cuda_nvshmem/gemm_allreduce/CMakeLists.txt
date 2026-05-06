@@ -246,6 +246,18 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   add_test(
     NAME runtime_arena_execution_contract
     COMMAND megacu_runtime_arena_execution_contract)
+
+  add_executable(megacu_runtime_gemm_allreduce_recipe_device_contract
+    ${PROJECT_SOURCE_DIR}/tests/build/runtime_gemm_allreduce_recipe_device_contract.cu)
+  target_link_libraries(megacu_runtime_gemm_allreduce_recipe_device_contract PRIVATE
+    megacu_headers
+    CUDA::cudart)
+  target_compile_options(megacu_runtime_gemm_allreduce_recipe_device_contract PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+
+  add_test(
+    NAME runtime_gemm_allreduce_recipe_device_contract
+    COMMAND megacu_runtime_gemm_allreduce_recipe_device_contract)
 endif()
 
 add_test(

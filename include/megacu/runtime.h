@@ -436,7 +436,8 @@ struct driver_view {
 
 namespace event_tensor {
 
-inline megacu::runtime::attr symmetric_storage(void *storage) {
+MEGACU_RUNTIME_HOST_DEVICE inline megacu::runtime::attr
+symmetric_storage(void *storage) {
   return {.kind = megacu::runtime::attr_kind::event_tensor_storage,
           .pointer = storage};
 }
@@ -444,14 +445,14 @@ inline megacu::runtime::attr symmetric_storage(void *storage) {
 namespace scope {
 
 struct team {
-  constexpr operator megacu::runtime::attr() const {
+  MEGACU_RUNTIME_HOST_DEVICE constexpr operator megacu::runtime::attr() const {
     return {.kind = megacu::runtime::attr_kind::event_tensor_scope};
   }
 };
 
 } // namespace scope
 
-inline megacu::runtime::attr team_scope() {
+MEGACU_RUNTIME_HOST_DEVICE inline megacu::runtime::attr team_scope() {
   return scope::team{};
 }
 
