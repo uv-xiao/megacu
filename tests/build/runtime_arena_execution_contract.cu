@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 
 #include <megacu/dispatcher/tile_grid_device.cuh>
+#include <megacu/runtime/loop/block_tile.cuh>
 #include <megacu/runtime/task_arena.h>
 #include <megacu/scheduler/explicit_asap_device.cuh>
 
@@ -13,6 +14,7 @@ struct arena_runtime_context {
   __device__ int block_id() const { return blockIdx.x; }
   __device__ int grid_blocks() const { return gridDim.x; }
   __device__ int thread_id() const { return threadIdx.x; }
+  __device__ void sync_block() const { __syncthreads(); }
 };
 
 struct arena_runtime_observation {
@@ -28,6 +30,51 @@ struct arena_runtime_observation {
   int second_task = -1;
   int second_work_active = 0;
   int second_work_tile = -1;
+};
+
+struct op_observation {
+  int producer_count = 0;
+  int consumer_count = 0;
+  int unexpected_operator_count = 0;
+  int sync_completed = 0;
+  int consumer_after_sync = 0;
+};
+
+struct contract_event_tensor {
+  op_observation *obs = nullptr;
+
+  template <class Context, class Arena, class Task, class Work>
+  __device__ bool complete(Context ctx, Arena, Task task, Work) const {
+    if (ctx.thread_id() == 0 && task.value == 1) {
+      atomicAdd(&obs->sync_completed, 1);
+    }
+    return task.value == 1;
+  }
+
+  template <class Context, class Arena, class Task, class Work>
+  __device__ void after(Context, Arena, Task, Work) const {}
+};
+
+struct contract_operators {
+  op_observation *obs = nullptr;
+
+  template <class Context, class Arena, class Task, class Work>
+  __device__ void invoke(Context ctx, Arena arena, Task task, Work) const {
+    if (ctx.thread_id() != 0) {
+      return;
+    }
+    auto const slot = arena.tasks[task.value].op_slot;
+    if (slot == megacu::runtime::operator_slot{3}) {
+      atomicAdd(&obs->producer_count, 1);
+    } else if (slot == megacu::runtime::operator_slot{4}) {
+      if (arena.task_completed[1] == 1) {
+        atomicAdd(&obs->consumer_after_sync, 1);
+      }
+      atomicAdd(&obs->consumer_count, 1);
+    } else {
+      atomicAdd(&obs->unexpected_operator_count, 1);
+    }
+  }
 };
 
 __global__ void
@@ -118,6 +165,16 @@ __global__ void reset_task0_completion(megacu::runtime::task_arena_view arena) {
   }
 }
 
+__global__ void
+execute_arena_runtime(megacu::runtime::task_arena_view arena,
+                      op_observation *observation) {
+  auto ctx = arena_runtime_context{};
+  megacu::runtime::loop::block_tile{}.run(
+      ctx, arena, megacu::scheduler::device::explicit_asap{},
+      megacu::dispatcher::device::tile_grid{},
+      contract_event_tensor{observation}, contract_operators{observation});
+}
+
 } // namespace
 
 int main() {
@@ -128,6 +185,7 @@ int main() {
   std::uint32_t *completed = nullptr;
   std::uint32_t *remaining = nullptr;
   arena_runtime_observation *observations = nullptr;
+  op_observation *op_observations = nullptr;
 
   assert(cudaMallocManaged(&tasks, sizeof(*tasks) * 3) == cudaSuccess);
   assert(cudaMallocManaged(&events, sizeof(*events) * 1) == cudaSuccess);
@@ -136,6 +194,8 @@ int main() {
   assert(cudaMallocManaged(&completed, sizeof(*completed) * 3) == cudaSuccess);
   assert(cudaMallocManaged(&remaining, sizeof(*remaining) * 3) == cudaSuccess);
   assert(cudaMallocManaged(&observations, sizeof(*observations) * 2) ==
+         cudaSuccess);
+  assert(cudaMallocManaged(&op_observations, sizeof(*op_observations)) ==
          cudaSuccess);
 
   events[0] = {.ref = megacu::runtime::event_tensor_ref{0},
@@ -235,6 +295,29 @@ int main() {
   assert(observations[0].second_work_active == 1);
   assert(observations[0].second_work_tile == 0);
 
+  completed[0] = 0;
+  completed[1] = 0;
+  completed[2] = 0;
+  remaining[0] = 4;
+  remaining[1] = 1;
+  remaining[2] = 1;
+  *op_observations = {};
+
+  execute_arena_runtime<<<2, 4>>>(arena, op_observations);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(op_observations->producer_count == 4);
+  assert(op_observations->unexpected_operator_count == 0);
+  assert(op_observations->sync_completed == 1);
+  assert(op_observations->consumer_count == 1);
+  assert(op_observations->consumer_after_sync == 1);
+  assert(completed[0] == 1);
+  assert(completed[1] == 1);
+  assert(completed[2] == 1);
+  assert(remaining[0] == 0);
+  assert(remaining[1] == 0);
+  assert(remaining[2] == 0);
+
+  assert(cudaFree(op_observations) == cudaSuccess);
   assert(cudaFree(observations) == cudaSuccess);
   assert(cudaFree(remaining) == cudaSuccess);
   assert(cudaFree(completed) == cudaSuccess);

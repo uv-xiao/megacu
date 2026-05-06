@@ -54,14 +54,14 @@ struct explicit_asap {
     auto const remaining_before =
         atomicSub(&arena.task_remaining_work[task.value], 1);
     if (remaining_before == 1) {
-      arena.task_completed[task.value] = 1;
+      publish_completed(&arena.task_completed[task.value]);
     }
   }
 
 private:
   template <class Arena> __device__ int region_first_task(Arena arena) const {
     if (arena.regions == nullptr || arena.region_count == 0 ||
-        arena.regions[0].sealed == 0) {
+        load_volatile(&arena.regions[0].sealed) == 0) {
       return static_cast<int>(arena.task_count);
     }
     return static_cast<int>(arena.regions[0].first_task);
@@ -71,7 +71,8 @@ private:
   __device__ megacu::runtime::device::task_ref find_ready(Arena arena,
                                                           int start) const {
     if (arena.tasks == nullptr || arena.regions == nullptr ||
-        arena.region_count == 0 || arena.regions[0].sealed == 0) {
+        arena.region_count == 0 ||
+        load_volatile(&arena.regions[0].sealed) == 0) {
       return {};
     }
 
@@ -91,7 +92,7 @@ private:
   template <class Arena>
   __device__ bool is_ready(Arena arena, int task_index) const {
     if (arena.task_completed != nullptr &&
-        arena.task_completed[task_index] != 0) {
+        load_volatile(&arena.task_completed[task_index]) != 0) {
       return false;
     }
 
@@ -103,11 +104,22 @@ private:
       }
       auto const dep = arena.deps[dep_index];
       if (dep.value >= arena.task_count || arena.task_completed == nullptr ||
-          arena.task_completed[dep.value] == 0) {
+          load_volatile(&arena.task_completed[dep.value]) == 0) {
         return false;
       }
     }
     return true;
+  }
+
+  template <class T> __device__ T load_volatile(T const *ptr) const {
+    return *reinterpret_cast<T const volatile *>(ptr);
+  }
+
+  __device__ void publish_completed(std::uint32_t *ptr) const {
+#if defined(__CUDA_ARCH__)
+    __threadfence();
+#endif
+    *reinterpret_cast<std::uint32_t volatile *>(ptr) = 1;
   }
 };
 
