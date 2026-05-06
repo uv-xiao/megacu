@@ -22,6 +22,21 @@ __device__ inline void clear_failure_state(task_arena_view &view) {
   }
 }
 
+__device__ inline std::uint32_t published_dep_count(task_arena_view const &view,
+                                                    arena_region region) {
+  std::uint32_t count = 0;
+  auto const one_past_last = region.first_task + region.task_count;
+  for (auto task = region.first_task; task < one_past_last; ++task) {
+    auto const &record = view.tasks[task];
+    auto const task_dep_end =
+        static_cast<std::uint32_t>(record.first_dep) + record.dep_count;
+    if (task_dep_end > count) {
+      count = task_dep_end;
+    }
+  }
+  return count;
+}
+
 } // namespace detail
 
 template <class Recipe> struct model {
@@ -82,6 +97,7 @@ template <class Recipe> struct model {
     auto region = view.regions[0];
     view.task_count = region.first_task + region.task_count;
     view.event_count = region.first_event + region.event_count;
+    view.dep_count = detail::published_dep_count(view, region);
     view.region_count = 1;
     return true;
   }

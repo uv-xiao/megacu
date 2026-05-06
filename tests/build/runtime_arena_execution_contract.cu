@@ -5,9 +5,13 @@
 
 #include <megacu/backends/nvshmem/cuda_event_tensor.cuh>
 #include <megacu/dispatcher/tile_grid_device.cuh>
+#include <megacu/runtime/device_persistent.cuh>
+#include <megacu/runtime/execution/seeded_orch.cuh>
 #include <megacu/runtime/loop/block_tile.cuh>
 #include <megacu/runtime/task_arena.h>
 #include <megacu/scheduler/explicit_asap_device.cuh>
+
+#include "runtime_recipe_contracts.h"
 
 namespace {
 
@@ -35,6 +39,7 @@ struct arena_runtime_observation {
 
 struct op_observation {
   int producer_count = 0;
+  int sync_completed = 0;
   int consumer_count = 0;
   int unexpected_operator_count = 0;
   int consumer_after_sync = 0;
@@ -66,6 +71,13 @@ struct contract_operators {
     } else {
       atomicAdd(&obs->unexpected_operator_count, 1);
     }
+  }
+};
+
+struct seeded_contract_recipe {
+  template <class Orch> __device__ megacu::status operator()(Orch &orch) const {
+    (void)megacu::runtime::contracts::submit_three_task_event_recipe(orch);
+    return orch.seal();
   }
 };
 
@@ -173,6 +185,38 @@ execute_arena_runtime(megacu::runtime::task_arena_view arena,
       contract_operators{observation});
 }
 
+__global__ void execute_seeded_arena_runtime(
+    megacu::runtime::task_arena_view arena, megacu::status *device_status,
+    std::uint32_t *construction_status, int *event_storage,
+    op_observation *observation) {
+  auto ctx = arena_runtime_context{};
+  auto runtime = megacu::runtime::device_persistent<
+      megacu::runtime::execution::seeded_orch::model<seeded_contract_recipe>,
+      megacu::runtime::loop::block_tile, megacu::scheduler::device::explicit_asap,
+      megacu::dispatcher::device::tile_grid,
+      megacu::backend::nvshmem::cuda::attr_event_tensor_i32,
+      contract_operators>{
+      .execution = {.arena = arena,
+                    .recipe = seeded_contract_recipe{},
+                    .device_status = device_status,
+                    .construction_status = construction_status},
+      .loop = megacu::runtime::loop::block_tile{},
+      .scheduler = megacu::scheduler::device::explicit_asap{},
+      .dispatcher = megacu::dispatcher::device::tile_grid{},
+      .event_tensor = megacu::backend::nvshmem::cuda::attr_event_tensor_i32{
+          .event_tensor = {.events = event_storage,
+                           .tiles = 1,
+                           .my_pe = 0,
+                           .n_pes = 1}},
+      .operators = contract_operators{observation}};
+
+  runtime(ctx);
+
+  if (ctx.block_id() == 0 && ctx.thread_id() == 0) {
+    observation->sync_completed = arena.task_completed[1] == 1 ? 1 : 0;
+  }
+}
+
 __global__ void
 observe_attr_event_wait(megacu::runtime::task_arena_view arena,
                         int *event_storage,
@@ -227,6 +271,8 @@ int main() {
   arena_runtime_observation *observations = nullptr;
   op_observation *op_observations = nullptr;
   event_wait_observation *event_wait_observations = nullptr;
+  megacu::status *device_status = nullptr;
+  std::uint32_t *construction_status = nullptr;
 
   assert(cudaMallocManaged(&tasks, sizeof(*tasks) * 3) == cudaSuccess);
   assert(cudaMallocManaged(&events, sizeof(*events) * 1) == cudaSuccess);
@@ -242,6 +288,10 @@ int main() {
          cudaSuccess);
   assert(cudaMallocManaged(&event_wait_observations,
                            sizeof(*event_wait_observations)) == cudaSuccess);
+  assert(cudaMallocManaged(&device_status, sizeof(*device_status)) ==
+         cudaSuccess);
+  assert(cudaMallocManaged(&construction_status,
+                           sizeof(*construction_status)) == cudaSuccess);
 
   events[0] = {.ref = megacu::runtime::event_tensor_ref{0},
                .attributes = megacu::runtime::attrs(
@@ -375,6 +425,59 @@ int main() {
   assert(remaining[1] == 0);
   assert(remaining[2] == 0);
 
+  completed[0] = 0;
+  completed[1] = 0;
+  completed[2] = 0;
+  remaining[0] = 1;
+  remaining[1] = 1;
+  remaining[2] = 1;
+  event_storage[0] = 0;
+  tasks[0] = {};
+  tasks[1] = {};
+  tasks[2] = {};
+  events[0] = {};
+  deps[0] = {};
+  deps[1] = {};
+  regions[0] = {};
+  arena.task_count = 0;
+  arena.event_count = 0;
+  arena.dep_count = 0;
+  arena.region_count = 0;
+  *device_status = {};
+  *construction_status =
+      megacu::runtime::execution::seeded_orch::construction_pending;
+  *op_observations = {};
+
+  execute_seeded_arena_runtime<<<2, 4>>>(arena, device_status,
+                                         construction_status, event_storage,
+                                         op_observations);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(device_status->code == megacu::status_code::ok);
+  assert(*construction_status ==
+         megacu::runtime::execution::seeded_orch::construction_succeeded);
+  assert(tasks[0].kind == megacu::runtime::task_kind::operator_body);
+  assert(tasks[0].op_slot == megacu::runtime::operator_slot{3});
+  assert(tasks[1].kind == megacu::runtime::task_kind::sync_only);
+  assert(tasks[1].op_slot == megacu::runtime::invalid_operator_slot());
+  assert(tasks[2].kind == megacu::runtime::task_kind::operator_body);
+  assert(tasks[2].op_slot == megacu::runtime::operator_slot{4});
+  assert(deps[tasks[1].first_dep] == megacu::runtime::task_ref{0});
+  assert(deps[tasks[2].first_dep] == megacu::runtime::task_ref{1});
+  assert(op_observations->producer_count == 1);
+  assert(op_observations->sync_completed == 1);
+  assert(op_observations->consumer_count == 1);
+  assert(op_observations->unexpected_operator_count == 0);
+  assert(op_observations->consumer_after_sync == 1);
+  assert(event_storage[0] == 1);
+  assert(completed[0] == 1);
+  assert(completed[1] == 1);
+  assert(completed[2] == 1);
+  assert(remaining[0] == 0);
+  assert(remaining[1] == 0);
+  assert(remaining[2] == 0);
+
+  assert(cudaFree(construction_status) == cudaSuccess);
+  assert(cudaFree(device_status) == cudaSuccess);
   assert(cudaFree(event_wait_observations) == cudaSuccess);
   assert(cudaFree(op_observations) == cudaSuccess);
   assert(cudaFree(observations) == cudaSuccess);
