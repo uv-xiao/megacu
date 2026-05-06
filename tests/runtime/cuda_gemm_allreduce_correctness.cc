@@ -157,7 +157,7 @@ int main() {
           .world_n_pes = 1,
           .cuda_device_ordinal = device}};
 
-  auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+  auto status = cuda_nvshmem_gemm_allreduce_host_orch(
       driver,
       static_cast<float const *>(a),
       static_cast<float const *>(b),
@@ -170,7 +170,7 @@ int main() {
   require_cuda(cudaMemcpyAsync(
       host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
-  check_expected(host_a, host_b, host_c, 1.0f, "megacu_phased_single");
+  check_expected(host_a, host_b, host_c, 1.0f, "megacu_host_orch_single");
 
   require_cuda(cudaFree(events));
   require_cuda(cudaFree(partial));

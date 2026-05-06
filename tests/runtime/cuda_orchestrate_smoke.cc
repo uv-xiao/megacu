@@ -84,7 +84,7 @@ int main() {
           .world_n_pes = 1,
           .cuda_device_ordinal = device}};
 
-  auto phased = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+  auto status = cuda_nvshmem_gemm_allreduce_host_orch(
       driver,
       static_cast<float const *>(a),
       static_cast<float const *>(b),
@@ -92,7 +92,7 @@ int main() {
       static_cast<float *>(c),
       events,
       small_problem());
-  assert(phased.code == megacu::status_code::ok);
+  assert(status.code == megacu::status_code::ok);
 
   require_cuda(cudaFree(marker));
   require_cuda(cudaFree(events));

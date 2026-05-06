@@ -132,7 +132,28 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
 
 endif()
 
-add_subdirectory(phased/megacu)
+megacu_add_orchestrate_target(
+  TARGET cuda_nvshmem_gemm_allreduce_megacu
+  SOURCES megacu/gemm_allreduce_orchestrate.cc
+  COMPONENTS cuda_nvshmem_static
+  PROGRESS asap)
+
+if(MEGACU_HAS_CUDA_LANGUAGE)
+  target_sources(cuda_nvshmem_gemm_allreduce_megacu PRIVATE
+    $<TARGET_OBJECTS:megacu_gemm_allreduce_cuda_native>)
+  target_link_libraries(cuda_nvshmem_gemm_allreduce_megacu PUBLIC
+    CUDA::cudart)
+  set_target_properties(cuda_nvshmem_gemm_allreduce_megacu PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON)
+  target_compile_definitions(cuda_nvshmem_gemm_allreduce_megacu PRIVATE
+    MEGACU_HAS_CUDA_NUMERIC_PATH=1)
+  if(MEGACU_ENABLE_NVSHMEM_TESTS)
+    target_link_libraries(cuda_nvshmem_gemm_allreduce_megacu PUBLIC
+      CUDA::cuda_driver
+      ${NVSHMEM_DEVICE_LIBRARY}
+      ${NVSHMEM_HOST_LIBRARY})
+  endif()
+endif()
 
 add_executable(megacu_runtime_linked_surface_contract
   ${PROJECT_SOURCE_DIR}/tests/build/runtime_linked_surface_contract.cc)
@@ -326,7 +347,7 @@ add_executable(megacu_direct_orchestrate_smoke
   ${PROJECT_SOURCE_DIR}/tests/runtime/direct_orchestrate_smoke.cc)
 target_link_libraries(megacu_direct_orchestrate_smoke PRIVATE
   megacu_headers
-  cuda_nvshmem_gemm_allreduce_phased)
+  cuda_nvshmem_gemm_allreduce_megacu)
 if(MEGACU_HAS_CUDA_LANGUAGE)
   set_target_properties(megacu_direct_orchestrate_smoke PROPERTIES
     LINKER_LANGUAGE CUDA)
@@ -341,7 +362,7 @@ if(CUDAToolkit_FOUND)
     ${PROJECT_SOURCE_DIR}/tests/runtime/cuda_orchestrate_smoke.cc)
   target_link_libraries(megacu_cuda_orchestrate_smoke PRIVATE
     megacu_headers
-    cuda_nvshmem_gemm_allreduce_phased
+    cuda_nvshmem_gemm_allreduce_megacu
     CUDA::cudart)
   set_target_properties(megacu_cuda_orchestrate_smoke PROPERTIES
     LINKER_LANGUAGE CUDA)
@@ -354,7 +375,7 @@ if(CUDAToolkit_FOUND)
     ${PROJECT_SOURCE_DIR}/tests/runtime/cuda_multicard_smoke.cc)
   target_link_libraries(megacu_cuda_multicard_smoke PRIVATE
     megacu_headers
-    cuda_nvshmem_gemm_allreduce_phased
+    cuda_nvshmem_gemm_allreduce_megacu
     CUDA::cudart)
   set_target_properties(megacu_cuda_multicard_smoke PROPERTIES
     LINKER_LANGUAGE CUDA)
@@ -371,7 +392,7 @@ if(CUDAToolkit_FOUND)
     target_link_libraries(megacu_cuda_gemm_allreduce_correctness PRIVATE
       megacu_headers
       golden_cuda_nvshmem_gemm_allreduce
-      cuda_nvshmem_gemm_allreduce_phased
+      cuda_nvshmem_gemm_allreduce_megacu
       CUDA::cudart)
     set_target_properties(megacu_cuda_gemm_allreduce_correctness PROPERTIES
       LINKER_LANGUAGE CUDA)
@@ -388,7 +409,7 @@ if(MEGACU_ENABLE_NVSHMEM_TESTS)
   target_link_libraries(megacu_nvshmem_two_rank_smoke PRIVATE
     megacu_headers
     golden_cuda_nvshmem_gemm_allreduce
-    cuda_nvshmem_gemm_allreduce_phased
+    cuda_nvshmem_gemm_allreduce_megacu
     CUDA::cudart
     CUDA::cuda_driver
     ${NVSHMEM_DEVICE_LIBRARY}
@@ -398,7 +419,7 @@ if(MEGACU_ENABLE_NVSHMEM_TESTS)
 
   foreach(mode
       golden_phased
-      megacu_phased)
+      megacu_host_orch)
     if(mode STREQUAL "golden_phased")
       set(test_name nvshmem_two_rank_gemm_ar_correctness_golden)
     else()

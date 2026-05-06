@@ -115,7 +115,7 @@ megacu::status orchestrate_on(device_allocation allocation,
           .world_n_pes = 2,
           .cuda_device_ordinal = allocation.device}};
 
-  return cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+  return cuda_nvshmem_gemm_allreduce_host_orch(
       driver,
       static_cast<float const *>(allocation.a),
       static_cast<float const *>(allocation.b),

@@ -116,9 +116,34 @@ private:
         .dep_count = task_dep_count,
         .first_dep = static_cast<std::uint16_t>(first_dep),
         .attributes = attributes};
+    initialize_task_state(ref, kind, attributes);
     arena_.dep_count = next_dep;
     ++arena_.task_count;
     return ref;
+  }
+
+  __device__ void initialize_task_state(task_ref task, task_kind kind,
+                                        attr_set attributes) {
+    if (arena_.task_completed != nullptr) {
+      arena_.task_completed[task.value] = 0;
+    }
+    if (arena_.task_remaining_work != nullptr) {
+      arena_.task_remaining_work[task.value] =
+          initial_remaining_work(kind, attributes);
+    }
+  }
+
+  __device__ std::uint32_t initial_remaining_work(task_kind kind,
+                                                  attr_set attributes) const {
+    if (kind == task_kind::sync_only) {
+      return 1;
+    }
+    for (auto item : attributes.entries()) {
+      if (item.kind == attr_kind::dispatch_tile_grid) {
+        return static_cast<std::uint32_t>(item.first * item.second);
+      }
+    }
+    return 1;
   }
 
   __device__ void set_error(std::uint16_t detail) {

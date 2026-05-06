@@ -157,8 +157,8 @@ int main(int argc, char **argv) {
     }
     assert(golden_status.code == golden_status_code::ok);
     check_expected("golden phased", pe, c, stream);
-  } else if (std::strcmp(mode, "megacu_phased") == 0) {
-    auto status = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+  } else if (std::strcmp(mode, "megacu_host_orch") == 0) {
+    auto status = cuda_nvshmem_gemm_allreduce_host_orch(
         driver,
         static_cast<float const *>(a),
         static_cast<float const *>(b),
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
         events,
         correctness_problem());
     assert(status.code == megacu::status_code::ok);
-    check_expected("megacu phased", pe, c, stream);
+    check_expected("megacu host-orch", pe, c, stream);
   } else {
     assert(false && "unknown nvshmem smoke mode");
   }

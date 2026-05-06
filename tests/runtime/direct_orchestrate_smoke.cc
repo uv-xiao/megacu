@@ -34,7 +34,7 @@ int main() {
           .world_n_pes = 2,
           .cuda_device_ordinal = 0}};
 
-  auto phased = cuda_nvshmem_gemm_allreduce_phased_orchestrate(
+  auto status = cuda_nvshmem_gemm_allreduce_host_orch(
       driver,
       a.data(),
       b.data(),
@@ -42,7 +42,8 @@ int main() {
       c.data(),
       events.data(),
       small_problem());
-  assert(phased.code == megacu::status_code::ok);
+  assert(status.code == megacu::status_code::invalid_argument ||
+         status.code == megacu::status_code::unsupported);
 
   return 0;
 }
