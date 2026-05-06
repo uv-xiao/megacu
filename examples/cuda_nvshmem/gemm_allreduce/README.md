@@ -39,5 +39,5 @@ working `nvshmrun` installation:
 ```sh
 cmake -S . -B build-nvshmem -DMEGACU_ENABLE_NVSHMEM_TESTS=ON
 cmake --build build-nvshmem --target megacu_nvshmem_two_rank_smoke
-ctest --test-dir build-nvshmem -R 'nvshmem_two_rank_gemm_ar_correctness_(golden|megacu)' --output-on-failure
+ctest --test-dir build-nvshmem -R 'nvshmem_two_rank_gemm_ar_correctness_(golden|manual_baseline|megacu)' --output-on-failure
 ```

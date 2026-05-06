@@ -420,6 +420,7 @@ if(MEGACU_ENABLE_NVSHMEM_TESTS)
   target_link_libraries(megacu_nvshmem_two_rank_smoke PRIVATE
     megacu_headers
     golden_cuda_nvshmem_gemm_allreduce
+    manual_megakernel_cuda_nvshmem_gemm_allreduce
     cuda_nvshmem_gemm_allreduce_megacu
     CUDA::cudart
     CUDA::cuda_driver
@@ -430,11 +431,17 @@ if(MEGACU_ENABLE_NVSHMEM_TESTS)
 
   foreach(mode
       golden_phased
-      megacu_host_orch)
+      manual_baseline
+      megacu_host_orch
+      megacu_seeded_orch)
     if(mode STREQUAL "golden_phased")
       set(test_name nvshmem_two_rank_gemm_ar_correctness_golden)
+    elseif(mode STREQUAL "manual_baseline")
+      set(test_name nvshmem_two_rank_gemm_ar_correctness_manual_baseline)
+    elseif(mode STREQUAL "megacu_host_orch")
+      set(test_name nvshmem_two_rank_gemm_ar_correctness_megacu_host_orch)
     else()
-      set(test_name nvshmem_two_rank_gemm_ar_correctness_megacu)
+      set(test_name nvshmem_two_rank_gemm_ar_correctness_megacu_seeded_orch)
     endif()
     add_test(
       NAME ${test_name}

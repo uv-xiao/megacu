@@ -30,5 +30,5 @@ docker run --rm \
       torchrun --standalone --nproc_per_node=2 \
       tools/cuda_nvshmem/run_torch.py && \
     ctest --test-dir '${build_dir}' \
-      -R 'cuda_gemm_allreduce_correctness|nvshmem_two_rank_gemm_ar_correctness_(golden|megacu)' \
+      -R 'cuda_gemm_allreduce_correctness|nvshmem_two_rank_gemm_ar_correctness_(golden|manual_baseline|megacu)' \
       --output-on-failure"

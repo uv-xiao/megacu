@@ -12,6 +12,11 @@
 #include "examples/cuda_nvshmem/gemm_allreduce/golden/golden_gemm_allreduce.h"
 #include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h"
 
+extern "C" megacu::status
+manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32(
+    gemm_ar_driver driver, float const *a, float const *b, float *partial,
+    float *out, void *events, gemm_ar_problem problem);
+
 namespace {
 
 constexpr int kSkipTest = 77;
@@ -58,6 +63,25 @@ void check_expected(char const *label, int pe, void *c, cudaStream_t stream) {
     }
     assert(std::fabs(value - 12.0f) < 1.0e-4f);
   }
+}
+
+void run_megacu_case(
+    char const *label,
+    megacu::status (*fn)(gemm_ar_driver, float const *, float const *, float *,
+                         float *, void *, gemm_ar_problem),
+    gemm_ar_driver driver,
+    void const *a,
+    void const *b,
+    void *partial,
+    void *c,
+    void *events,
+    cudaStream_t stream,
+    int pe) {
+  auto status = fn(driver, static_cast<float const *>(a),
+                   static_cast<float const *>(b), static_cast<float *>(partial),
+                   static_cast<float *>(c), events, correctness_problem());
+  assert(status.code == megacu::status_code::ok);
+  check_expected(label, pe, c, stream);
 }
 
 }  // namespace
@@ -157,17 +181,17 @@ int main(int argc, char **argv) {
     }
     assert(golden_status.code == golden_status_code::ok);
     check_expected("golden phased", pe, c, stream);
+  } else if (std::strcmp(mode, "manual_baseline") == 0) {
+    run_megacu_case("manual baseline",
+                    manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32,
+                    driver, a, b, partial, c, events, stream, pe);
   } else if (std::strcmp(mode, "megacu_host_orch") == 0) {
-    auto status = cuda_nvshmem_gemm_allreduce_host_orch(
-        driver,
-        static_cast<float const *>(a),
-        static_cast<float const *>(b),
-        static_cast<float *>(partial),
-        static_cast<float *>(c),
-        events,
-        correctness_problem());
-    assert(status.code == megacu::status_code::ok);
-    check_expected("megacu host-orch", pe, c, stream);
+    run_megacu_case("megacu host-orch", cuda_nvshmem_gemm_allreduce_host_orch,
+                    driver, a, b, partial, c, events, stream, pe);
+  } else if (std::strcmp(mode, "megacu_seeded_orch") == 0) {
+    run_megacu_case("megacu seeded-orch",
+                    cuda_nvshmem_gemm_allreduce_seeded_orch, driver, a, b,
+                    partial, c, events, stream, pe);
   } else {
     assert(false && "unknown nvshmem smoke mode");
   }
