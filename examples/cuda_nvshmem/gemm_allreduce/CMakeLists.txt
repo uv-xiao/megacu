@@ -162,6 +162,16 @@ add_test(
   NAME runtime_execution_models_contracts
   COMMAND megacu_runtime_execution_models_contracts)
 
+add_executable(megacu_runtime_arena_execution_contracts
+  ${PROJECT_SOURCE_DIR}/tests/build/runtime_arena_execution_contracts.cc)
+target_link_libraries(megacu_runtime_arena_execution_contracts PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME runtime_arena_execution_contracts
+  COMMAND megacu_runtime_arena_execution_contracts)
+
 add_executable(megacu_runtime_strategy_selection_contracts
   ${PROJECT_SOURCE_DIR}/tests/build/runtime_strategy_selection_contracts.cc)
 target_link_libraries(megacu_runtime_strategy_selection_contracts PRIVATE

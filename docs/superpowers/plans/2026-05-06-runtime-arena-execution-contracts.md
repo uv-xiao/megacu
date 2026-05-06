@@ -14,7 +14,8 @@
 
 - `include/megacu/runtime/task_arena.h`: extend arena records with completion state only if the existing fields cannot represent runtime execution.
 - `include/megacu/runtime/device_types.cuh`: add device task/work status types if needed by the arena-consuming loop.
-- `include/megacu/runtime/recipe_contracts.h`: create a host/device-friendly tiny recipe helper shared by host-only and CUDA smoke tests.
+- `tests/build/runtime_recipe_contracts.h`: create a host/device-friendly tiny
+  recipe helper shared by host-only and CUDA smoke tests.
 - `include/megacu/runtime/loop/block_tile.cuh`: change the loop from numeric scheduler iteration to arena-record execution.
 - `include/megacu/scheduler/explicit_asap_device.cuh`: make device scheduler read published arena tasks and explicit deps.
 - `include/megacu/dispatcher/tile_grid_device.cuh`: make device dispatcher derive work cursor availability from task dispatch attrs and task kind.
@@ -68,7 +69,7 @@ scheduler marks task 2 complete
 ## Task 1: Host-Only Topology Contract
 
 **Files:**
-- Create: `include/megacu/runtime/recipe_contracts.h`
+- Create: `tests/build/runtime_recipe_contracts.h`
 - Create: `tests/build/runtime_arena_execution_contracts.cc`
 - Modify: current CMake test registration location for build contracts.
 
@@ -80,7 +81,7 @@ Create `tests/build/runtime_arena_execution_contracts.cc` with this skeleton:
 #include <cassert>
 
 #include <megacu/runtime/execution/host_orch.h>
-#include <megacu/runtime/recipe_contracts.h>
+#include "runtime_recipe_contracts.h"
 
 int main() {
   megacu::runtime::execution::host_orch::frame<4, 2, 4> frame;
@@ -131,17 +132,25 @@ cmake -S . -B build
 cmake --build build --target megacu_runtime_arena_execution_contracts
 ```
 
-Expected: FAIL because `megacu/runtime/recipe_contracts.h` is missing.
+Expected: FAIL because `runtime_recipe_contracts.h` is missing.
 
 - [ ] **Step 3: Implement the shared recipe helper**
 
-Create `include/megacu/runtime/recipe_contracts.h`:
+Create `tests/build/runtime_recipe_contracts.h`:
 
 ```cpp
 #pragma once
 
 #include <megacu/runtime.h>
 #include <megacu/runtime/task_arena.h>
+
+#if defined(MEGACU_RUNTIME_HOST_DEVICE)
+#define MEGACU_TEST_CONTRACTS_HOST_DEVICE MEGACU_RUNTIME_HOST_DEVICE
+#elif defined(__CUDACC__)
+#define MEGACU_TEST_CONTRACTS_HOST_DEVICE __host__ __device__
+#else
+#define MEGACU_TEST_CONTRACTS_HOST_DEVICE
+#endif
 
 namespace megacu::runtime::contracts {
 
@@ -153,7 +162,7 @@ struct three_task_event_refs {
 };
 
 template <class Orch>
-MEGACU_RUNTIME_HOST_DEVICE three_task_event_refs
+MEGACU_TEST_CONTRACTS_HOST_DEVICE three_task_event_refs
 submit_three_task_event_recipe(Orch &orch) {
   three_task_event_refs refs;
   refs.ready = orch.event_tensor(attrs(event_tensor::shape(1, 1),
@@ -171,19 +180,9 @@ submit_three_task_event_recipe(Orch &orch) {
 }
 
 } // namespace megacu::runtime::contracts
+
+#undef MEGACU_TEST_CONTRACTS_HOST_DEVICE
 ```
-
-If `MEGACU_RUNTIME_HOST_DEVICE` is not visible outside `runtime.h`, replace it with a local macro in this header:
-
-```cpp
-#if defined(__CUDACC__)
-#define MEGACU_CONTRACTS_HOST_DEVICE __host__ __device__
-#else
-#define MEGACU_CONTRACTS_HOST_DEVICE
-#endif
-```
-
-and use `MEGACU_CONTRACTS_HOST_DEVICE` on the function.
 
 - [ ] **Step 4: Run the host-only contract**
 
@@ -199,7 +198,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add include/megacu/runtime/recipe_contracts.h tests/build/runtime_arena_execution_contracts.cc CMakeLists.txt examples/cuda_nvshmem/CMakeLists.txt cmake/MegacuTargets.cmake
+git add tests/build/runtime_recipe_contracts.h tests/build/runtime_arena_execution_contracts.cc CMakeLists.txt examples/cuda_nvshmem/CMakeLists.txt cmake/MegacuTargets.cmake
 git commit -m "test: add runtime arena topology contract"
 ```
 
@@ -513,7 +512,8 @@ git commit -m "feat: lower EventTensor operations from task attrs"
 
 **Files:**
 - Modify: `tests/build/runtime_arena_execution_contract.cu`
-- Modify: `include/megacu/runtime/recipe_contracts.h` if the recipe helper needs CUDA annotations.
+- Modify: `tests/build/runtime_recipe_contracts.h` if the recipe helper needs
+  CUDA annotations.
 
 - [ ] **Step 1: Extend CUDA test to build topology through `seeded-orch`**
 
@@ -551,7 +551,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tests/build/runtime_arena_execution_contract.cu include/megacu/runtime/recipe_contracts.h
+git add tests/build/runtime_arena_execution_contract.cu tests/build/runtime_recipe_contracts.h
 git commit -m "test: prove seeded-orch arena execution smoke"
 ```
 
