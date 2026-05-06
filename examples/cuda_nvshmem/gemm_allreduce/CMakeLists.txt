@@ -192,6 +192,16 @@ add_test(
   NAME runtime_gemm_allreduce_recipe_contracts
   COMMAND megacu_runtime_gemm_allreduce_recipe_contracts)
 
+add_executable(megacu_runtime_gemm_allreduce_host_arena_contracts
+  ${PROJECT_SOURCE_DIR}/tests/build/runtime_gemm_allreduce_host_arena_contracts.cc)
+target_link_libraries(megacu_runtime_gemm_allreduce_host_arena_contracts PRIVATE
+  megacu_headers
+  cuda_nvshmem_static)
+
+add_test(
+  NAME runtime_gemm_allreduce_host_arena_contracts
+  COMMAND megacu_runtime_gemm_allreduce_host_arena_contracts)
+
 add_executable(megacu_adapter_contracts
   ${PROJECT_SOURCE_DIR}/tests/build/adapter_contracts.cc)
 target_link_libraries(megacu_adapter_contracts PRIVATE
