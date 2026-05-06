@@ -61,17 +61,17 @@ Component status:
 | --- | --- | --- | --- | --- |
 | Public authoring surface | Host-callable orchestration with raw kernel-like arguments and explicit attrs | `runtime::phase`, `submit`, `sync`, and attrs exist, but examples do not all use the intended end-to-end path | Partial | Runtime headers and tests compile in the previous implementation pass |
 | Attr system | Shared carrier for scheduling, dispatch, operator, and EventTensor metadata | Central enum/union attr path exists; component-owned attr extensibility is still limited | Partial | Attr contract tests and runtime headers |
-| Task/Event records | Compact records for host-orch and seeded-orch execution | Arena and record types exist, but runtime loops do not yet consume them as the primary execution source | Partial | `task_arena` contracts |
-| `host-orch` model | Host builds task records, runtime launches a snapshot | Frame contracts exist | Partial | Host-orch contract tests, not required examples |
-| `seeded-orch` model | Host seeds device arena; persistent runtime can build/consume work dynamically | Device publication contracts exist | Partial | CUDA contract proof, not end-to-end examples |
+| Task/Event records | Compact records for host-orch and seeded-orch execution | Arena and record types exist and the first runtime arena execution checkpoint consumes sealed task/event records | Mostly complete | `task_arena` contracts and runtime arena execution contracts |
+| `host-orch` model | Host builds task records, runtime launches a snapshot | Frame contracts exist and shared recipe topology is proven in host-only/CUDA smoke; not integrated into required examples | Partial | Host-orch contract tests and shared recipe smoke, not required examples |
+| `seeded-orch` model | Host seeds device arena; persistent runtime can build/consume work dynamically | Device publication contracts exist and shared recipe equivalence CUDA smoke exists; not integrated into required examples | Partial | CUDA contract proof and shared recipe smoke, not end-to-end examples |
 | Runtime composition | Link scheduler, dispatcher, EventTensor, and operators behind a common runtime API | `device_persistent<ExecutionModel, Loop, ...>` provides a composition point | Mostly complete | Compile contracts for loop candidates |
-| Runtime loops | Overrideable internal loops owned by runtime | `block_tile`, `grid_stride`, and `single_work_item` candidates exist, but do not drive real arena task execution | Partial | Strategy headers and tests |
+| Runtime loops | Overrideable internal loops owned by runtime | `block_tile` now drives arena execution smoke; other loop candidates remain compile/runtime contracts | Mostly complete for arena execution smoke | Runtime arena execution CUDA smoke |
 | Scheduler, host side | ASAP readiness from explicit dependencies only | `explicit_asap` exists as a host-side contract | Partial | Contract tests |
-| Scheduler, device side | Common task readiness for runtime loops | Device path is still effectively a numeric iterator, not arena dependency readiness | Partial | Runtime loop implementation |
+| Scheduler, device side | Common task readiness for runtime loops | Device ASAP reads sealed arena records and explicit deps in the smoke path | Mostly complete for explicit deps over sealed arena records | Runtime arena execution CUDA smoke |
 | Dispatcher, host side | Decode dispatch attrs into work cursor/placement decisions | Attr counter/contract path exists | Partial | Dispatcher tests |
-| Dispatcher, device side | Pick spatial work for selected ready task | `tile_grid` exists, but remains a narrow candidate | Partial | Device dispatcher headers |
-| EventTensor API | Event shape plus notify/wait/trigger attrs used by sync tasks | API and attr contracts exist | Mostly complete | EventTensor tests and docs |
-| CUDA+NVSHMEM EventTensor lowering | Backend/platform implementation for sync completion | Existing proof path still couples event lowering to manual task ids | Partial | GEMM+AllReduce proof path finding below |
+| Dispatcher, device side | Pick spatial work for selected ready task | `tile_grid` derives first/next work from task attrs in the smoke path; broader dispatchers remain missing | Mostly complete for tile-grid first/next from attrs | Runtime arena execution CUDA smoke |
+| EventTensor API | Event shape plus notify/wait/trigger attrs used by sync tasks | API and attr contracts exist, with CUDA attr-lowering smoke | Mostly complete with CUDA attr-lowering smoke | EventTensor tests, docs, and runtime arena execution CUDA smoke |
+| CUDA+NVSHMEM EventTensor lowering | Backend/platform implementation for sync completion | Attr-driven smoke adapter exists; mapping is still smoke-level, not full distributed EventTensor mapping | Partial, attr-driven smoke added | Runtime arena execution CUDA smoke; GEMM+AllReduce proof path remains legacy |
 | Driver | Carry CUDA+NVSHMEM launch/rank/team facts into runtime | Short driver view exists; conceptually acceptable, but more distributed fields may be needed as examples become real | Partial | CUDA+NVSHMEM driver/adapters |
 | MPI adapter | Required distributed launch path | Normalizes MPI facts into driver facts | Partial | Adapter contracts; no full example run evidence |
 | Torch adapter | Required distributed launch path | Normalizes torchrun environment into driver facts | Partial | Adapter contracts; no full example run evidence |
@@ -87,10 +87,10 @@ Task completion status:
 | --- | --- | --- | --- |
 | Architecture documentation | Active design explains runtime, scheduler, dispatcher, EventTensor, adapters, examples, and closeout docs | `docs/in_progress/design/` contains the discussion and implementation spec | Mostly complete |
 | Runtime/EventTensor API rename and decoupling | Use `runtime`, not `entry`; use `EventTensor`, not EventEngine; keep EventTensor as task attrs, not operator-manual protocol | Headers/docs/tests reflect the rename | Mostly complete |
-| Explicit task dependency model | Dependencies are explicit attrs and scheduler-owned | Host scheduler contracts exist | Partial |
-| Runtime-owned internal loop | Runtime owns loop strategies, not scheduler or examples | Loop strategy candidates compile | Partial |
-| Host-orch execution model | Snapshot-style host built task plan | Contract exists | Partial |
-| Seeded-orch execution model | Device-resident orchestration seeded from host | Device publication contract exists | Partial |
+| Explicit task dependency model | Dependencies are explicit attrs and scheduler-owned | Host contracts and CUDA arena smoke read explicit deps | Mostly complete for this checkpoint |
+| Runtime-owned internal loop | Runtime owns loop strategies, not scheduler or examples | Loop strategy candidates compile; `block_tile` consumes arena records in CUDA smoke | Mostly complete for arena execution smoke |
+| Host-orch execution model | Snapshot-style host built task plan | Shared recipe topology contract exists | Partial |
+| Seeded-orch execution model | Device-resident orchestration seeded from host | Shared recipe equivalence CUDA smoke exists | Partial |
 | Scheduler/dispatcher strategy set | Provide multiple strategies that can be picked through the common runtime API | Some runtime loops exist; scheduler/dispatcher candidates are thin | Partial |
 | MPI/Torch required adapters | Required by PR and Docker path, not optional dependency paths | Adapter normalization exists | Partial |
 | GEMM-RS | Tile-operator Megacu example with golden and baseline comparison | Skeleton only | Missing |
@@ -184,7 +184,7 @@ The first coding checkpoint must prove these invariants:
 - Direct file reads with line numbers across `docs/in_progress/design/`,
   runtime headers, example code, adapter code, CMake, scripts, and tests.
 
-Skipped during review:
+Skipped during the original review:
 
 - No build or CTest was rerun as part of this review pass.
 - No Docker execution was run.
@@ -193,6 +193,19 @@ Skipped during review:
 The previous implementation pass reported a local targeted build and CTest
 result of 18/18 passing, but this review treats Docker and full distributed
 correctness evidence as missing unless implemented and documented in code.
+
+Runtime arena checkpoint evidence reported by task implementers/reviewers during
+Tasks 1-5:
+
+- `cmake --build build --target megacu_runtime_arena_execution_contracts`
+- `ctest --test-dir build -R runtime_arena_execution_contracts --output-on-failure`
+- `cmake --build build --target megacu_runtime_arena_execution_contract`
+- `ctest --test-dir build -R runtime_arena_execution_contract --output-on-failure`
+- `cmake --build build --target megacu_runtime_device_persistent_contract megacu_runtime_arena_execution_contracts`
+- `ctest --test-dir build -R 'runtime_device_persistent_contract|runtime_arena_execution_contracts' --output-on-failure`
+
+These targeted checks were run by the task implementers during Tasks 1-5. Full
+Docker/NVSHMEM distributed examples were not run.
 
 ## Executive Status
 
@@ -207,6 +220,10 @@ What is implemented:
 - `runtime::device_persistent<ExecutionModel, Loop, ...>` composition point.
 - Runtime loop candidates as compile/runtime contracts:
   `block_tile`, `grid_stride`, and `single_work_item`.
+- First runtime arena execution checkpoint: host-only topology contract plus CUDA
+  smoke proving shared recipe records, explicit device deps, tile-grid dispatch
+  attrs, sync-only EventTensor wait, operator notify, completion state, and
+  seeded-orch shared recipe equivalence.
 - Thin MPI/Torch launch fact adapters that normalize rank/world/local-rank into
   `cuda_nvshmem::driver_view`.
 - Tiny decode golden/baseline/Megacu host-phase correctness path.
@@ -219,10 +236,10 @@ What is not implemented relative to the active design:
 - No direct/MPI/Torch GEMM-RS correctness path exists.
 - No direct/distributed AG-GEMM correctness path exists.
 - `host-orch` and `seeded-orch` are not integrated into the required examples.
-- The common runtime loop does not consume task arena records to decide
-  scheduler/dispatcher/EventTensor behavior.
-- EventTensor device lowering is still tied to hard-coded task ids in the
-  GEMM+AllReduce proof path.
+- Runtime arena smoke is not yet the GEMM-AllReduce refit or an end-to-end
+  distributed example.
+- EventTensor mapping is still smoke-level, not a general multi-tile distributed
+  mapping.
 - Required dispatcher/scheduler strategy candidates are not all implemented.
 - Docker helper scripts exercise adapter contracts and old GEMM+AllReduce tests,
   not the required new PR examples.
@@ -323,7 +340,7 @@ Fix direction:
   `cuda_nvshmem_tiny_decode_seeded_orch`.
 - Drive both variants from the same target recipe and operator table.
 
-### High: Runtime Loops Do Not Consume Arena Records Or Implement The Designed Common Loop
+### Medium: Runtime Arena Smoke Is Landed, But Examples Are Not Refit
 
 Design requirement:
 
@@ -341,35 +358,35 @@ Design requirement:
 
 Implementation evidence:
 
-- `include/megacu/runtime/loop/block_tile.cuh:5-28`,
-  `include/megacu/runtime/loop/grid_stride.cuh:35-62`, and
-  `include/megacu/runtime/loop/single_work_item.cuh:69-96` accept an `Arena`
-  parameter but do not inspect it.
-- `include/megacu/scheduler/explicit_asap_device.cuh:7-31` uses a fixed
-  `task_count` and iterates numeric task ids; it does not read dependency attrs,
-  publication state, regions, or completion state from the arena.
-- `include/megacu/dispatcher/tile_grid_device.cuh:42-57` maps block ids to
-  tiles but does not read per-task dispatcher attrs from arena records.
+- `include/megacu/runtime/loop/block_tile.cuh` now consumes sealed arena task
+  records in the runtime arena execution smoke.
+- `include/megacu/scheduler/explicit_asap_device.cuh` now reads arena deps and
+  task completion state for explicit ASAP readiness.
+- `include/megacu/dispatcher/tile_grid_device.cuh` now derives tile-grid work
+  from task attrs for the smoke contract.
+- `tests/build/runtime_arena_execution_contract.cu` proves the three-task
+  recipe executes producer, sync-only wait, and consumer work through the
+  composed runtime.
+- `grid_stride` and `single_work_item` remain candidates that are not proven on
+  the arena execution contract.
 
 Impact:
 
-- The new arena and execution model records are publication data, but the
-  device-side execution loop does not yet use them to decide what to run.
-- The current device runtime path remains closer to a manually assembled
-  scheduler/dispatcher/ops wrapper than the designed arena-driven Megacu
-  runtime.
+- The first common-loop checkpoint is real, but it is still a smoke topology,
+  not a refit of GEMM-AllReduce or the required GEMM-RS/AG-GEMM/tiny-decode
+  examples.
+- The CUDA contract is monolithic and should be split as the example contracts
+  harden.
 
 Fix direction:
 
-- Change loop/scheduler/dispatcher interfaces so the loop can iterate sealed
-  arena regions and task records.
-- The scheduler should evaluate explicit dependency attrs and completion state
-  from published task records.
-- The dispatcher should derive work cursors from the current task's
-  dispatcher-owned attrs and worker context.
-- The operator table should invoke by `device_task_record::op_slot`.
+- Refit GEMM-AllReduce through the same arena-driven runtime loop.
+- Split the monolithic CUDA contract into focused scheduler, dispatcher,
+  EventTensor, loop, and execution-model contracts once the interfaces harden.
+- Extend or replace the remaining loop candidates with arena-backed behavior
+  before claiming loop-strategy completeness.
 
-### High: EventTensor Device Lowering Still Depends On Manual Task Ids
+### Medium: EventTensor Lowering Is Attr-Driven Only At Smoke Level
 
 Design requirement:
 
@@ -381,8 +398,12 @@ Design requirement:
 
 Implementation evidence:
 
-- `include/megacu/backends/nvshmem/cuda_event_tensor.cuh:41-58` stores
-  `notify_task` and `wait_task`, then compares `task.value` against those ids.
+- `include/megacu/backends/nvshmem/cuda_event_tensor.cuh` now includes an
+  attr-driven smoke adapter that scans task attrs for EventTensor notify/wait.
+- The smoke mapping is `event ref -> tile` and `event ref + 1 -> ready value`;
+  it is not a general multi-tile distributed mapping.
+- The older task-id-coupled proof type remains present for compatibility with
+  legacy proof code.
 - `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu:204-210`
   manually sets `.notify_task = 0` and `.wait_task = 1`.
 - `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu:136-147`
@@ -390,18 +411,19 @@ Implementation evidence:
 
 Impact:
 
-- EventTensor behavior is not fully owned by task attrs and the EventTensor
-  component. It is still coupled to an example-specific task numbering scheme.
-- This will break once host-orch/seeded-orch can produce different task ids,
-  task insertion, or multiple event tensors.
+- EventTensor behavior is now proven through attrs for the runtime arena smoke,
+  but distributed EventTensor addressing and multi-tile semantics are still not
+  validated.
+- The GEMM-AllReduce proof path still demonstrates the legacy task-id coupling
+  that the examples must retire during refit.
 
 Fix direction:
 
-- EventTensor lowering should inspect `device_task_record::attributes` for
-  `event_tensor::notify`, `event_tensor::wait`, and future trigger attrs.
-- Sync-only wait completion should be handled by EventTensor using the current
-  task record, not by hard-coded `wait_task`.
-- Operator invocation should use `op_slot`, not `task.value`.
+- Generalize the attr-driven adapter beyond the smoke mapping.
+- Refit GEMM-AllReduce and later distributed examples so they no longer pass
+  `.notify_task`/`.wait_task`.
+- Add distributed EventTensor mapping checks before claiming CUDA+NVSHMEM
+  lowering is complete.
 
 ### Medium: Required Scheduler/Dispatcher Strategy Set Is Mostly Missing
 
@@ -573,16 +595,16 @@ Fix direction:
 | Design area | Current code status | Correspondence |
 | --- | --- | --- |
 | Thin raw operator arguments | `runtime::phase::submit` accepts native function signatures and raw args in `include/megacu/runtime.h:318-351`; tiny decode submits raw pointer args in `tiny_decode_megacu.cu:285-301`. | Mostly aligned for host surface. Device arena path does not yet carry raw args. |
-| Explicit dependencies only | `scheduler::depends_on` exists in `include/megacu/runtime.h:94-100`; host scheduler checks dependency attrs in `src/scheduler/explicit_asap.cc:40-52`. | Partially aligned. No inference, but device scheduler does not read task deps from arena. |
-| EventTensor API naming | `event_tensor::shape/wait_count/notify/wait/trigger` exist in `include/megacu/runtime.h:102-126`; stale `runtime::events` guard exists in CMake. | Aligned at API naming level. Lowering is still task-id coupled. |
-| EventTensor as sync-task completion condition | Host surface places wait on sync task in `gemm_allreduce_orchestrate_common.h:52-54`; tests check consumer does not carry wait. | Aligned in host records. Device loop does not yet evaluate wait attrs from records. |
+| Explicit dependencies only | `scheduler::depends_on` exists in `include/megacu/runtime.h:94-100`; host scheduler checks dependency attrs in `src/scheduler/explicit_asap.cc:40-52`; CUDA smoke checks device arena deps. | Mostly aligned for the checkpoint. Missing full example validation. |
+| EventTensor API naming | `event_tensor::shape/wait_count/notify/wait/trigger` exist in `include/megacu/runtime.h:102-126`; stale `runtime::events` guard exists in CMake. | Aligned at API naming level. CUDA attr-lowering smoke exists; distributed mapping remains partial. |
+| EventTensor as sync-task completion condition | Host surface places wait on sync task in `gemm_allreduce_orchestrate_common.h:52-54`; tests check consumer does not carry wait; CUDA arena smoke completes sync-only wait through EventTensor attrs. | Mostly aligned for the checkpoint. Missing distributed example validation. |
 | Runtime, not entry | `device_entry.cuh` was removed; `block_tile_runtime.cuh` delegates to `runtime::loop::block_tile`; CMake guard rejects old entry naming. | Mostly aligned. |
 | Runtime owns execution model and loop | `device_persistent` composes execution and loop in `include/megacu/runtime/device_persistent.cuh:22-39`. | Aligned structurally. Not integrated into examples. |
-| Host-orch | `host_orch::frame` exists and records tasks/events/deps/region. | Partial. Contract test only; no example. |
-| Seeded-orch | `seeded_orch::model` and `device_orch` exist and publish/seal on device. | Partial. Contract test only; no example; no distributed validation. |
-| Runtime loops | `block_tile`, `grid_stride`, `single_work_item` loops exist. | Partial. Loops do not use arena records or task attrs. |
-| Dispatcher candidates | `tile_grid_device` exists; host `map_explicit_attrs` counts attrs. | Partial. Missing `rank_aware_tile_grid` and real `single_work_item` dispatcher. |
-| Scheduler candidates | Host and device `explicit_asap` exist. | Partial. Missing `static_submission_order` and `static_level_order`; device ASAP ignores deps. |
+| Host-orch | `host_orch::frame` exists and records tasks/events/deps/region; shared recipe topology contract exists. | Partial. Contract/smoke only; no example. |
+| Seeded-orch | `seeded_orch::model` and `device_orch` exist and publish/seal on device; shared recipe equivalence CUDA smoke exists. | Partial. Contract/smoke only; no example; no distributed validation. |
+| Runtime loops | `block_tile`, `grid_stride`, `single_work_item` loops exist; `block_tile` executes arena records in smoke. | Mostly aligned for first arena checkpoint. Other loops and examples remain partial. |
+| Dispatcher candidates | `tile_grid_device` exists and reads task attrs in smoke; host `map_explicit_attrs` counts attrs. | Partial. Missing `rank_aware_tile_grid` and real `single_work_item` dispatcher. |
+| Scheduler candidates | Host and device `explicit_asap` exist; device ASAP reads sealed arena deps in smoke. | Partial. Missing `static_submission_order` and `static_level_order`; no full example validation. |
 | Launch adapters | MPI/Torch adapter headers and env contracts exist. | Partial/aligned for thin normalization; missing real example launch correctness and NVSHMEM bootstrap proof. |
 | GEMM-RS example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
 | AG-GEMM example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
@@ -600,6 +622,8 @@ Fix direction:
   host surface.
 - `device_persistent` is the right structural home for execution model plus
   runtime loop.
+- The runtime arena execution checkpoint now proves a shared three-task recipe
+  through host-orch topology and seeded-orch CUDA runtime execution smoke.
 - The seeded-orch tests check several important failure modes: task overflow,
   dependency overflow, event overflow, region overflow, and failure gating before
   the loop runs.
@@ -608,17 +632,16 @@ Fix direction:
 
 ## Recommended Fix Order
 
-1. Make the device runtime loop arena-driven.
-   - Loop over sealed regions and task records.
-   - Scheduler readiness should use explicit dependency attrs and completion
-     state.
-   - EventTensor should evaluate notify/wait attrs from the current task record.
-   - Dispatcher should return cursors based on current task attrs and worker
-     context.
+1. Refit GEMM-AllReduce through the arena-driven runtime checkpoint.
+   - Keep the shared recipe shape: operator task, sync-only EventTensor wait,
+     consumer task, explicit deps, and runtime-owned loop.
+   - Replace legacy `.notify_task`/`.wait_task` example wiring with EventTensor
+     attrs.
 
-2. Remove task-id coupling from EventTensor and operator invocation.
-   - Replace `.notify_task = 0`, `.wait_task = 1`, and task-value branches with
-     `op_slot` and task attrs.
+2. Split the monolithic CUDA runtime arena contract as interfaces harden.
+   - Preserve the current end-to-end smoke, but add focused contracts for
+     scheduler, dispatcher, EventTensor, runtime loop, and seeded-orch
+     equivalence.
 
 3. Integrate `host-orch` and `seeded-orch` into one small example first.
    - Tiny decode is the lowest-risk target because it already has golden and
@@ -657,6 +680,11 @@ Fix direction:
 
 - GPU, CUDA, NVSHMEM, MPI, and Torch distributed execution were not exercised in
   this review pass.
+- Full direct/MPI/Torch/Docker example matrix remains missing.
+- EventTensor mapping is still smoke-level: `event ref -> tile` and
+  `event ref + 1 -> ready value`, not general multi-tile distributed mapping.
+- Runtime arena smoke is not yet the GEMM-AllReduce refit.
+- The CUDA contract is monolithic and should later be split as examples harden.
 - The current tests may still pass while the active design remains unmet because
   many checks validate shape, layout, or contract compilation rather than
   distributed runtime behavior.

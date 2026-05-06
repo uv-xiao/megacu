@@ -560,7 +560,7 @@ git commit -m "test: prove seeded-orch arena execution smoke"
 **Files:**
 - Modify: `docs/in_progress/general_runtime_linked_components_code_review.tmp.md`
 
-- [ ] **Step 1: Update dashboard statuses**
+- [x] **Step 1: Update dashboard statuses**
 
 Change these rows if the previous tasks pass:
 
@@ -573,7 +573,7 @@ EventTensor API: Mostly complete -> Mostly complete with CUDA smoke lowering
 CUDA+NVSHMEM EventTensor lowering: Partial -> Partial, attr-driven smoke added
 ```
 
-- [ ] **Step 2: Add verification evidence**
+- [x] **Step 2: Add verification evidence**
 
 Add the exact commands and outcomes:
 
@@ -584,7 +584,7 @@ cmake --build build --target megacu_runtime_arena_execution_contract
 ctest --test-dir build -R runtime_arena_execution_contract --output-on-failure
 ```
 
-- [ ] **Step 3: Run stale-term and section checks**
+- [x] **Step 3: Run stale-term and section checks**
 
 Run:
 
@@ -595,7 +595,7 @@ rg -n "^##|^###" docs/in_progress/general_runtime_linked_components_code_review.
 
 Expected: first command returns no matches; second command shows `Architecture Overview`, `Next Step Decision Record`, and findings still present.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/in_progress/general_runtime_linked_components_code_review.tmp.md
