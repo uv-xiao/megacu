@@ -1276,3 +1276,63 @@ were later promoted into `docs/design/`.
     operator tasks plus sync-only EventTensor tasks and explicit dependency
     attrs. Large handwritten fused/persistent kernels are acceptable only as
     baselines, not as the Megacu implementation path.
+
+- 2026-05-06 Asia/Shanghai - Four examples required before PR completion
+  > Yes. And we need to make all four exampels work as expected/planned to end the PR.
+  >
+  > It must be refit to the same opterator-task + runtime execution/loop model.
+  >
+  > Yes, and you must make sure it matches the aligned design we froze before.
+  >
+  > Yes. And for the decode, we should have two versions: 1h1d and 1h2d.
+  - Context: User clarified the next implementation scope after reviewing the
+    temporary code review and being asked whether GEMM-AllReduce, GEMM-RS,
+    AG-GEMM, and tiny decode are the four completion examples.
+  - Related:
+    `docs/in_progress/general_runtime_linked_components_code_review.tmp.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/in_progress/design/runtime_execution_model_implementation_design.md`.
+  - Agent interpretation: The PR must end with four working examples:
+    GEMM-AllReduce, GEMM-RS, AG-GEMM, and tiny decode. GEMM-AllReduce must be
+    refit to the same operator-task plus runtime-owned execution/loop model as
+    the other examples. Tiny decode must include both 1-host-1-device and
+    1-host-2-device paths.
+
+- 2026-05-06 Asia/Shanghai - Existing architecture-violating Megacu proof code must be removed
+  > Existing legacy proof code violating the above must be removed.
+  >
+  > accept.
+  - Context: User answered whether old Megacu proof paths that bypass the
+    common runtime architecture should remain while new runtime paths are added.
+  - Related:
+    `examples/cuda_nvshmem/gemm_allreduce/`,
+    `docs/in_progress/general_runtime_linked_components_code_review.tmp.md`.
+  - Agent interpretation: Do not preserve Megacu-named legacy proof code if it
+    uses problem-specific manual mega-kernels, manual EventTensor task ids,
+    operator-side wait/notify protocol, scheduler phases, or example-owned
+    runtime loops. Handwritten kernels may exist only as clean baselines under
+    `baseline/`.
+
+- 2026-05-06 Asia/Shanghai - Full example matrix and depth-first tracer bullet
+  > both for all
+  >
+  > yes
+  >
+  > yes
+  >
+  > both.
+  - Context: User accepted the proposed completion matrix and implementation
+    order: all examples need direct, MPI, and Torch launch paths; GEMM-AllReduce
+    should be the depth-first tracer bullet; and the first coding checkpoint
+    should include both host-only and CUDA smoke tests.
+  - Related:
+    `docs/in_progress/general_runtime_linked_components_code_review.tmp.md`,
+    `docs/in_progress/design/general_runtime_linked_components.md`,
+    `docs/in_progress/design/runtime_execution_model_implementation_design.md`.
+  - Agent interpretation: Each of the four examples should provide golden,
+    baseline, Megacu `host-orch`, and Megacu `seeded-orch` variants; direct
+    1h1d and 1h2d execution; and MPI/Torch distributed Docker launch coverage.
+    Implementation should proceed depth-first through GEMM-AllReduce only after
+    `runtime_arena_execution_contracts` proves the shared recipe, arena,
+    scheduler, dispatcher, EventTensor, operator table, and runtime loop shape
+    with both host-only and CUDA smoke coverage.
