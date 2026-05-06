@@ -179,7 +179,7 @@ execute_arena_runtime(megacu::runtime::task_arena_view arena,
       megacu::dispatcher::device::tile_grid{},
       megacu::backend::nvshmem::cuda::attr_event_tensor_i32{
           .event_tensor = {.events = event_storage,
-                           .tiles = 1,
+                           .tiles = 4,
                            .my_pe = 0,
                            .n_pes = 1}},
       contract_operators{observation});
@@ -280,7 +280,7 @@ int main() {
   assert(cudaMallocManaged(&regions, sizeof(*regions) * 1) == cudaSuccess);
   assert(cudaMallocManaged(&completed, sizeof(*completed) * 3) == cudaSuccess);
   assert(cudaMallocManaged(&remaining, sizeof(*remaining) * 3) == cudaSuccess);
-  assert(cudaMallocManaged(&event_storage, sizeof(*event_storage)) ==
+  assert(cudaMallocManaged(&event_storage, sizeof(*event_storage) * 4) ==
          cudaSuccess);
   assert(cudaMallocManaged(&observations, sizeof(*observations) * 2) ==
          cudaSuccess);
@@ -337,6 +337,9 @@ int main() {
   remaining[1] = 1;
   remaining[2] = 1;
   event_storage[0] = 0;
+  event_storage[1] = 0;
+  event_storage[2] = 0;
+  event_storage[3] = 0;
   observations[0] = {};
   observations[1] = {};
 
@@ -392,6 +395,9 @@ int main() {
   assert(observations[0].second_work_tile == 0);
 
   event_storage[0] = 0;
+  event_storage[1] = 0;
+  event_storage[2] = 0;
+  event_storage[3] = 0;
   *event_wait_observations = {};
   observe_attr_event_wait<<<1, 64>>>(arena, event_storage,
                                      event_wait_observations);
@@ -416,6 +422,9 @@ int main() {
   assert(op_observations->producer_count == 4);
   assert(op_observations->unexpected_operator_count == 0);
   assert(event_storage[0] == 1);
+  assert(event_storage[1] == 2);
+  assert(event_storage[2] == 3);
+  assert(event_storage[3] == 4);
   assert(op_observations->consumer_count == 1);
   assert(op_observations->consumer_after_sync == 1);
   assert(completed[0] == 1);
@@ -432,6 +441,9 @@ int main() {
   remaining[1] = 1;
   remaining[2] = 1;
   event_storage[0] = 0;
+  event_storage[1] = 0;
+  event_storage[2] = 0;
+  event_storage[3] = 0;
   tasks[0] = {};
   tasks[1] = {};
   tasks[2] = {};

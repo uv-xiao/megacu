@@ -74,7 +74,7 @@ struct attr_event_tensor_i32 {
     if (is_cta_leader(ctx)) {
       for (auto const &attr : attrs) {
         if (attr.kind == megacu::runtime::attr_kind::event_wait) {
-          event_tensor.wait(event_tile(attr.event), ready_value(attr.event));
+          wait_event(arena, attr.event);
         }
       }
     }
@@ -82,7 +82,7 @@ struct attr_event_tensor_i32 {
   }
 
   template <class Context, class Arena, class Task, class Work>
-  __device__ void after(Context ctx, Arena arena, Task task, Work) const {
+  __device__ void after(Context ctx, Arena arena, Task task, Work work) const {
     if (!task.valid() || arena.tasks == nullptr ||
         task.value >= static_cast<int>(arena.task_count)) {
       return;
@@ -92,7 +92,7 @@ struct attr_event_tensor_i32 {
     if (is_cta_leader(ctx)) {
       for (auto const &attr : attrs) {
         if (attr.kind == megacu::runtime::attr_kind::event_notify) {
-          event_tensor.notify(event_tile(attr.event), ready_value(attr.event));
+          event_tensor.notify(work.tile_id, ready_value(work.tile_id));
         }
       }
     }
@@ -107,13 +107,34 @@ private:
     }
   }
 
-  __device__ std::int64_t
-  event_tile(megacu::runtime::event_tensor_ref event) const {
-    return static_cast<std::int64_t>(event.value);
+  template <class Arena>
+  __device__ void wait_event(Arena arena,
+                             megacu::runtime::event_tensor_ref event) const {
+    auto const tiles = event_tile_count(arena, event);
+    for (std::int64_t tile_id = 0; tile_id < tiles; ++tile_id) {
+      event_tensor.wait(tile_id, ready_value(tile_id));
+    }
   }
 
-  __device__ int ready_value(megacu::runtime::event_tensor_ref event) const {
-    return static_cast<int>(event_tile(event) + 1);
+  template <class Arena>
+  __device__ std::int64_t
+  event_tile_count(Arena arena, megacu::runtime::event_tensor_ref event) const {
+    if (arena.events == nullptr ||
+        event.value >= static_cast<std::uint32_t>(arena.event_count)) {
+      return 1;
+    }
+
+    auto const attrs = arena.events[event.value].attributes.entries();
+    for (auto const &attr : attrs) {
+      if (attr.kind == megacu::runtime::attr_kind::event_tensor_shape) {
+        return attr.first * attr.second;
+      }
+    }
+    return 1;
+  }
+
+  __device__ int ready_value(std::int64_t tile_id) const {
+    return static_cast<int>(tile_id + 1);
   }
 };
 
