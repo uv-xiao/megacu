@@ -400,24 +400,24 @@ Implementation evidence:
 
 - `include/megacu/backends/nvshmem/cuda_event_tensor.cuh` now includes an
   attr-driven smoke adapter that scans task attrs for EventTensor notify/wait.
-- The smoke mapping is `event ref -> tile` and `event ref + 1 -> ready value`;
-  it is not a general multi-tile distributed mapping.
+- Notify lowering uses the operator work tile, and sync-task wait lowering
+  covers the EventTensor shape recorded on the event object.
 - The older task-id-coupled proof type remains present for compatibility with
-  legacy proof code.
-- `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu:204-210`
-  manually sets `.notify_task = 0` and `.wait_task = 1`.
-- `examples/cuda_nvshmem/gemm_allreduce/phased/megacu/megacu_gemm_allreduce_phased.cu:136-147`
-  invokes producer on task id `0` and consumer on task id `2`.
+  handwritten baseline history only; the active GEMM-AllReduce Megacu path uses
+  `attr_event_tensor_i32`.
+- `examples/cuda_nvshmem/gemm_allreduce/megacu/megacu_gemm_allreduce.cu`
+  dispatches operators by `op_slot` from the arena task record.
 
 Impact:
 
-- EventTensor behavior is now proven through attrs for the runtime arena smoke,
-  but distributed EventTensor addressing and multi-tile semantics are still not
-  validated.
-- The GEMM-AllReduce proof path still demonstrates the legacy task-id coupling
-  that the examples must retire during refit.
+- EventTensor behavior is now proven through attrs for the runtime arena smoke
+  and the active GEMM-AllReduce direct correctness path. Full distributed
+  NVSHMEM validation is still pending.
 
 Fix direction:
+
+- Complete the distributed 1-host-2-device validation path through direct,
+  MPI, and Torch launch adapters.
 
 - Generalize the attr-driven adapter beyond the smoke mapping.
 - Refit GEMM-AllReduce and later distributed examples so they no longer pass
@@ -597,11 +597,11 @@ Fix direction:
 | Thin raw operator arguments | `runtime::phase::submit` accepts native function signatures and raw args in `include/megacu/runtime.h:318-351`; tiny decode submits raw pointer args in `tiny_decode_megacu.cu:285-301`. | Mostly aligned for host surface. Device arena path does not yet carry raw args. |
 | Explicit dependencies only | `scheduler::depends_on` exists in `include/megacu/runtime.h:94-100`; host scheduler checks dependency attrs in `src/scheduler/explicit_asap.cc:40-52`; CUDA smoke checks device arena deps. | Mostly aligned for the checkpoint. Missing full example validation. |
 | EventTensor API naming | `event_tensor::shape/wait_count/notify/wait/trigger` exist in `include/megacu/runtime.h:102-126`; stale `runtime::events` guard exists in CMake. | Aligned at API naming level. CUDA attr-lowering smoke exists; distributed mapping remains partial. |
-| EventTensor as sync-task completion condition | Host surface places wait on sync task in `gemm_allreduce_orchestrate_common.h:52-54`; tests check consumer does not carry wait; CUDA arena smoke completes sync-only wait through EventTensor attrs. | Mostly aligned for the checkpoint. Missing distributed example validation. |
+| EventTensor as sync-task completion condition | The shared GEMM-AllReduce recipe places wait on a sync task; CUDA arena smoke and GEMM-AllReduce direct correctness complete sync-only waits through EventTensor attrs. | Mostly aligned for the checkpoint. Missing distributed example validation. |
 | Runtime, not entry | `device_entry.cuh` was removed; `block_tile_runtime.cuh` delegates to `runtime::loop::block_tile`; CMake guard rejects old entry naming. | Mostly aligned. |
-| Runtime owns execution model and loop | `device_persistent` composes execution and loop in `include/megacu/runtime/device_persistent.cuh:22-39`. | Aligned structurally. Not integrated into examples. |
-| Host-orch | `host_orch::frame` exists and records tasks/events/deps/region; shared recipe topology contract exists. | Partial. Contract/smoke only; no example. |
-| Seeded-orch | `seeded_orch::model` and `device_orch` exist and publish/seal on device; shared recipe equivalence CUDA smoke exists. | Partial. Contract/smoke only; no example; no distributed validation. |
+| Runtime owns execution model and loop | `device_persistent` composes execution and loop in `include/megacu/runtime/device_persistent.cuh:22-39`; GEMM-AllReduce host-orch and seeded-orch use this path. | Mostly aligned for the active tracer bullet. |
+| Host-orch | `host_orch::frame` records tasks/events/deps/region; GEMM-AllReduce direct correctness uses the host-orch runtime variant. | Partial. Direct 1-host-1-device proven; distributed validation pending. |
+| Seeded-orch | `seeded_orch::model` and `device_orch` publish/seal on device; GEMM-AllReduce direct correctness uses the seeded-orch runtime variant. | Partial. Direct 1-host-1-device proven; distributed validation pending. |
 | Runtime loops | `block_tile`, `grid_stride`, `single_work_item` loops exist; `block_tile` executes arena records in smoke. | Mostly aligned for first arena checkpoint. Other loops and examples remain partial. |
 | Dispatcher candidates | `tile_grid_device` exists and reads task attrs in smoke; host `map_explicit_attrs` counts attrs. | Partial. Missing `rank_aware_tile_grid` and real `single_work_item` dispatcher. |
 | Scheduler candidates | Host and device `explicit_asap` exist; device ASAP reads sealed arena deps in smoke. | Partial. Missing `static_submission_order` and `static_level_order`; no full example validation. |

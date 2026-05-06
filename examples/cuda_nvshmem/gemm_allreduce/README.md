@@ -1,44 +1,36 @@
-# CUDA+NVSHMEM GEMM+AllReduce
+# CUDA+NVSHMEM GEMM-AllReduce
 
-This example family validates the PR #4 Megacu CUDA+NVSHMEM path with a tiny
-phased GEMM+AllReduce target.
+This example family validates the CUDA+NVSHMEM runtime path with a tiny
+GEMM-AllReduce target. The Megacu variant is composed from operator tasks and
+sync-only tasks. The handwritten mega-kernel is a baseline only.
 
 ## Layout
 
 ```text
-common/             shared direct target signature and runtime helper
-golden/             Megacu-free golden and baseline entrypoints
-phased/baseline/    phased pure CUDA/NVSHMEM baseline ownership point
-phased/megacu/      phased Megacu target
+common/             shared target ABI and Megacu recipe
+golden/             Megacu-free golden entrypoints
+phased/baseline/    handwritten CUDA/NVSHMEM manual mega-kernel baseline
+megacu/             host-orch and seeded-orch Megacu runtime variant
 ```
 
 ## Execution
 
 ```text
-host calls cuda_nvshmem_gemm_allreduce_phased_orchestrate(driver, raw args...)
-        |
-        v
-orchestrate submits GEMM and AllReduce operators with raw args
-        |
-        v
-sync-only readiness task carries scheduler::depends_on(gemm)
-        |
-        v
-AllReduce carries scheduler::depends_on(sync)
-        |
-        v
-linked CUDA/NVSHMEM phased native path runs one fused Megacu launcher
+orchestrate(driver, a, b, partial, out, events, problem)
+  -> build_runtime_recipe(...)
+  -> EventTensor ready object
+  -> GEMM tile operator task
+  -> sync-only wait task
+  -> AllReduce tile operator task
+  -> runtime-owned mega-kernel loop
 ```
-
-The active Megacu proof is phased only. It covers single-GPU CUDA execution and
-two-GPU device-side NVSHMEM execution when the NVSHMEM test option is enabled.
 
 ## Usage
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --target cuda_nvshmem_gemm_allreduce_phased
-ctest --test-dir build -R 'cuda_gemm_allreduce_correctness' --output-on-failure
+cmake --build build --target cuda_nvshmem_gemm_allreduce_megacu
+ctest --test-dir build -R 'cuda_gemm_allreduce_correctness|runtime_gemm_allreduce' --output-on-failure
 ```
 
 Two-GPU NVSHMEM validation requires `MEGACU_ENABLE_NVSHMEM_TESTS=ON` and a

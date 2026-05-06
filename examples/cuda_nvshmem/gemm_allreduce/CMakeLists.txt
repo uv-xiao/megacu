@@ -296,32 +296,42 @@ endif()
 add_test(
   NAME megacu_native_does_not_call_golden
   COMMAND bash -lc
-          "! grep -R \"golden_\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "! grep -R \"golden_\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
-  NAME megacu_phased_path_uses_single_native_launcher
+  NAME gemm_allreduce_megacu_uses_runtime_arena
   COMMAND bash -lc
-          "! grep -R \"gemm_tile_produce_kernel<<<\\|allreduce_tile_consume_kernel<<<\\|nvshmem_allreduce_tile_consume_kernel<<<\\|megacu_local_gemm_allreduce_kernel\\|megacu_gemm_stage_kernel\\|megacu_allreduce_stage_kernel\\|manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "grep -R \"device_persistent\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu && grep -R \"runtime::loop::block_tile\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
+
+add_test(
+  NAME gemm_allreduce_megacu_has_no_manual_event_protocol
+  COMMAND bash -lc
+          "! grep -R \"task_event_tensor_i32\\|notify_task\\|wait_task\\|event_tensor.before\\|event_tensor.after(ctx, task\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
+
+add_test(
+  NAME gemm_allreduce_megacu_dispatches_by_operator_slot
+  COMMAND bash -lc
+          "grep -R \"op_slot\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu && ! grep -R \"task.value == 0\\|task.value == 2\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME manual_megakernel_lives_in_baseline
   COMMAND bash -lc
-          "grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/baseline && ! grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/baseline && ! grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME cuda_megakernel_shell_is_general_platform_code
   COMMAND bash -lc
-          "grep -R \"launch_megakernel\" ${PROJECT_SOURCE_DIR}/include/megacu/platform/cuda && ! grep -R \"asap_tile_composer\\|cuda_nvshmem_asap\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "grep -R \"launch_megakernel\" ${PROJECT_SOURCE_DIR}/include/megacu/platform/cuda && ! grep -R \"asap_tile_composer\\|cuda_nvshmem_asap\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME megakernel_running_logic_is_common
   COMMAND bash -lc
-          "grep -R \"struct block_tile_runtime\" ${PROJECT_SOURCE_DIR}/include/megacu/runtime && grep -R \"struct explicit_asap\" ${PROJECT_SOURCE_DIR}/include/megacu/scheduler && grep -R \"struct tile_grid\" ${PROJECT_SOURCE_DIR}/include/megacu/dispatcher && ! grep -R \"gemm_allreduce_program\\|runtime::device::entry\\|device_entry.cuh\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu ${PROJECT_SOURCE_DIR}/include/megacu/runtime")
+          "grep -R \"struct block_tile\" ${PROJECT_SOURCE_DIR}/include/megacu/runtime/loop && grep -R \"struct explicit_asap\" ${PROJECT_SOURCE_DIR}/include/megacu/scheduler && grep -R \"struct tile_grid\" ${PROJECT_SOURCE_DIR}/include/megacu/dispatcher && ! grep -R \"gemm_allreduce_program\\|runtime::device::entry\\|device_entry.cuh\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu ${PROJECT_SOURCE_DIR}/include/megacu/runtime")
 
 add_test(
   NAME nvshmem_event_tensor_is_backend_code
   COMMAND bash -lc
-          "grep -R \"event_tensor_i32\" ${PROJECT_SOURCE_DIR}/include/megacu/backends/nvshmem && ! grep -R \"struct event_tensor_i32\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "grep -R \"event_tensor_i32\" ${PROJECT_SOURCE_DIR}/include/megacu/backends/nvshmem && ! grep -R \"struct event_tensor_i32\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME megacu_asap_scheduler_has_no_phase_attrs
@@ -336,12 +346,12 @@ add_test(
 add_test(
   NAME runtime_strategy_selection_contracts_examples_do_not_call_scheduler_run
   COMMAND bash -lc
-          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' --include='*.cuh' \"scheduler\\.run\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/common ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu")
+          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' --include='*.cuh' \"scheduler\\.run\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/common ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME megacu_event_tensor_uses_decoupled_api
   COMMAND bash -lc
-          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' \"runtime::events\\|cuda_nvshmem::events\\|event_publish\\|event_acquire\\|event_join\\|event_publish_attrs\\|event_acquire_attrs\\|event_join_attrs\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/common ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/megacu ${PROJECT_SOURCE_DIR}/tests/build")
+          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' \"runtime::events\\|cuda_nvshmem::events\\|event_publish\\|event_acquire\\|event_join\\|event_publish_attrs\\|event_acquire_attrs\\|event_join_attrs\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/common ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu ${PROJECT_SOURCE_DIR}/tests/build")
 
 add_executable(megacu_direct_orchestrate_smoke
   ${PROJECT_SOURCE_DIR}/tests/runtime/direct_orchestrate_smoke.cc)
