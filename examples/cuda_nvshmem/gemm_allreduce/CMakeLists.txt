@@ -391,6 +391,7 @@ if(CUDAToolkit_FOUND)
       ${PROJECT_SOURCE_DIR}/tests/runtime/cuda_gemm_allreduce_correctness.cc)
     target_link_libraries(megacu_cuda_gemm_allreduce_correctness PRIVATE
       megacu_headers
+      manual_megakernel_cuda_nvshmem_gemm_allreduce
       golden_cuda_nvshmem_gemm_allreduce
       cuda_nvshmem_gemm_allreduce_megacu
       CUDA::cudart)

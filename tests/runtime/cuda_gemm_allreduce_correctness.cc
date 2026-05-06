@@ -11,6 +11,11 @@
 #include "examples/cuda_nvshmem/gemm_allreduce/golden/golden_gemm_allreduce.h"
 #include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h"
 
+extern "C" megacu::status
+manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32(
+    gemm_ar_driver driver, float const *a, float const *b, float *partial,
+    float *out, void *events, gemm_ar_problem problem);
+
 namespace {
 
 constexpr int kM = 2;
@@ -78,6 +83,37 @@ void reset_outputs(
   require_cuda(cudaMemsetAsync(c, 0, kCBytes, stream));
   require_cuda(cudaMemsetAsync(partial, 0, kPartialBytes, stream));
   require_cuda(cudaMemsetAsync(events, 0, 128, stream));
+}
+
+void run_megacu_case(
+    char const *label,
+    megacu::status (*fn)(gemm_ar_driver, float const *, float const *, float *,
+                         float *, void *, gemm_ar_problem),
+    gemm_ar_driver driver,
+    void const *a,
+    void const *b,
+    void *partial,
+    void *c,
+    void *events,
+    cudaStream_t stream,
+    std::vector<float> const &host_a,
+    std::vector<float> const &host_b,
+    std::vector<float> &host_c) {
+  reset_outputs(c, partial, events, stream);
+  auto status = fn(driver, static_cast<float const *>(a),
+                   static_cast<float const *>(b), static_cast<float *>(partial),
+                   static_cast<float *>(c), events,
+                   gemm_ar_problem{
+                       .m = kM,
+                       .n = kN,
+                       .k = kK,
+                       .tile_m = 1,
+                       .tile_n = 2});
+  assert(status.code == megacu::status_code::ok);
+  require_cuda(cudaMemcpyAsync(
+      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaStreamSynchronize(stream));
+  check_expected(host_a, host_b, host_c, 1.0f, label);
 }
 
 }  // namespace
@@ -157,20 +193,16 @@ int main() {
           .world_n_pes = 1,
           .cuda_device_ordinal = device}};
 
-  auto status = cuda_nvshmem_gemm_allreduce_host_orch(
-      driver,
-      static_cast<float const *>(a),
-      static_cast<float const *>(b),
-      static_cast<float *>(partial),
-      static_cast<float *>(c),
-      events,
-      gemm_ar_problem{.m = kM, .n = kN, .k = kK, .tile_m = 1, .tile_n = 2});
-  assert(status.code == megacu::status_code::ok);
-
-  require_cuda(cudaMemcpyAsync(
-      host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
-  require_cuda(cudaStreamSynchronize(stream));
-  check_expected(host_a, host_b, host_c, 1.0f, "megacu_host_orch_single");
+  run_megacu_case("baseline_manual_single",
+                  manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32,
+                  driver, a, b, partial, c, events, stream, host_a, host_b,
+                  host_c);
+  run_megacu_case("megacu_host_orch_single",
+                  cuda_nvshmem_gemm_allreduce_host_orch, driver, a, b, partial,
+                  c, events, stream, host_a, host_b, host_c);
+  run_megacu_case("megacu_seeded_orch_single",
+                  cuda_nvshmem_gemm_allreduce_seeded_orch, driver, a, b,
+                  partial, c, events, stream, host_a, host_b, host_c);
 
   require_cuda(cudaFree(events));
   require_cuda(cudaFree(partial));
