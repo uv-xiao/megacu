@@ -103,7 +103,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   endif()
 
   add_library(megacu_gemm_allreduce_cuda_native OBJECT
-    phased/megacu/megacu_gemm_allreduce_phased.cu)
+    megacu/megacu_gemm_allreduce.cu)
   target_link_libraries(megacu_gemm_allreduce_cuda_native PUBLIC
     megacu_headers
     CUDA::cudart)
@@ -111,6 +111,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     target_compile_options(megacu_gemm_allreduce_cuda_native PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   endif()
+  target_compile_options(megacu_gemm_allreduce_cuda_native PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
   set_target_properties(megacu_gemm_allreduce_cuda_native PROPERTIES
     CUDA_ARCHITECTURES 80
     CUDA_SEPARABLE_COMPILATION ON
