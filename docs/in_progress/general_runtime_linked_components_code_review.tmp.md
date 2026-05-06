@@ -76,7 +76,7 @@ Component status:
 | MPI adapter | Required distributed launch path | Normalizes MPI facts into driver facts | Partial | Adapter contracts; no full example run evidence |
 | Torch adapter | Required distributed launch path | Normalizes torchrun environment into driver facts | Partial | Adapter contracts; no full example run evidence |
 | Docker environment | Required execution envelope for MPI/Torch/CUDA+NVSHMEM | Helper scripts exist, but do not prove all required examples | Partial | Docker/tooling findings below |
-| GEMM-RS example | Required end-to-end distributed example | Directory/build skeleton exists | Missing | No golden/baseline/Megacu correctness binary |
+| GEMM-RS example | Required end-to-end distributed example | Golden, baseline, Megacu host-orch, and Megacu seeded-orch local CUDA correctness exists | Partial | Distributed direct/MPI/Torch correctness still missing |
 | AG-GEMM example | Required end-to-end distributed example | Directory/build skeleton exists | Missing | No golden/baseline/Megacu correctness binary |
 | Tiny decode example | Required end-to-end decode pipeline example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness path exists | Partial | Distributed tiny decode path still missing |
 | Stable docs closeout | Recreate flattened `docs/design/` at merge time | Active in-progress docs record this requirement | Process/deferred | Stable docs were touched early; see finding |
@@ -93,7 +93,7 @@ Task completion status:
 | Seeded-orch execution model | Device-resident orchestration seeded from host | Shared recipe equivalence CUDA smoke exists | Partial |
 | Scheduler/dispatcher strategy set | Provide multiple strategies that can be picked through the common runtime API | Some runtime loops exist; scheduler/dispatcher candidates are thin | Partial |
 | MPI/Torch required adapters | Required by PR and Docker path, not optional dependency paths | Adapter normalization exists | Partial |
-| GEMM-RS | Tile-operator Megacu example with golden and baseline comparison | Skeleton only | Missing |
+| GEMM-RS | Tile-operator Megacu example with golden and baseline comparison | Local CUDA correctness exists | Partial |
 | AG-GEMM | Tile-operator Megacu example with golden and baseline comparison | Skeleton only | Missing |
 | Tiny decode | Pipeline example with golden, baseline, and Megacu comparison | Local CUDA host-orch and seeded-orch paths exist | Partial |
 | Docker verification | Build/run required distributed examples through Docker | Scripts do not yet prove required examples | Missing |
@@ -228,13 +228,15 @@ What is implemented:
   `cuda_nvshmem::driver_view`.
 - Tiny decode golden/baseline/Megacu host-orch and seeded-orch local CUDA
   correctness path.
-- GEMM-RS and AG-GEMM directories and buildable skeleton object targets.
+- GEMM-RS local CUDA correctness path and AG-GEMM buildable skeleton object
+  target.
 
 What is not implemented relative to the active design:
 
-- GEMM-RS and AG-GEMM are not end-to-end examples; they are skeletons.
-- No GEMM-RS/AG-GEMM golden, baseline, or Megacu correctness binaries exist.
-- No direct/MPI/Torch GEMM-RS correctness path exists.
+- AG-GEMM is not an end-to-end example; it is still a skeleton.
+- No AG-GEMM golden, baseline, or Megacu correctness binary exists.
+- GEMM-RS has one-host/one-GPU correctness, but no direct two-GPU, MPI, or
+  Torch distributed correctness path exists yet.
 - No direct/distributed AG-GEMM correctness path exists.
 - `host-orch` and `seeded-orch` are integrated into tiny decode and
   GEMM-AllReduce, but not into GEMM-RS or AG-GEMM.
@@ -255,7 +257,7 @@ Merge-readiness assessment:
 
 ## Findings
 
-### High: GEMM-RS And AG-GEMM Are Skeletons, Not Required End-To-End Examples
+### High: AG-GEMM Is Still A Skeleton And GEMM-RS Is Local-Only
 
 Design requirement:
 
@@ -272,31 +274,31 @@ Design requirement:
 
 Implementation evidence:
 
-- `examples/cuda_nvshmem/gemm_reduce_scatter/megacu/gemm_reduce_scatter_megacu.cu:1-3`
-  contains only a skeleton function returning `1`.
+- `examples/cuda_nvshmem/gemm_reduce_scatter/` now contains common, golden,
+  baseline, and Megacu host-orch/seeded-orch local CUDA correctness paths.
 - `examples/cuda_nvshmem/allgather_gemm/megacu/allgather_gemm_megacu.cu:1-3`
   contains only a skeleton function returning `1`.
-- `examples/cuda_nvshmem/gemm_reduce_scatter/README.md:63-70` explicitly says
-  the current skeleton does not implement numeric correctness and does not add a
-  numeric GEMM-RS distributed run.
+- `examples/cuda_nvshmem/gemm_reduce_scatter/README.md` documents that the
+  distributed numeric GEMM-RS run remains pending.
 - `examples/cuda_nvshmem/allgather_gemm/README.md:134-141` says the same for
   AG-GEMM.
 
 Impact:
 
-- The current branch does not prove reusable distributed task composition.
-- The main examples that motivated this PR do not exercise scheduler,
-  dispatcher, EventTensor, runtime execution model, or backend behavior.
+- The current branch proves the GEMM-RS task composition locally, but not yet
+  through distributed direct/MPI/Torch launch paths.
+- AG-GEMM still does not exercise scheduler, dispatcher, EventTensor, runtime
+  execution model, or backend behavior.
 
 Fix direction:
 
-- Implement `common/`, `golden/`, `baseline/`, and `megacu/` for GEMM-RS and
-  AG-GEMM.
-- Add runnable correctness binaries for direct, MPI, and Torch launch paths.
+- Implement `common/`, `golden/`, `baseline/`, and `megacu/` for AG-GEMM.
+- Add GEMM-RS distributed correctness binaries for direct, MPI, and Torch
+  launch paths.
 - The Megacu variants should submit producer tasks, sync-only EventTensor wait
   tasks, and consumer tasks with explicit dependency attrs.
 
-### High: `host-orch` And `seeded-orch` Exist Only As Contracts, Not Example Paths
+### High: `host-orch` And `seeded-orch` Are Not In Every Required Example
 
 Design requirement:
 
@@ -323,23 +325,21 @@ Implementation evidence:
 - `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_megacu.cu`
   now exposes host-orch and seeded-orch CUDA megakernel variants from one shared
   recipe.
-- GEMM-RS and AG-GEMM Megacu sources are skeletons.
+- AG-GEMM Megacu source is still a skeleton. GEMM-RS now has local CUDA
+  host-orch and seeded-orch variants.
 
 Impact:
 
-- The core ownership claim is now demonstrated by tiny decode and
-  GEMM-AllReduce, but still not by GEMM-RS or AG-GEMM.
+- The core ownership claim is now demonstrated by tiny decode, GEMM-AllReduce,
+  and local GEMM-RS, but still not by AG-GEMM.
 
 Fix direction:
 
-- Add example targets named around the accepted variants, for example
-  `cuda_nvshmem_gemm_rs_host_orch`, `cuda_nvshmem_gemm_rs_seeded_orch`,
-  `cuda_nvshmem_ag_gemm_host_orch`, `cuda_nvshmem_ag_gemm_seeded_orch`,
-  `cuda_nvshmem_tiny_decode_host_orch`, and
-  `cuda_nvshmem_tiny_decode_seeded_orch`.
-- Drive both variants from the same target recipe and operator table.
+- Add AG-GEMM host-orch and seeded-orch variants from one shared target recipe
+  and operator table.
+- Add distributed validation for GEMM-RS and tiny decode.
 
-### Medium: Runtime Arena Smoke Is Landed, But Examples Are Not Refit
+### Medium: Runtime Arena Smoke Is Landed, But Example Coverage Is Incomplete
 
 Design requirement:
 
@@ -371,15 +371,15 @@ Implementation evidence:
 
 Impact:
 
-- The first common-loop checkpoint is real, but it is still a smoke topology,
-  not a refit of GEMM-AllReduce or the required GEMM-RS/AG-GEMM/tiny-decode
-  examples.
+- The common-loop checkpoint is real and now has GEMM-AllReduce, GEMM-RS local,
+  and tiny decode local example coverage, but AG-GEMM and distributed variants
+  remain incomplete.
 - The CUDA contract is monolithic and should be split as the example contracts
   harden.
 
 Fix direction:
 
-- Refit GEMM-AllReduce through the same arena-driven runtime loop.
+- Refit AG-GEMM through the same arena-driven runtime loop.
 - Split the monolithic CUDA contract into focused scheduler, dispatcher,
   EventTensor, loop, and execution-model contracts once the interfaces harden.
 - Extend or replace the remaining loop candidates with arena-backed behavior
@@ -604,7 +604,7 @@ Fix direction:
 | Dispatcher candidates | `tile_grid_device` exists and reads task attrs in smoke; host `map_explicit_attrs` counts attrs. | Partial. Missing `rank_aware_tile_grid` and real `single_work_item` dispatcher. |
 | Scheduler candidates | Host and device `explicit_asap` exist; device ASAP reads sealed arena deps in smoke. | Partial. Missing `static_submission_order` and `static_level_order`; no full example validation. |
 | Launch adapters | MPI/Torch adapter headers and env contracts exist. | Partial/aligned for thin normalization; missing real example launch correctness and NVSHMEM bootstrap proof. |
-| GEMM-RS example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
+| GEMM-RS example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness exists. | Partial. Distributed launch correctness remains missing. |
 | AG-GEMM example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
 | Tiny decode example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness exists. | Partial. Distributed tiny decode is still missing. |
 | Docker source of truth | Docker installs MPI/Torch and script runner invokes helpers. | Partial. Helpers do not run required GEMM-RS/AG-GEMM correctness. |

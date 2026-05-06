@@ -1,7 +1,7 @@
 # CUDA + NVSHMEM GEMM Reduce-Scatter
 
-This example will demonstrate GEMM producer tiles feeding reduce-scatter
-consumer work through the CUDA+NVSHMEM backend.
+This example demonstrates GEMM producer tiles feeding reduce-scatter consumer
+work through the CUDA+NVSHMEM backend.
 
 ## Layout
 
@@ -16,9 +16,9 @@ consumer work through the CUDA+NVSHMEM backend.
 orchestrate(driver, args)
   declare EventTensor readiness for produced GEMM tiles
   submit GEMM tile producer tasks
-  submit sync-only readiness tasks that wait on EventTensor state
+  submit sync-only readiness task that waits on EventTensor state
   submit reduce-scatter tile or range consumer tasks
-  launch one runtime-owned CUDA+NVSHMEM path
+  launch one runtime-owned CUDA megakernel
 ```
 
 Scheduler, dispatcher, runtime, EventTensor, platform, and backend components
@@ -30,28 +30,23 @@ tile/range operators as tasks.
 
 ```bash
 cmake -S . -B build
-cmake --build build --target cuda_nvshmem_gemm_reduce_scatter_megacu
-ctest --test-dir build -R '^gemm_rs_example_layout$' --output-on-failure
+cmake --build build --target megacu_cuda_gemm_reduce_scatter_correctness
+ctest --test-dir build -R 'gemm_rs_example_layout|cuda_gemm_reduce_scatter_correctness' --output-on-failure
 ```
 
-The CTest is a layout check. The build target verifies that the skeleton Megacu
-object target is present when CUDA language support is enabled.
+The correctness CTest compares golden, handwritten CUDA baseline, Megacu
+host-orch, and Megacu seeded-orch paths for one host and one GPU.
 
 ## Run
 
-This skeleton has no correctness binary yet. A future runnable path should live
-under `examples/cuda_nvshmem/gemm_reduce_scatter/megacu/` and provide a
-GEMM-RS correctness entrypoint for local and distributed launch modes.
-
 ```bash
-cmake --build build --target cuda_nvshmem_gemm_reduce_scatter_megacu
+cmake --build build --target megacu_cuda_gemm_reduce_scatter_correctness
+ctest --test-dir build -R '^cuda_gemm_reduce_scatter_correctness$' --output-on-failure
 ```
-
-There is no executable run command for this skeleton-only step.
 
 ## Assumptions
 
-- CUDA language support is available for the object target.
+- CUDA language support is available for the numeric targets.
 - The distributed backend is CUDA+NVSHMEM with symmetric memory and rank/team
   setup supplied by the eventual runner.
 - Numeric validation will require NVIDIA GPUs, a CUDA toolkit, NVSHMEM headers
@@ -59,9 +54,8 @@ There is no executable run command for this skeleton-only step.
 
 ## Known Limitations
 
-- The current skeleton does not implement numeric correctness.
+- The current correctness path proves one host and one GPU only.
 - The layout CTest does not run CUDA kernels or NVSHMEM communication.
-- Golden and baseline behavior is planned but not proved by this README.
 - Direct, MPI, and Torch launch adapters are required by the current PR and are
-  exercised through the shared CUDA+NVSHMEM helper scripts; this skeleton does
-  not yet add a numeric GEMM-RS distributed run.
+  exercised through the shared CUDA+NVSHMEM helper scripts; the distributed
+  numeric GEMM-RS run remains pending.
