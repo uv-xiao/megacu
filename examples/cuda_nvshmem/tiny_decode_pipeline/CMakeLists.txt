@@ -97,7 +97,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       endif()
       add_test(
         NAME ${test_name}
-        COMMAND mpirun -np 2
+        COMMAND mpirun --allow-run-as-root -np 2
                 $<TARGET_FILE:mpi_two_rank_tiny_decode_smoke> ${mode})
       set_tests_properties(${test_name} PROPERTIES
         SKIP_RETURN_CODE 77)
