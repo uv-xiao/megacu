@@ -77,7 +77,7 @@ Component status:
 | Torch adapter | Required distributed launch path | Normalizes torchrun environment into driver facts | Partial | Adapter contracts; no full example run evidence |
 | Docker environment | Required execution envelope for MPI/Torch/CUDA+NVSHMEM | Helper scripts exist, but do not prove all required examples | Partial | Docker/tooling findings below |
 | GEMM-RS example | Required end-to-end distributed example | Golden, baseline, Megacu host-orch, and Megacu seeded-orch local CUDA correctness exists | Partial | Distributed direct/MPI/Torch correctness still missing |
-| AG-GEMM example | Required end-to-end distributed example | Directory/build skeleton exists | Missing | No golden/baseline/Megacu correctness binary |
+| AG-GEMM example | Required end-to-end distributed example | Golden, baseline, Megacu host-orch, and Megacu seeded-orch local CUDA correctness exists | Partial | Distributed direct/MPI/Torch correctness still missing |
 | Tiny decode example | Required end-to-end decode pipeline example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness path exists | Partial | Distributed tiny decode path still missing |
 | Stable docs closeout | Recreate flattened `docs/design/` at merge time | Active in-progress docs record this requirement | Process/deferred | Stable docs were touched early; see finding |
 
@@ -94,7 +94,7 @@ Task completion status:
 | Scheduler/dispatcher strategy set | Provide multiple strategies that can be picked through the common runtime API | Some runtime loops exist; scheduler/dispatcher candidates are thin | Partial |
 | MPI/Torch required adapters | Required by PR and Docker path, not optional dependency paths | Adapter normalization exists | Partial |
 | GEMM-RS | Tile-operator Megacu example with golden and baseline comparison | Local CUDA correctness exists | Partial |
-| AG-GEMM | Tile-operator Megacu example with golden and baseline comparison | Skeleton only | Missing |
+| AG-GEMM | Tile-operator Megacu example with golden and baseline comparison | Local CUDA correctness exists | Partial |
 | Tiny decode | Pipeline example with golden, baseline, and Megacu comparison | Local CUDA host-orch and seeded-orch paths exist | Partial |
 | Docker verification | Build/run required distributed examples through Docker | Scripts do not yet prove required examples | Missing |
 | `docs/design/` closeout | Recreate flattened stable docs during PR merge, not now | In-progress docs mention this | Process/deferred |
@@ -228,16 +228,15 @@ What is implemented:
   `cuda_nvshmem::driver_view`.
 - Tiny decode golden/baseline/Megacu host-orch and seeded-orch local CUDA
   correctness path.
-- GEMM-RS local CUDA correctness path and AG-GEMM buildable skeleton object
-  target.
+- GEMM-RS and AG-GEMM local CUDA correctness paths.
 
 What is not implemented relative to the active design:
 
-- AG-GEMM is not an end-to-end example; it is still a skeleton.
-- No AG-GEMM golden, baseline, or Megacu correctness binary exists.
+- AG-GEMM has one-host/one-GPU correctness, but no direct two-GPU, MPI, or
+  Torch distributed correctness path exists yet.
 - GEMM-RS has one-host/one-GPU correctness, but no direct two-GPU, MPI, or
   Torch distributed correctness path exists yet.
-- No direct/distributed AG-GEMM correctness path exists.
+- No distributed AG-GEMM correctness path exists.
 - `host-orch` and `seeded-orch` are integrated into tiny decode and
   GEMM-AllReduce, but not into GEMM-RS or AG-GEMM.
 - Runtime arena smoke is not yet the GEMM-AllReduce refit or an end-to-end
@@ -276,23 +275,24 @@ Implementation evidence:
 
 - `examples/cuda_nvshmem/gemm_reduce_scatter/` now contains common, golden,
   baseline, and Megacu host-orch/seeded-orch local CUDA correctness paths.
-- `examples/cuda_nvshmem/allgather_gemm/megacu/allgather_gemm_megacu.cu:1-3`
-  contains only a skeleton function returning `1`.
+- `examples/cuda_nvshmem/allgather_gemm/` now contains common, golden,
+  baseline, and Megacu host-orch/seeded-orch local CUDA correctness paths.
 - `examples/cuda_nvshmem/gemm_reduce_scatter/README.md` documents that the
   distributed numeric GEMM-RS run remains pending.
-- `examples/cuda_nvshmem/allgather_gemm/README.md:134-141` says the same for
-  AG-GEMM.
+- `examples/cuda_nvshmem/allgather_gemm/README.md` documents that the
+  distributed numeric AG-GEMM run remains pending.
 
 Impact:
 
 - The current branch proves the GEMM-RS task composition locally, but not yet
   through distributed direct/MPI/Torch launch paths.
-- AG-GEMM still does not exercise scheduler, dispatcher, EventTensor, runtime
-  execution model, or backend behavior.
+- AG-GEMM now exercises scheduler, dispatcher, EventTensor, runtime execution
+  model, and local backend behavior, but not distributed launch behavior.
 
 Fix direction:
 
-- Implement `common/`, `golden/`, `baseline/`, and `megacu/` for AG-GEMM.
+- Add AG-GEMM distributed correctness binaries for direct, MPI, and Torch
+  launch paths.
 - Add GEMM-RS distributed correctness binaries for direct, MPI, and Torch
   launch paths.
 - The Megacu variants should submit producer tasks, sync-only EventTensor wait
@@ -325,19 +325,16 @@ Implementation evidence:
 - `examples/cuda_nvshmem/tiny_decode_pipeline/megacu/tiny_decode_megacu.cu`
   now exposes host-orch and seeded-orch CUDA megakernel variants from one shared
   recipe.
-- AG-GEMM Megacu source is still a skeleton. GEMM-RS now has local CUDA
-  host-orch and seeded-orch variants.
+- AG-GEMM and GEMM-RS now have local CUDA host-orch and seeded-orch variants.
 
 Impact:
 
 - The core ownership claim is now demonstrated by tiny decode, GEMM-AllReduce,
-  and local GEMM-RS, but still not by AG-GEMM.
+  local GEMM-RS, and local AG-GEMM.
 
 Fix direction:
 
-- Add AG-GEMM host-orch and seeded-orch variants from one shared target recipe
-  and operator table.
-- Add distributed validation for GEMM-RS and tiny decode.
+- Add distributed validation for GEMM-RS, AG-GEMM, and tiny decode.
 
 ### Medium: Runtime Arena Smoke Is Landed, But Example Coverage Is Incomplete
 
@@ -372,14 +369,15 @@ Implementation evidence:
 Impact:
 
 - The common-loop checkpoint is real and now has GEMM-AllReduce, GEMM-RS local,
-  and tiny decode local example coverage, but AG-GEMM and distributed variants
-  remain incomplete.
+  AG-GEMM local, and tiny decode local example coverage, but distributed
+  variants remain incomplete.
 - The CUDA contract is monolithic and should be split as the example contracts
   harden.
 
 Fix direction:
 
-- Refit AG-GEMM through the same arena-driven runtime loop.
+- Extend the distributed example paths through the same arena-driven runtime
+  loop.
 - Split the monolithic CUDA contract into focused scheduler, dispatcher,
   EventTensor, loop, and execution-model contracts once the interfaces harden.
 - Extend or replace the remaining loop candidates with arena-backed behavior
@@ -605,7 +603,7 @@ Fix direction:
 | Scheduler candidates | Host and device `explicit_asap` exist; device ASAP reads sealed arena deps in smoke. | Partial. Missing `static_submission_order` and `static_level_order`; no full example validation. |
 | Launch adapters | MPI/Torch adapter headers and env contracts exist. | Partial/aligned for thin normalization; missing real example launch correctness and NVSHMEM bootstrap proof. |
 | GEMM-RS example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness exists. | Partial. Distributed launch correctness remains missing. |
-| AG-GEMM example | Directory and skeleton object target exist. | Missing required end-to-end behavior. |
+| AG-GEMM example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness exists. | Partial. Distributed launch correctness remains missing. |
 | Tiny decode example | Golden/baseline/Megacu host-orch and seeded-orch local CUDA correctness exists. | Partial. Distributed tiny decode is still missing. |
 | Docker source of truth | Docker installs MPI/Torch and script runner invokes helpers. | Partial. Helpers do not run required GEMM-RS/AG-GEMM correctness. |
 | Stable docs lifecycle | Closeout plan exists under in-progress. | Partially misaligned because `docs/design/` also changed. |

@@ -168,9 +168,10 @@ component now matches the runtime-loop architecture.
 `docs/in_progress/design/runtime_execution_model_implementation_design.md`;
 implementation in progress. Compact arena records, `host_orch::frame`,
 `seeded_orch`, runtime composition, GEMM-AllReduce runtime integration,
-GEMM-RS host-orch/seeded-orch local CUDA integration, and tiny decode
-host-orch/seeded-orch local CUDA integration now exist. AG-GEMM, distributed
-GEMM-RS, and distributed tiny decode integration remain pending.
+GEMM-RS host-orch/seeded-orch local CUDA integration, AG-GEMM
+host-orch/seeded-orch local CUDA integration, and tiny decode host-orch/
+seeded-orch local CUDA integration now exist. Distributed GEMM-RS, distributed
+AG-GEMM, and distributed tiny decode integration remain pending.
 
 ### Slice 4: Three Tile-Operator Examples
 
