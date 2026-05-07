@@ -17,7 +17,6 @@ function(megacu_add_components)
     ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/platform/cuda/platform.cc
     ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/backends/nvshmem/backend.cc
     ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/target/runtime.cc)
-  target_compile_features(${MEGACU_NAME} PUBLIC cxx_std_20)
   target_link_libraries(${MEGACU_NAME} PUBLIC megacu_headers)
   target_compile_definitions(${MEGACU_NAME} PRIVATE
     "MEGACU_COMPONENT_DISPATCHER=\"${MEGACU_DISPATCHER}\""
@@ -47,7 +46,6 @@ function(megacu_add_orchestrate_target)
   endif()
 
   add_library(${MEGACU_TARGET} STATIC ${MEGACU_SOURCES})
-  target_compile_features(${MEGACU_TARGET} PUBLIC cxx_std_20)
   target_link_libraries(${MEGACU_TARGET} PUBLIC megacu_headers)
 
   if(MEGACU_COMPONENTS)

@@ -36,7 +36,6 @@ add_library(megacu_headers INTERFACE)
 target_include_directories(megacu_headers INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(megacu_headers INTERFACE cxx_std_20)
 target_compile_options(megacu_headers INTERFACE
   $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
 
