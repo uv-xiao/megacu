@@ -12,6 +12,12 @@
 #include <megacu/runtime/loop/block_tile.cuh>
 #include <megacu/scheduler/explicit_asap_device.cuh>
 
+#ifdef MEGACU_AG_GEMM_HAS_DEVICE_NVSHMEM
+#include <nvshmem.h>
+
+extern "C" void nvshmem_barrier_all();
+#endif
+
 namespace {
 
 constexpr int kThreads = 128;
@@ -27,6 +33,32 @@ megacu::status cuda_status(cudaError_t error, std::uint16_t detail) {
 __device__ std::int64_t device_ceil_div(std::int64_t value,
                                         std::int64_t divisor) {
   return (value + divisor - 1) / divisor;
+}
+
+__device__ std::int64_t k_slice_begin(std::int64_t global_k, int n_pes,
+                                      int pe) {
+  auto base = global_k / n_pes;
+  auto extra = global_k % n_pes;
+  return static_cast<std::int64_t>(pe) * base +
+         (static_cast<std::int64_t>(pe) < extra ? pe : extra);
+}
+
+__device__ std::int64_t k_slice_count(std::int64_t global_k, int n_pes,
+                                      int pe) {
+  auto base = global_k / n_pes;
+  auto extra = global_k % n_pes;
+  return base + (static_cast<std::int64_t>(pe) < extra ? 1 : 0);
+}
+
+__device__ int owner_for_k(std::int64_t global_k, int n_pes, std::int64_t kk) {
+  for (int pe = 0; pe < n_pes; ++pe) {
+    auto begin = k_slice_begin(global_k, n_pes, pe);
+    auto count = k_slice_count(global_k, n_pes, pe);
+    if (kk >= begin && kk < begin + count) {
+      return pe;
+    }
+  }
+  return n_pes - 1;
 }
 
 struct allgather_tile_produce_task {
@@ -51,8 +83,23 @@ struct allgather_tile_produce_task {
       if (kk >= args.problem.k || col >= args.problem.n) {
         continue;
       }
+
+      auto n_pes = args.driver.team.team_n_pes;
+      auto my_pe = args.driver.team.team_my_pe;
+      auto owner = owner_for_k(args.problem.k, n_pes, kk);
+      auto owner_begin = k_slice_begin(args.problem.k, n_pes, owner);
+      auto local_index = (kk - owner_begin) * args.problem.n + col;
+      float value = 0.0F;
+      if (owner == my_pe) {
+        value = args.b[local_index];
+      } else {
+#ifdef MEGACU_AG_GEMM_HAS_DEVICE_NVSHMEM
+        value = megacu::nvshmem::device::remote_float(args.b, local_index,
+                                                      owner);
+#endif
+      }
       args.gathered_b[kk * args.problem.n + col] =
-          args.b[kk * args.problem.n + col];
+          value;
     }
   }
 };
@@ -161,10 +208,20 @@ megacu::status launch_runtime(ag_gemm_driver driver,
     return status;
   }
 
+#ifdef MEGACU_AG_GEMM_HAS_DEVICE_NVSHMEM
+  if (megacu::nvshmem::has_remote_pes(driver.team)) {
+    status = cuda_status(cudaStreamSynchronize(stream), 12);
+    if (status.code != megacu::status_code::ok) {
+      return status;
+    }
+    nvshmem_barrier_all();
+  }
+#else
   if (megacu::nvshmem::has_remote_pes(driver.team)) {
     return {megacu::status_code::unsupported, 13,
-            "distributed AG-GEMM path is not implemented yet"};
+            "device-side NVSHMEM path was not built"};
   }
+#endif
 
   auto runtime = ag_gemm_runtime<ExecutionModel>{
       .execution = execution,

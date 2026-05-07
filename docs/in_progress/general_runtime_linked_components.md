@@ -173,8 +173,12 @@ host-orch/seeded-orch local CUDA integration, and tiny decode host-orch/
 seeded-orch local CUDA integration now exist. A GEMM-RS two-rank NVSHMEM smoke
 test for host-orch and seeded-orch is wired into the Docker NVSHMEM test path;
 local direct CUDA verification passes, but this machine lacks local NVSHMEM
-headers/libraries/launcher for non-Docker execution. Distributed AG-GEMM and
-distributed tiny decode integration remain pending.
+headers/libraries/launcher for non-Docker execution. AG-GEMM now uses a real
+distributed all-gather contract where each rank owns a symmetric local K-slice
+of `B`, the all-gather operator gathers all rank slices into local
+`gathered_b`, and the GEMM operator consumes the gathered matrix; its two-rank
+host-orch/seeded-orch smoke is wired into the Docker NVSHMEM path. Distributed
+tiny decode integration remains pending.
 
 ### Slice 4: Three Tile-Operator Examples
 
