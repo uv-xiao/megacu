@@ -63,10 +63,6 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   set_target_properties(cuda_nvshmem_tiny_decode_correctness PROPERTIES
     LINKER_LANGUAGE CUDA)
 
-  target_compile_options(cuda_nvshmem_tiny_decode_baseline PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-  target_compile_options(cuda_nvshmem_tiny_decode_megacu PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   set_target_properties(cuda_nvshmem_tiny_decode_baseline PROPERTIES
     CUDA_ARCHITECTURES 80)
   set_target_properties(cuda_nvshmem_tiny_decode_megacu PROPERTIES

@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 project(megacu LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_compile_options(
+  $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>
+  $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
 
 option(MEGACU_ENABLE_NVSHMEM_TESTS
   "Build CUDA+NVSHMEM two-rank runtime validation tests" OFF)
@@ -36,8 +37,6 @@ add_library(megacu_headers INTERFACE)
 target_include_directories(megacu_headers INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_options(megacu_headers INTERFACE
-  $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
 
 enable_testing()
 

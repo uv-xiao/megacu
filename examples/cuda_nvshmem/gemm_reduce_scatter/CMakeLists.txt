@@ -62,12 +62,6 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     ${PROJECT_SOURCE_DIR})
   target_compile_options(megacu_gemm_reduce_scatter_cuda_native PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
-  target_compile_options(golden_cuda_nvshmem_gemm_reduce_scatter PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-  target_compile_options(baseline_cuda_nvshmem_gemm_reduce_scatter PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-  target_compile_options(megacu_gemm_reduce_scatter_cuda_native PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   set_target_properties(
     golden_cuda_nvshmem_gemm_reduce_scatter
     baseline_cuda_nvshmem_gemm_reduce_scatter
