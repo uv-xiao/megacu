@@ -5,6 +5,7 @@ target_link_libraries(cuda_nvshmem_tiny_decode_golden PUBLIC
 
 if(MEGACU_ENABLE_NVSHMEM_TESTS)
   find_package(CUDAToolkit REQUIRED)
+  find_package(MPI REQUIRED COMPONENTS CXX)
   find_path(NVSHMEM_INCLUDE_DIR
     NAMES nvshmem.h
     HINTS ENV NVSHMEM_HOME
@@ -73,31 +74,31 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     COMMAND cuda_nvshmem_tiny_decode_correctness)
 
   if(MEGACU_ENABLE_NVSHMEM_TESTS)
-    add_executable(nvshmem_two_rank_tiny_decode_smoke
-      ${PROJECT_SOURCE_DIR}/tests/runtime/nvshmem_two_rank_tiny_decode_smoke.cc)
-    target_link_libraries(nvshmem_two_rank_tiny_decode_smoke PRIVATE
+    add_executable(mpi_two_rank_tiny_decode_smoke
+      ${PROJECT_SOURCE_DIR}/tests/runtime/mpi_two_rank_tiny_decode_smoke.cc)
+    target_link_libraries(mpi_two_rank_tiny_decode_smoke PRIVATE
       megacu_headers
       cuda_nvshmem_tiny_decode_golden
       cuda_nvshmem_tiny_decode_megacu
       CUDA::cudart
-      ${NVSHMEM_HOST_LIBRARY})
-    target_include_directories(nvshmem_two_rank_tiny_decode_smoke PRIVATE
+      MPI::MPI_CXX)
+    target_include_directories(mpi_two_rank_tiny_decode_smoke PRIVATE
       ${NVSHMEM_INCLUDE_DIR})
-    set_target_properties(nvshmem_two_rank_tiny_decode_smoke PROPERTIES
+    set_target_properties(mpi_two_rank_tiny_decode_smoke PROPERTIES
       LINKER_LANGUAGE CUDA)
 
     foreach(mode
         megacu_host_orch
         megacu_seeded_orch)
       if(mode STREQUAL "megacu_host_orch")
-        set(test_name nvshmem_two_rank_tiny_decode_correctness_megacu_host_orch)
+        set(test_name mpi_two_rank_tiny_decode_correctness_megacu_host_orch)
       else()
-        set(test_name nvshmem_two_rank_tiny_decode_correctness_megacu_seeded_orch)
+        set(test_name mpi_two_rank_tiny_decode_correctness_megacu_seeded_orch)
       endif()
       add_test(
         NAME ${test_name}
-        COMMAND ${NVSHMEMRUN_EXECUTABLE} -np 2
-                $<TARGET_FILE:nvshmem_two_rank_tiny_decode_smoke> ${mode})
+        COMMAND mpirun -np 2
+                $<TARGET_FILE:mpi_two_rank_tiny_decode_smoke> ${mode})
       set_tests_properties(${test_name} PROPERTIES
         SKIP_RETURN_CODE 77)
     endforeach()

@@ -1,7 +1,7 @@
 #include "examples/cuda_nvshmem/tiny_decode_pipeline/common/tiny_decode.h"
 
 #include <cuda_runtime.h>
-#include <nvshmem_host.h>
+#include <mpi.h>
 
 #include <cassert>
 #include <cstdio>
@@ -39,25 +39,27 @@ void run_mode(char const *label,
 
 int main(int argc, char **argv) {
   char const *mode = argc > 1 ? argv[1] : "";
-  nvshmem_init();
+  MPI_Init(&argc, &argv);
 
-  int pe = nvshmem_my_pe();
-  int npes = nvshmem_n_pes();
+  int pe = 0;
+  int npes = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &pe);
+  MPI_Comm_size(MPI_COMM_WORLD, &npes);
   if (npes != 2) {
-    nvshmem_finalize();
+    MPI_Finalize();
     return kSkipTest;
   }
 
   int device_count = 0;
   require_cuda(cudaGetDeviceCount(&device_count));
   if (device_count < 2) {
-    nvshmem_finalize();
+    MPI_Finalize();
     return kSkipTest;
   }
 
   int device = pe % device_count;
   require_cuda(cudaSetDevice(device));
-  nvshmem_barrier_all();
+  MPI_Barrier(MPI_COMM_WORLD);
 
   if (std::strcmp(mode, "megacu_host_orch") == 0) {
     run_mode("tiny-decode host-orch", megacu_tiny_decode_megacu_host_orch, pe);
@@ -68,7 +70,7 @@ int main(int argc, char **argv) {
     assert(false && "unknown tiny decode two-rank mode");
   }
 
-  nvshmem_barrier_all();
-  nvshmem_finalize();
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Finalize();
   return 0;
 }

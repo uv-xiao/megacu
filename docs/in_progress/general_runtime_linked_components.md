@@ -178,9 +178,10 @@ distributed all-gather contract where each rank owns a symmetric local K-slice
 of `B`, the all-gather operator gathers all rank slices into local
 `gathered_b`, and the GEMM operator consumes the gathered matrix; its two-rank
 host-orch/seeded-orch smoke is wired into the Docker NVSHMEM path. Distributed
-tiny decode now has a two-rank NVSHMEM launch smoke for host-orch and
-seeded-orch; each rank runs the same range-operator runtime pipeline on its
-assigned GPU and compares against golden output.
+tiny decode now has a two-rank MPI launch smoke for host-orch and seeded-orch;
+each rank runs the same range-operator runtime pipeline on its assigned GPU and
+compares against golden output. Tiny decode intentionally does not add backend
+communication because it is the non-communication pipeline example.
 
 MPI launch now has an example correctness path, not only an adapter shape
 contract: the GEMM-RS two-rank smoke can be built as an MPI-bootstrapped
