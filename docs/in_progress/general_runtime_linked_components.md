@@ -170,8 +170,11 @@ implementation in progress. Compact arena records, `host_orch::frame`,
 `seeded_orch`, runtime composition, GEMM-AllReduce runtime integration,
 GEMM-RS host-orch/seeded-orch local CUDA integration, AG-GEMM
 host-orch/seeded-orch local CUDA integration, and tiny decode host-orch/
-seeded-orch local CUDA integration now exist. Distributed GEMM-RS, distributed
-AG-GEMM, and distributed tiny decode integration remain pending.
+seeded-orch local CUDA integration now exist. A GEMM-RS two-rank NVSHMEM smoke
+test for host-orch and seeded-orch is wired into the Docker NVSHMEM test path;
+local direct CUDA verification passes, but this machine lacks local NVSHMEM
+headers/libraries/launcher for non-Docker execution. Distributed AG-GEMM and
+distributed tiny decode integration remain pending.
 
 ### Slice 4: Three Tile-Operator Examples
 
