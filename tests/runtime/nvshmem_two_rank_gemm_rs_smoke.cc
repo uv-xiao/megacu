@@ -4,10 +4,14 @@
 #include <nvshmem_host.h>
 #if defined(MEGACU_GEMM_RS_SMOKE_USE_MPI_BOOTSTRAP)
 #include <mpi.h>
+#endif
+#if defined(MEGACU_GEMM_RS_SMOKE_USE_MPI_BOOTSTRAP) ||                      \
+    defined(MEGACU_GEMM_RS_SMOKE_USE_UID_BOOTSTRAP)
 #include <nvshmemx.h>
 #endif
 
 #include <cassert>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -44,10 +48,54 @@ int optional_env(std::initializer_list<char const *> names, int fallback) {
   return value == nullptr ? fallback : std::atoi(value);
 }
 
+int required_env(std::initializer_list<char const *> names) {
+  auto *value = first_env(names);
+  assert(value != nullptr);
+  return std::atoi(value);
+}
+
+int hex_value(char value) {
+  if (value >= '0' && value <= '9') {
+    return value - '0';
+  }
+  value = static_cast<char>(std::tolower(value));
+  if (value >= 'a' && value <= 'f') {
+    return value - 'a' + 10;
+  }
+  assert(false && "invalid hex digit");
+  return 0;
+}
+
+void decode_hex(char const *hex, unsigned char *bytes, std::size_t byte_count) {
+  assert(hex != nullptr);
+  assert(std::strlen(hex) == byte_count * 2);
+  for (std::size_t index = 0; index < byte_count; ++index) {
+    bytes[index] =
+        static_cast<unsigned char>((hex_value(hex[index * 2]) << 4) |
+                                   hex_value(hex[index * 2 + 1]));
+  }
+}
+
 struct launch_env {
   int device = -1;
   bool skip = false;
 };
+
+int print_unique_id() {
+#if defined(MEGACU_GEMM_RS_SMOKE_USE_UID_BOOTSTRAP)
+  nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
+  auto status = nvshmemx_get_uniqueid(&id);
+  assert(status == 0);
+  auto const *bytes = reinterpret_cast<unsigned char const *>(&id);
+  for (std::size_t index = 0; index < sizeof(id); ++index) {
+    std::printf("%02x", static_cast<unsigned>(bytes[index]));
+  }
+  std::printf("\n");
+  return 0;
+#else
+  return 1;
+#endif
+}
 
 launch_env initialize_backend(int *argc, char ***argv) {
 #if defined(MEGACU_GEMM_RS_SMOKE_USE_MPI_BOOTSTRAP)
@@ -72,6 +120,30 @@ launch_env initialize_backend(int *argc, char ***argv) {
   nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
   attr.mpi_comm = &mpi_comm;
   auto init_status = nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+  assert(init_status == 0);
+  return {.device = device, .skip = false};
+#elif defined(MEGACU_GEMM_RS_SMOKE_USE_UID_BOOTSTRAP)
+  (void)argc;
+  (void)argv;
+  auto rank = required_env({"RANK"});
+  auto world_size = required_env({"WORLD_SIZE"});
+  auto local_rank = required_env({"LOCAL_RANK"});
+
+  int device_count = 0;
+  require_cuda(cudaGetDeviceCount(&device_count));
+  if (device_count < 2) {
+    return {.device = -1, .skip = true};
+  }
+
+  auto device = local_rank % device_count;
+  require_cuda(cudaSetDevice(device));
+
+  nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
+  decode_hex(first_env({"MEGACU_NVSHMEM_UNIQUEID_HEX"}),
+             reinterpret_cast<unsigned char *>(&id), sizeof(id));
+  nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
+  nvshmemx_set_attr_uniqueid_args(rank, world_size, &id, &attr);
+  auto init_status = nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
   assert(init_status == 0);
   return {.device = device, .skip = false};
 #else
@@ -142,6 +214,10 @@ void run_case(char const *label,
 
 int main(int argc, char **argv) {
   char const *mode = argc > 1 ? argv[1] : "";
+  if (std::strcmp(mode, "--print-uid") == 0) {
+    return print_unique_id();
+  }
+
   auto launch = initialize_backend(&argc, &argv);
   if (launch.skip) {
     finalize_backend();

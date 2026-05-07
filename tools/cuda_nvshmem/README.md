@@ -12,9 +12,10 @@ subdirectory only when that example needs a unique script.
 - `run_mpi.sh`: builds `megacu_adapter_contracts`, runs it with `mpirun`,
   then runs the MPI-bootstrapped GEMM-RS Megacu correctness smoke when
   NVSHMEM tests are enabled in the build.
-- `run_torch.py`: builds `megacu_adapter_contracts` and runs the Torch launch
-  adapter smoke path from `RANK`, `WORLD_SIZE`, and `LOCAL_RANK` environment
-  facts.
+- `run_torch.py`: builds `megacu_adapter_contracts`, checks the Torch launch
+  adapter facts from `RANK`, `WORLD_SIZE`, and `LOCAL_RANK`, broadcasts an
+  NVSHMEM UID through `torch.distributed`, then runs the UID-bootstrapped
+  GEMM-RS Megacu correctness smoke.
 - `run_two_card_docker.sh`: shared two-card Docker runner for CUDA+NVSHMEM
   validation targets.
 

@@ -194,5 +194,21 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       set_tests_properties(${test_name} PROPERTIES
         SKIP_RETURN_CODE 77)
     endforeach()
+
+    add_executable(megacu_torch_uid_two_rank_gemm_rs_smoke
+      ${PROJECT_SOURCE_DIR}/tests/runtime/nvshmem_two_rank_gemm_rs_smoke.cc)
+    target_compile_definitions(megacu_torch_uid_two_rank_gemm_rs_smoke PRIVATE
+      MEGACU_GEMM_RS_SMOKE_USE_UID_BOOTSTRAP=1)
+    target_link_libraries(megacu_torch_uid_two_rank_gemm_rs_smoke PRIVATE
+      megacu_headers
+      cuda_nvshmem_gemm_reduce_scatter_megacu
+      CUDA::cudart
+      CUDA::cuda_driver
+      ${NVSHMEM_DEVICE_LIBRARY}
+      ${NVSHMEM_HOST_LIBRARY})
+    target_include_directories(megacu_torch_uid_two_rank_gemm_rs_smoke PRIVATE
+      ${NVSHMEM_INCLUDE_DIR})
+    set_target_properties(megacu_torch_uid_two_rank_gemm_rs_smoke PROPERTIES
+      LINKER_LANGUAGE CUDA)
   endif()
 endif()

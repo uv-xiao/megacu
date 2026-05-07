@@ -187,6 +187,11 @@ contract: the GEMM-RS two-rank smoke can be built as an MPI-bootstrapped
 binary that initializes NVSHMEM from `MPI_COMM_WORLD` and then calls the same
 Megacu host-orch/seeded-orch orchestrate functions.
 
+Torch launch now has an example correctness path as well: `run_torch.py` uses
+`torch.distributed` to broadcast an NVSHMEM UID, then each torch-launched rank
+runs a UID-bootstrapped GEMM-RS smoke binary through the same Megacu
+host-orch/seeded-orch orchestrate functions.
+
 ### Slice 4: Three Tile-Operator Examples
 
 **Goal:** Implement the PR example scope with Megacu-composed operator tasks,
