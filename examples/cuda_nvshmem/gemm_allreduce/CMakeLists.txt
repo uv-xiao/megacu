@@ -49,15 +49,9 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA::cudart)
   target_include_directories(golden_cuda_nvshmem_gemm_allreduce PUBLIC
     ${PROJECT_SOURCE_DIR})
-  if(CMAKE_VERSION VERSION_LESS 3.25)
-    target_compile_options(golden_cuda_nvshmem_gemm_allreduce PRIVATE
-      $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-    set(MEGACU_GEMM_AR_CUDA_STANDARD_PROPERTIES "")
-  else()
-    set(MEGACU_GEMM_AR_CUDA_STANDARD_PROPERTIES
-      CUDA_STANDARD 20
-      CUDA_STANDARD_REQUIRED ON)
-  endif()
+  set(MEGACU_GEMM_AR_CUDA_STANDARD_PROPERTIES "")
+  target_compile_options(golden_cuda_nvshmem_gemm_allreduce PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   set_target_properties(golden_cuda_nvshmem_gemm_allreduce PROPERTIES
     CUDA_ARCHITECTURES 80
     CUDA_SEPARABLE_COMPILATION ON
@@ -81,10 +75,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA::cudart)
   target_include_directories(manual_megakernel_cuda_nvshmem_gemm_allreduce PUBLIC
     ${PROJECT_SOURCE_DIR})
-  if(CMAKE_VERSION VERSION_LESS 3.25)
-    target_compile_options(manual_megakernel_cuda_nvshmem_gemm_allreduce PRIVATE
-      $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-  endif()
+  target_compile_options(manual_megakernel_cuda_nvshmem_gemm_allreduce PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   set_target_properties(manual_megakernel_cuda_nvshmem_gemm_allreduce PROPERTIES
     CUDA_ARCHITECTURES 80
     CUDA_SEPARABLE_COMPILATION ON
@@ -107,10 +99,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   target_link_libraries(megacu_gemm_allreduce_cuda_native PUBLIC
     megacu_headers
     CUDA::cudart)
-  if(CMAKE_VERSION VERSION_LESS 3.25)
-    target_compile_options(megacu_gemm_allreduce_cuda_native PRIVATE
-      $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-  endif()
+  target_compile_options(megacu_gemm_allreduce_cuda_native PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   target_compile_options(megacu_gemm_allreduce_cuda_native PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
   set_target_properties(megacu_gemm_allreduce_cuda_native PROPERTIES

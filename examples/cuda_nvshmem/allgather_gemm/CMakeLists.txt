@@ -61,18 +61,12 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     ${PROJECT_SOURCE_DIR})
   target_compile_options(megacu_allgather_gemm_cuda_native PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
-  if(CMAKE_VERSION VERSION_LESS 3.25)
-    target_compile_options(golden_cuda_nvshmem_allgather_gemm PRIVATE
-      $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-    target_compile_options(baseline_cuda_nvshmem_allgather_gemm PRIVATE
-      $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-    target_compile_options(megacu_allgather_gemm_cuda_native PRIVATE
-      $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
-  else()
-    set(MEGACU_AG_GEMM_CUDA_STANDARD_PROPERTIES
-      CUDA_STANDARD 20
-      CUDA_STANDARD_REQUIRED ON)
-  endif()
+  target_compile_options(golden_cuda_nvshmem_allgather_gemm PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
+  target_compile_options(baseline_cuda_nvshmem_allgather_gemm PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
+  target_compile_options(megacu_allgather_gemm_cuda_native PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
   set_target_properties(
     golden_cuda_nvshmem_allgather_gemm
     baseline_cuda_nvshmem_allgather_gemm
