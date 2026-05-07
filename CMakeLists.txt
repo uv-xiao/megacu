@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 project(megacu LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 option(MEGACU_ENABLE_NVSHMEM_TESTS
   "Build CUDA+NVSHMEM two-rank runtime validation tests" OFF)
 
@@ -23,6 +26,8 @@ if(CUDAToolkit_FOUND)
   if(CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
     set(MEGACU_HAS_CUDA_LANGUAGE ON)
+    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
 endif()
 
