@@ -26,8 +26,6 @@ if(CUDAToolkit_FOUND)
   if(CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
     set(MEGACU_HAS_CUDA_LANGUAGE ON)
-    set(CMAKE_CUDA_STANDARD 20)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
 endif()
 
@@ -39,6 +37,8 @@ target_include_directories(megacu_headers INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(megacu_headers INTERFACE cxx_std_20)
+target_compile_options(megacu_headers INTERFACE
+  $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
 
 enable_testing()
 
