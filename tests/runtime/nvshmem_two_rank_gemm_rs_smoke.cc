@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include <string>
 #include <vector>
 
 namespace {
@@ -76,6 +77,18 @@ void decode_hex(char const *hex, unsigned char *bytes, std::size_t byte_count) {
   }
 }
 
+std::string encode_hex(void const *data, std::size_t byte_count) {
+  auto const *bytes = static_cast<unsigned char const *>(data);
+  char const digits[] = "0123456789abcdef";
+  std::string hex;
+  hex.resize(byte_count * 2);
+  for (std::size_t index = 0; index < byte_count; ++index) {
+    hex[index * 2] = digits[bytes[index] >> 4];
+    hex[index * 2 + 1] = digits[bytes[index] & 0x0F];
+  }
+  return hex;
+}
+
 struct launch_env {
   int device = -1;
   bool skip = false;
@@ -86,14 +99,29 @@ int print_unique_id() {
   nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
   auto status = nvshmemx_get_uniqueid(&id);
   assert(status == 0);
-  auto const *bytes = reinterpret_cast<unsigned char const *>(&id);
-  for (std::size_t index = 0; index < sizeof(id); ++index) {
-    std::printf("%02x", static_cast<unsigned>(bytes[index]));
-  }
-  std::printf("\n");
+  auto hex = encode_hex(&id, sizeof(id));
+  std::printf("%s\n", hex.c_str());
   return 0;
 #else
   return 1;
+#endif
+}
+
+char const *prepare_uid_root_mode() {
+#if defined(MEGACU_GEMM_RS_SMOKE_USE_UID_BOOTSTRAP)
+  nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
+  auto status = nvshmemx_get_uniqueid(&id);
+  assert(status == 0);
+  auto hex = encode_hex(&id, sizeof(id));
+  std::printf("%s\n", hex.c_str());
+  std::fflush(stdout);
+  (void)std::getchar();
+  auto set_status =
+      setenv("MEGACU_NVSHMEM_UNIQUEID_HEX", hex.c_str(), 1);
+  assert(set_status == 0);
+  return std::getenv("MEGACU_NVSHMEM_UNIQUEID_HEX");
+#else
+  return nullptr;
 #endif
 }
 
@@ -216,6 +244,11 @@ int main(int argc, char **argv) {
   char const *mode = argc > 1 ? argv[1] : "";
   if (std::strcmp(mode, "--print-uid") == 0) {
     return print_unique_id();
+  }
+  if (std::strcmp(mode, "--uid-bootstrap-root") == 0) {
+    assert(argc > 2);
+    (void)prepare_uid_root_mode();
+    mode = argv[2];
   }
 
   auto launch = initialize_backend(&argc, &argv);

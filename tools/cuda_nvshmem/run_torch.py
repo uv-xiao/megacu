@@ -7,6 +7,55 @@ import torch
 import torch.distributed as dist
 
 
+def broadcast_string(value, src):
+    encoded = value.encode("ascii") if value is not None else b""
+    length = torch.tensor([len(encoded)], dtype=torch.int64)
+    dist.broadcast(length, src=src)
+
+    payload_len = int(length.item())
+    if dist.get_rank() == src:
+        payload = torch.tensor(list(encoded), dtype=torch.uint8)
+    else:
+        payload = torch.empty(payload_len, dtype=torch.uint8)
+    dist.broadcast(payload, src=src)
+    return bytes(payload.tolist()).decode("ascii")
+
+
+def run_uid_bootstrap_case(binary, mode, env, rank):
+    if rank == 0:
+        root = subprocess.Popen(
+            [binary, "--uid-bootstrap-root", mode],
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        uid = root.stdout.readline().strip()
+        if not uid:
+            root.kill()
+            root.wait()
+            raise RuntimeError("rank 0 did not publish an NVSHMEM UID")
+    else:
+        root = None
+        uid = None
+
+    uid = broadcast_string(uid, src=0)
+    env = env.copy()
+    env["MEGACU_NVSHMEM_UNIQUEID_HEX"] = uid
+    dist.barrier()
+
+    if rank == 0:
+        root.stdin.write("\n")
+        root.stdin.flush()
+        return_code = root.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(
+                return_code, [binary, "--uid-bootstrap-root", mode]
+            )
+    else:
+        subprocess.check_call([binary, mode], env=env)
+
+
 build_dir = os.environ.get("MEGACU_BUILD_DIR", "build")
 adapter_binary = (
     f"{build_dir}/examples/cuda_nvshmem/gemm_allreduce/megacu_adapter_contracts"
@@ -53,16 +102,8 @@ try:
     subprocess.check_call([adapter_binary], env=env)
     dist.barrier()
 
-    uid = [None]
-    if rank == 0:
-        uid[0] = subprocess.check_output(
-            [gemm_rs_binary, "--print-uid"], text=True
-        ).strip()
-    dist.broadcast_object_list(uid, src=0)
-    env["MEGACU_NVSHMEM_UNIQUEID_HEX"] = uid[0]
-
     for mode in ("megacu_host_orch", "megacu_seeded_orch"):
-        subprocess.check_call([gemm_rs_binary, mode], env=env)
+        run_uid_bootstrap_case(gemm_rs_binary, mode, env, rank)
         dist.barrier()
     dist.barrier()
 finally:
