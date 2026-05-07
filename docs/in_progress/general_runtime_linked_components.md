@@ -178,7 +178,9 @@ distributed all-gather contract where each rank owns a symmetric local K-slice
 of `B`, the all-gather operator gathers all rank slices into local
 `gathered_b`, and the GEMM operator consumes the gathered matrix; its two-rank
 host-orch/seeded-orch smoke is wired into the Docker NVSHMEM path. Distributed
-tiny decode integration remains pending.
+tiny decode now has a two-rank NVSHMEM launch smoke for host-orch and
+seeded-orch; each rank runs the same range-operator runtime pipeline on its
+assigned GPU and compares against golden output.
 
 ### Slice 4: Three Tile-Operator Examples
 
