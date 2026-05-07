@@ -80,7 +80,6 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       cuda_nvshmem_tiny_decode_golden
       cuda_nvshmem_tiny_decode_megacu
       CUDA::cudart
-      ${NVSHMEM_DEVICE_LIBRARY}
       ${NVSHMEM_HOST_LIBRARY})
     target_include_directories(nvshmem_two_rank_tiny_decode_smoke PRIVATE
       ${NVSHMEM_INCLUDE_DIR})
