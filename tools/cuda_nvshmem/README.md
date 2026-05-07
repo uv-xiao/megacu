@@ -9,7 +9,9 @@ subdirectory only when that example needs a unique script.
 ## Examples
 
 - `run_direct.sh`: builds and runs the direct tiny-decode correctness check.
-- `run_mpi.sh`: builds `megacu_adapter_contracts` and runs it with `mpirun`.
+- `run_mpi.sh`: builds `megacu_adapter_contracts`, runs it with `mpirun`,
+  then runs the MPI-bootstrapped GEMM-RS Megacu correctness smoke when
+  NVSHMEM tests are enabled in the build.
 - `run_torch.py`: builds `megacu_adapter_contracts` and runs the Torch launch
   adapter smoke path from `RANK`, `WORLD_SIZE`, and `LOCAL_RANK` environment
   facts.

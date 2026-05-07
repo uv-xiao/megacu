@@ -182,6 +182,11 @@ tiny decode now has a two-rank NVSHMEM launch smoke for host-orch and
 seeded-orch; each rank runs the same range-operator runtime pipeline on its
 assigned GPU and compares against golden output.
 
+MPI launch now has an example correctness path, not only an adapter shape
+contract: the GEMM-RS two-rank smoke can be built as an MPI-bootstrapped
+binary that initializes NVSHMEM from `MPI_COMM_WORLD` and then calls the same
+Megacu host-orch/seeded-orch orchestrate functions.
+
 ### Slice 4: Three Tile-Operator Examples
 
 **Goal:** Implement the PR example scope with Megacu-composed operator tasks,

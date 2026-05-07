@@ -18,3 +18,10 @@ fi
 
 mpirun -np "${mpi_np}" \
   env MEGACU_ADAPTER_CONTRACT_MODE=mpi "${binary}"
+
+if [[ "${MEGACU_RUN_EXAMPLE_TESTS:-1}" == "1" ]]; then
+  cmake --build "${build_dir}" --target megacu_mpi_two_rank_gemm_rs_smoke
+  ctest --test-dir "${build_dir}" \
+    -R 'mpi_two_rank_gemm_rs_correctness_megacu' \
+    --output-on-failure
+fi
