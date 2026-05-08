@@ -3,10 +3,10 @@
 - Date: 2026-05-04 Asia/Shanghai
 - Purpose: identify required example/design inputs for the general
   runtime-linked components PR.
-- Related task:
-  `docs/in_progress/general_runtime_linked_components.md`
 - Related design:
-  `docs/in_progress/design/general_runtime_linked_components.md`
+  `docs/design/runtime_architecture.md`,
+  `docs/design/cuda_nvshmem_examples.md`, and
+  `docs/design/launch_adapters_and_verification.md`
 
 ## Sources Read
 

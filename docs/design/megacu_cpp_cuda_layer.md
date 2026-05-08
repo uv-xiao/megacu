@@ -3,10 +3,12 @@
 This is the stable entry point for the picked Megacu device-native layer
 direction.
 
-The first implementation contract is the runtime-linked device-native layer in
-`docs/design/runtime_linked_device_native_layer/`. It replaces the rejected
-compiler-like materialization path with linked dispatcher, scheduler, platform,
-backend, target runtime, and native operator code.
+The first implementation contract is the flattened runtime-linked design under
+`docs/design/runtime_architecture.md`,
+`docs/design/program_compile_execute_flow.md`, and
+`docs/design/launch_adapters_and_verification.md`. It replaces the rejected
+compiler-like materialization path with linked runtime, dispatcher, scheduler,
+EventTensor, platform, backend, and native operator code.
 
 ## Accepted Direction
 

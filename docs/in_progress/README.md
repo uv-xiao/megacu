@@ -13,6 +13,5 @@ Rules:
 
 ## Active Tasks
 
-- `docs/in_progress/general_runtime_linked_components.md` - generalize the
-  runtime-linked implementation with required Docker-backed MPI and Torch
-  adapters plus multiple dispatcher/scheduler/runtime strategies.
+No active implementation task is recorded here after the general
+runtime-linked component design was promoted into `docs/design/`.

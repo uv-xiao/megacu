@@ -12,15 +12,14 @@ For example, CUDA plus NVSHMEM GEMM+AllReduce lives at:
 examples/cuda_nvshmem/gemm_allreduce/
 ```
 
-Example families may contain variant directories. The CUDA+NVSHMEM
-GEMM+AllReduce family uses:
+Example families may contain variant directories. The CUDA+NVSHMEM examples
+currently include:
 
 ```text
-examples/cuda_nvshmem/gemm_allreduce/
-  common/
-  golden/
-  phased/baseline/
-  phased/megacu/
+examples/cuda_nvshmem/gemm_allreduce/        # golden, manual baseline, Megacu
+examples/cuda_nvshmem/gemm_reduce_scatter/   # golden, baseline, Megacu
+examples/cuda_nvshmem/allgather_gemm/        # golden, baseline, Megacu
+examples/cuda_nvshmem/tiny_decode_pipeline/  # golden, baseline, Megacu
 ```
 
 Operational assets are shared at the platform/backend level by default:

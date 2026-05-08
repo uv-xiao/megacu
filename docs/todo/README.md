@@ -9,15 +9,16 @@
 - [x] Megacu C++/CUDA layer design
 - [x] Implementation-ready device-native design
 - [x] Minimal build and verification tooling
-- [ ] General runtime-linked concrete implementation (active:
-      `docs/in_progress/general_runtime_linked_components.md`)
+- [x] General runtime-linked concrete implementation
 - [ ] Benchmark and profiling harness
 
 Each future feature should have clear input, output, and verification criteria.
 
 ## Future Workstreams
 
-- `concrete_impl/`: future implementation documentation for a general
-  runtime-linked Megacu implementation. This work was split out of PR #4 on
-  2026-04-28 so PR #4 can focus on architecture repair and one tiny
-  problem-specific proof example.
+- Benchmark and profiling harness with hardware, compiler, workload, and
+  baseline evidence.
+- Additional runtime loops and dispatcher strategies beyond the current
+  block-tile CUDA examples.
+- Larger framework packaging after the current Docker-backed Torch launch
+  adapter remains stable.
