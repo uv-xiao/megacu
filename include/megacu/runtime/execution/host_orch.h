@@ -7,7 +7,27 @@
 
 #include <megacu/runtime/task_arena.h>
 
+#if defined(__CUDACC__)
+#define MEGACU_HOST_ORCH_HOST_DEVICE __host__ __device__
+#else
+#define MEGACU_HOST_ORCH_HOST_DEVICE
+#endif
+
 namespace megacu::runtime::execution::host_orch {
+
+struct model {
+  task_arena_view arena;
+
+  template <class Context>
+  MEGACU_HOST_ORCH_HOST_DEVICE task_arena_view bind(Context) const {
+    return arena;
+  }
+
+  template <class Context>
+  MEGACU_HOST_ORCH_HOST_DEVICE bool construct(Context, task_arena_view &) const {
+    return true;
+  }
+};
 
 template <std::size_t MaxTasks = 64, std::size_t MaxEvents = 16,
           std::size_t MaxDeps = 128, std::size_t MaxRegions = 1>
@@ -155,3 +175,5 @@ private:
 };
 
 } // namespace megacu::runtime::execution::host_orch
+
+#undef MEGACU_HOST_ORCH_HOST_DEVICE

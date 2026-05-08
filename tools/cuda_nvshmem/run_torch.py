@@ -64,6 +64,10 @@ gemm_rs_binary = (
     f"{build_dir}/examples/cuda_nvshmem/gemm_reduce_scatter/"
     "megacu_torch_uid_two_rank_gemm_rs_smoke"
 )
+ag_gemm_binary = (
+    f"{build_dir}/examples/cuda_nvshmem/allgather_gemm/"
+    "megacu_torch_uid_two_rank_ag_gemm_smoke"
+)
 required_env = ["RANK", "WORLD_SIZE", "LOCAL_RANK"]
 missing = [name for name in required_env if not os.environ.get(name)]
 if missing:
@@ -88,6 +92,8 @@ try:
                 "megacu_adapter_contracts",
                 "--target",
                 "megacu_torch_uid_two_rank_gemm_rs_smoke",
+                "--target",
+                "megacu_torch_uid_two_rank_ag_gemm_smoke",
             ]
         )
     dist.barrier()
@@ -96,15 +102,18 @@ try:
         raise SystemExit(f"missing adapter contract binary: {adapter_binary}")
     if not os.path.exists(gemm_rs_binary):
         raise SystemExit(f"missing Torch UID GEMM-RS binary: {gemm_rs_binary}")
+    if not os.path.exists(ag_gemm_binary):
+        raise SystemExit(f"missing Torch UID AG-GEMM binary: {ag_gemm_binary}")
 
     env = os.environ.copy()
     env["MEGACU_ADAPTER_CONTRACT_MODE"] = "torch"
     subprocess.check_call([adapter_binary], env=env)
     dist.barrier()
 
-    for mode in ("megacu_host_orch", "megacu_seeded_orch"):
-        run_uid_bootstrap_case(gemm_rs_binary, mode, env, rank)
-        dist.barrier()
+    for binary in (gemm_rs_binary, ag_gemm_binary):
+        for mode in ("megacu_host_orch", "megacu_seeded_orch"):
+            run_uid_bootstrap_case(binary, mode, env, rank)
+            dist.barrier()
     dist.barrier()
 finally:
     dist.destroy_process_group()

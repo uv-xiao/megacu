@@ -6,8 +6,10 @@
 
 #include <megacu/dispatcher/tile_grid_device.cuh>
 #include <megacu/platform/cuda.h>
+#include <megacu/platform/cuda/local_event_tensor.cuh>
 #include <megacu/platform/cuda/megakernel.cuh>
 #include <megacu/runtime/device_persistent.cuh>
+#include <megacu/runtime/execution/host_orch.h>
 #include <megacu/runtime/execution/seeded_orch.cuh>
 #include <megacu/runtime/loop/block_tile.cuh>
 #include <megacu/scheduler/explicit_asap_device.cuh>
@@ -130,88 +132,6 @@ void copy_host_arena(decode_runtime::host_arena_storage const &host,
   }
 }
 
-struct local_event_tensor_i32 {
-  int *events = nullptr;
-  std::int64_t max_tiles = 1;
-
-  template <class Context, class Arena, class Task, class Work>
-  __device__ bool complete(Context ctx, Arena arena, Task task, Work) const {
-    if (!task.valid() || arena.tasks == nullptr ||
-        task.value >= static_cast<int>(arena.task_count)) {
-      return true;
-    }
-    if (is_cta_leader(ctx)) {
-      for (auto attr : arena.tasks[task.value].attributes.entries()) {
-        if (attr.kind == megacu::runtime::attr_kind::event_wait) {
-          wait_event(arena, attr.event);
-        }
-      }
-    }
-    return true;
-  }
-
-  template <class Context, class Arena, class Task, class Work>
-  __device__ void after(Context ctx, Arena arena, Task task, Work work) const {
-    if (!task.valid() || arena.tasks == nullptr ||
-        task.value >= static_cast<int>(arena.task_count)) {
-      return;
-    }
-    if (is_cta_leader(ctx)) {
-      for (auto attr : arena.tasks[task.value].attributes.entries()) {
-        if (attr.kind == megacu::runtime::attr_kind::event_notify) {
-          notify(attr.event, work.tile_id);
-        }
-      }
-    }
-  }
-
-private:
-  template <class Context> __device__ bool is_cta_leader(Context ctx) const {
-    return ctx.thread_id() == 0;
-  }
-
-  template <class Arena>
-  __device__ void wait_event(Arena arena,
-                             megacu::runtime::event_tensor_ref event) const {
-    auto const tile_count = event_tile_count(arena, event);
-    for (std::int64_t tile_id = 0; tile_id < tile_count; ++tile_id) {
-      megacu::cuda::device::wait_ready(events, slot(event, tile_id),
-                                       ready_value(tile_id));
-    }
-  }
-
-  __device__ void notify(megacu::runtime::event_tensor_ref event,
-                         std::int64_t tile_id) const {
-    megacu::cuda::device::fence_system();
-    megacu::cuda::device::signal_ready(events, slot(event, tile_id),
-                                       ready_value(tile_id));
-  }
-
-  template <class Arena>
-  __device__ std::int64_t
-  event_tile_count(Arena arena, megacu::runtime::event_tensor_ref event) const {
-    if (arena.events == nullptr ||
-        event.value >= static_cast<std::uint32_t>(arena.event_count)) {
-      return 1;
-    }
-    for (auto attr : arena.events[event.value].attributes.entries()) {
-      if (attr.kind == megacu::runtime::attr_kind::event_tensor_shape) {
-        return attr.first * attr.second;
-      }
-    }
-    return 1;
-  }
-
-  __device__ std::int64_t slot(megacu::runtime::event_tensor_ref event,
-                               std::int64_t tile_id) const {
-    return static_cast<std::int64_t>(event.value) * max_tiles + tile_id;
-  }
-
-  __device__ int ready_value(std::int64_t tile_id) const {
-    return static_cast<int>(tile_id + 1);
-  }
-};
-
 struct norm_task {
   decode_runtime::runtime_args args;
 
@@ -307,21 +227,6 @@ struct tiny_decode_operators {
   }
 };
 
-struct host_orch_execution {
-  megacu::runtime::task_arena_view arena;
-
-  template <class Context>
-  __device__ megacu::runtime::task_arena_view bind(Context) const {
-    return arena;
-  }
-
-  template <class Context>
-  __device__ bool construct(Context,
-                            megacu::runtime::task_arena_view &) const {
-    return true;
-  }
-};
-
 struct seeded_decode_recipe {
   decode_runtime::runtime_args args;
 
@@ -338,7 +243,8 @@ template <class ExecutionModel>
 using tiny_decode_runtime = megacu::runtime::device_persistent<
     ExecutionModel, megacu::runtime::loop::block_tile,
     megacu::scheduler::device::explicit_asap,
-    megacu::dispatcher::device::tile_grid, local_event_tensor_i32,
+    megacu::dispatcher::device::tile_grid,
+    megacu::platform::cuda::local_event_tensor_i32,
     tiny_decode_operators>;
 
 template <class ExecutionModel>
@@ -426,7 +332,9 @@ megacu::status launch_host_orch(decode_runtime::runtime_args args,
   }
   copy_host_arena(host_arena, arena);
   return launch_runtime(args, arena.view,
-                        host_orch_execution{.arena = arena.view}, events);
+                        megacu::runtime::execution::host_orch::model{
+                            .arena = arena.view},
+                        events);
 }
 
 megacu::status launch_seeded_orch(decode_runtime::runtime_args args,

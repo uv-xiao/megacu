@@ -2,11 +2,22 @@
 
 #include <cuda_runtime.h>
 #include <nvshmem_host.h>
+#if defined(MEGACU_AG_GEMM_SMOKE_USE_MPI_BOOTSTRAP)
+#include <mpi.h>
+#endif
+#if defined(MEGACU_AG_GEMM_SMOKE_USE_MPI_BOOTSTRAP) ||                      \
+    defined(MEGACU_AG_GEMM_SMOKE_USE_UID_BOOTSTRAP)
+#include <nvshmemx.h>
+#endif
 
 #include <cassert>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
+#include <string>
 #include <vector>
 
 namespace {
@@ -23,6 +34,160 @@ constexpr std::size_t kCBytes = kM * kN * sizeof(float);
 
 void require_cuda(cudaError_t error) {
   assert(error == cudaSuccess);
+}
+
+char const *first_env(std::initializer_list<char const *> names) {
+  for (auto *name : names) {
+    auto *value = std::getenv(name);
+    if (value != nullptr && value[0] != '\0') {
+      return value;
+    }
+  }
+  return nullptr;
+}
+
+int optional_env(std::initializer_list<char const *> names, int fallback) {
+  auto *value = first_env(names);
+  return value == nullptr ? fallback : std::atoi(value);
+}
+
+int required_env(std::initializer_list<char const *> names) {
+  auto *value = first_env(names);
+  assert(value != nullptr);
+  return std::atoi(value);
+}
+
+int hex_value(char value) {
+  if (value >= '0' && value <= '9') {
+    return value - '0';
+  }
+  value = static_cast<char>(std::tolower(value));
+  if (value >= 'a' && value <= 'f') {
+    return value - 'a' + 10;
+  }
+  assert(false && "invalid hex digit");
+  return 0;
+}
+
+void decode_hex(char const *hex, unsigned char *bytes, std::size_t byte_count) {
+  assert(hex != nullptr);
+  assert(std::strlen(hex) == byte_count * 2);
+  for (std::size_t index = 0; index < byte_count; ++index) {
+    bytes[index] =
+        static_cast<unsigned char>((hex_value(hex[index * 2]) << 4) |
+                                   hex_value(hex[index * 2 + 1]));
+  }
+}
+
+std::string encode_hex(void const *data, std::size_t byte_count) {
+  auto const *bytes = static_cast<unsigned char const *>(data);
+  char const digits[] = "0123456789abcdef";
+  std::string hex;
+  hex.resize(byte_count * 2);
+  for (std::size_t index = 0; index < byte_count; ++index) {
+    hex[index * 2] = digits[bytes[index] >> 4];
+    hex[index * 2 + 1] = digits[bytes[index] & 0x0F];
+  }
+  return hex;
+}
+
+struct launch_env {
+  int device = -1;
+  bool skip = false;
+};
+
+int print_unique_id() {
+#if defined(MEGACU_AG_GEMM_SMOKE_USE_UID_BOOTSTRAP)
+  nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
+  auto status = nvshmemx_get_uniqueid(&id);
+  assert(status == 0);
+  auto hex = encode_hex(&id, sizeof(id));
+  std::printf("%s\n", hex.c_str());
+  return 0;
+#else
+  return 1;
+#endif
+}
+
+char const *prepare_uid_root_mode() {
+#if defined(MEGACU_AG_GEMM_SMOKE_USE_UID_BOOTSTRAP)
+  nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
+  auto status = nvshmemx_get_uniqueid(&id);
+  assert(status == 0);
+  auto hex = encode_hex(&id, sizeof(id));
+  std::printf("%s\n", hex.c_str());
+  std::fflush(stdout);
+  (void)std::getchar();
+  auto set_status = setenv("MEGACU_NVSHMEM_UNIQUEID_HEX", hex.c_str(), 1);
+  assert(set_status == 0);
+  return std::getenv("MEGACU_NVSHMEM_UNIQUEID_HEX");
+#else
+  return nullptr;
+#endif
+}
+
+launch_env initialize_backend(int *argc, char ***argv) {
+#if defined(MEGACU_AG_GEMM_SMOKE_USE_MPI_BOOTSTRAP)
+  MPI_Init(argc, argv);
+  int mpi_rank = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+
+  int device_count = 0;
+  require_cuda(cudaGetDeviceCount(&device_count));
+  if (device_count < 2) {
+    return {.device = -1, .skip = true};
+  }
+
+  auto local_rank =
+      optional_env({"OMPI_COMM_WORLD_LOCAL_RANK", "MPI_LOCALRANKID",
+                    "PMI_LOCAL_RANK"},
+                   mpi_rank);
+  auto device = local_rank % device_count;
+  require_cuda(cudaSetDevice(device));
+
+  MPI_Comm mpi_comm = MPI_COMM_WORLD;
+  nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
+  attr.mpi_comm = &mpi_comm;
+  auto init_status = nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+  assert(init_status == 0);
+  return {.device = device, .skip = false};
+#elif defined(MEGACU_AG_GEMM_SMOKE_USE_UID_BOOTSTRAP)
+  (void)argc;
+  (void)argv;
+  auto rank = required_env({"RANK"});
+  auto world_size = required_env({"WORLD_SIZE"});
+  auto local_rank = required_env({"LOCAL_RANK"});
+
+  int device_count = 0;
+  require_cuda(cudaGetDeviceCount(&device_count));
+  if (device_count < 2) {
+    return {.device = -1, .skip = true};
+  }
+
+  auto device = local_rank % device_count;
+  require_cuda(cudaSetDevice(device));
+
+  nvshmemx_uniqueid_t id = NVSHMEMX_UNIQUEID_INITIALIZER;
+  decode_hex(first_env({"MEGACU_NVSHMEM_UNIQUEID_HEX"}),
+             reinterpret_cast<unsigned char *>(&id), sizeof(id));
+  nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
+  nvshmemx_set_attr_uniqueid_args(rank, world_size, &id, &attr);
+  auto init_status = nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
+  assert(init_status == 0);
+  return {.device = device, .skip = false};
+#else
+  (void)argc;
+  (void)argv;
+  nvshmem_init();
+  return {};
+#endif
+}
+
+void finalize_backend() {
+  nvshmem_finalize();
+#if defined(MEGACU_AG_GEMM_SMOKE_USE_MPI_BOOTSTRAP)
+  MPI_Finalize();
+#endif
 }
 
 ag_gemm_problem correctness_problem() {
@@ -79,24 +244,40 @@ void run_case(char const *label,
 
 int main(int argc, char **argv) {
   char const *mode = argc > 1 ? argv[1] : "";
-  nvshmem_init();
+  if (std::strcmp(mode, "--print-uid") == 0) {
+    return print_unique_id();
+  }
+  if (std::strcmp(mode, "--uid-bootstrap-root") == 0) {
+    assert(argc > 2);
+    (void)prepare_uid_root_mode();
+    mode = argv[2];
+  }
+
+  auto launch = initialize_backend(&argc, &argv);
+  if (launch.skip) {
+    finalize_backend();
+    return kSkipTest;
+  }
 
   int pe = nvshmem_my_pe();
   int npes = nvshmem_n_pes();
   if (npes != 2) {
-    nvshmem_finalize();
+    finalize_backend();
     return kSkipTest;
   }
 
   int device_count = 0;
   require_cuda(cudaGetDeviceCount(&device_count));
   if (device_count < 2) {
-    nvshmem_finalize();
+    finalize_backend();
     return kSkipTest;
   }
 
-  int device = pe % device_count;
-  require_cuda(cudaSetDevice(device));
+  int device = launch.device;
+  if (device < 0) {
+    device = pe % device_count;
+    require_cuda(cudaSetDevice(device));
+  }
 
   cudaStream_t stream = nullptr;
   require_cuda(cudaStreamCreate(&stream));
@@ -150,6 +331,6 @@ int main(int argc, char **argv) {
   require_cuda(cudaFree(a));
   require_cuda(cudaStreamDestroy(stream));
 
-  nvshmem_finalize();
+  finalize_backend();
   return 0;
 }

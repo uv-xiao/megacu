@@ -1,5 +1,6 @@
 if(MEGACU_ENABLE_NVSHMEM_TESTS)
   find_package(CUDAToolkit REQUIRED)
+  find_package(MPI REQUIRED COMPONENTS CXX)
   find_path(NVSHMEM_INCLUDE_DIR
     NAMES nvshmem.h
     HINTS ENV NVSHMEM_HOME
@@ -145,5 +146,54 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       set_tests_properties(${test_name} PROPERTIES
         SKIP_RETURN_CODE 77)
     endforeach()
+
+    add_executable(megacu_mpi_two_rank_ag_gemm_smoke
+      ${PROJECT_SOURCE_DIR}/tests/runtime/nvshmem_two_rank_ag_gemm_smoke.cc)
+    target_compile_definitions(megacu_mpi_two_rank_ag_gemm_smoke PRIVATE
+      MEGACU_AG_GEMM_SMOKE_USE_MPI_BOOTSTRAP=1)
+    target_link_libraries(megacu_mpi_two_rank_ag_gemm_smoke PRIVATE
+      megacu_headers
+      cuda_nvshmem_allgather_gemm_megacu
+      CUDA::cudart
+      CUDA::cuda_driver
+      MPI::MPI_CXX
+      ${NVSHMEM_DEVICE_LIBRARY}
+      ${NVSHMEM_HOST_LIBRARY})
+    target_include_directories(megacu_mpi_two_rank_ag_gemm_smoke PRIVATE
+      ${NVSHMEM_INCLUDE_DIR})
+    set_target_properties(megacu_mpi_two_rank_ag_gemm_smoke PROPERTIES
+      LINKER_LANGUAGE CUDA)
+
+    foreach(mode
+        megacu_host_orch
+        megacu_seeded_orch)
+      if(mode STREQUAL "megacu_host_orch")
+        set(test_name mpi_two_rank_ag_gemm_correctness_megacu_host_orch)
+      else()
+        set(test_name mpi_two_rank_ag_gemm_correctness_megacu_seeded_orch)
+      endif()
+      add_test(
+        NAME ${test_name}
+        COMMAND mpirun -np 2
+                $<TARGET_FILE:megacu_mpi_two_rank_ag_gemm_smoke> ${mode})
+      set_tests_properties(${test_name} PROPERTIES
+        SKIP_RETURN_CODE 77)
+    endforeach()
+
+    add_executable(megacu_torch_uid_two_rank_ag_gemm_smoke
+      ${PROJECT_SOURCE_DIR}/tests/runtime/nvshmem_two_rank_ag_gemm_smoke.cc)
+    target_compile_definitions(megacu_torch_uid_two_rank_ag_gemm_smoke PRIVATE
+      MEGACU_AG_GEMM_SMOKE_USE_UID_BOOTSTRAP=1)
+    target_link_libraries(megacu_torch_uid_two_rank_ag_gemm_smoke PRIVATE
+      megacu_headers
+      cuda_nvshmem_allgather_gemm_megacu
+      CUDA::cudart
+      CUDA::cuda_driver
+      ${NVSHMEM_DEVICE_LIBRARY}
+      ${NVSHMEM_HOST_LIBRARY})
+    target_include_directories(megacu_torch_uid_two_rank_ag_gemm_smoke PRIVATE
+      ${NVSHMEM_INCLUDE_DIR})
+    set_target_properties(megacu_torch_uid_two_rank_ag_gemm_smoke PROPERTIES
+      LINKER_LANGUAGE CUDA)
   endif()
 endif()

@@ -38,6 +38,10 @@ struct tile_grid {
     }
 
     for (auto attr : record.attributes.entries()) {
+      if (attr.kind == megacu::runtime::attr_kind::dispatch_single_tile) {
+        auto const owner = attr.first % ctx.grid_blocks();
+        return {.active = ctx.block_id() == owner, .tile_id = attr.first};
+      }
       if (attr.kind == megacu::runtime::attr_kind::dispatch_tile_grid) {
         auto const tile_count = attr.first * attr.second;
         auto const tile_id = static_cast<std::int64_t>(ctx.block_id());
@@ -63,6 +67,9 @@ struct tile_grid {
     }
 
     for (auto attr : record.attributes.entries()) {
+      if (attr.kind == megacu::runtime::attr_kind::dispatch_single_tile) {
+        return {};
+      }
       if (attr.kind == megacu::runtime::attr_kind::dispatch_tile_grid) {
         auto const tile_count = attr.first * attr.second;
         auto const tile_id = current.tile_id + ctx.grid_blocks();

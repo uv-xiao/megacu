@@ -74,7 +74,11 @@ struct attr_event_tensor_i32 {
     if (is_cta_leader(ctx)) {
       for (auto const &attr : attrs) {
         if (attr.kind == megacu::runtime::attr_kind::event_wait) {
-          wait_event(arena, attr.event);
+          if (attr.first >= 0) {
+            event_tensor.wait(attr.first, ready_value(attr.first));
+          } else {
+            wait_event(arena, attr.event);
+          }
         }
       }
     }

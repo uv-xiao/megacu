@@ -139,6 +139,9 @@ private:
       return 1;
     }
     for (auto item : attributes.entries()) {
+      if (item.kind == attr_kind::dispatch_single_tile) {
+        return 1;
+      }
       if (item.kind == attr_kind::dispatch_tile_grid) {
         return static_cast<std::uint32_t>(item.first * item.second);
       }

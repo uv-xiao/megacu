@@ -54,22 +54,25 @@ GEMM_RS_HOST_DEVICE megacu::status build_runtime_recipe(Orch &orch,
       megacu::runtime::event_tensor::wait_count(args.driver.team.team_n_pes),
       megacu::cuda_nvshmem::event_tensor::symmetric_storage(args.events),
       megacu::cuda_nvshmem::event_tensor::scope::team{}));
+  auto const tiles = m_tiles * n_tiles;
 
-  auto gemm = orch.submit(
-      runtime_slots::gemm_tile_produce,
-      megacu::runtime::attrs(
-          megacu::runtime::dispatcher::tile_grid(m_tiles, n_tiles),
-          megacu::runtime::event_tensor::notify(ready)));
+  for (std::int64_t tile = 0; tile < tiles; ++tile) {
+    auto gemm = orch.submit(
+        runtime_slots::gemm_tile_produce,
+        megacu::runtime::attrs(
+            megacu::runtime::dispatcher::single_tile(tile),
+            megacu::runtime::event_tensor::notify(ready)));
 
-  auto wait_ready = orch.sync(megacu::runtime::attrs(
-      megacu::runtime::scheduler::depends_on(gemm),
-      megacu::runtime::event_tensor::wait(ready)));
+    auto wait_ready = orch.sync(megacu::runtime::attrs(
+        megacu::runtime::scheduler::depends_on(gemm),
+        megacu::runtime::event_tensor::wait(ready, tile)));
 
-  (void)orch.submit(
-      runtime_slots::reduce_scatter_tile_consume,
-      megacu::runtime::attrs(
-          megacu::runtime::scheduler::depends_on(wait_ready),
-          megacu::runtime::dispatcher::tile_grid(m_tiles, n_tiles)));
+    (void)orch.submit(
+        runtime_slots::reduce_scatter_tile_consume,
+        megacu::runtime::attrs(
+            megacu::runtime::scheduler::depends_on(wait_ready),
+            megacu::runtime::dispatcher::single_tile(tile)));
+  }
 
   return orch.current_status();
 }

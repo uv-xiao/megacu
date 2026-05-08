@@ -50,6 +50,7 @@ constexpr bool operator==(event_tensor_ref lhs, event_tensor_ref rhs) {
 enum class attr_kind : std::uint8_t {
   dependency,
   dispatch_tile_grid,
+  dispatch_single_tile,
   event_tensor_shape,
   event_tensor_wait_count,
   event_tensor_storage,
@@ -116,7 +117,15 @@ MEGACU_RUNTIME_HOST_DEVICE inline attr notify(event_tensor_ref event) {
 }
 
 MEGACU_RUNTIME_HOST_DEVICE inline attr wait(event_tensor_ref event) {
-  return {.kind = attr_kind::event_wait, .event = event};
+  return {.kind = attr_kind::event_wait, .event = event, .first = -1};
+}
+
+MEGACU_RUNTIME_HOST_DEVICE inline attr wait(event_tensor_ref event,
+                                           std::int64_t tile_id) {
+  return {.kind = attr_kind::event_wait,
+          .event = event,
+          .first = tile_id,
+          .second = 1};
 }
 
 MEGACU_RUNTIME_HOST_DEVICE inline attr trigger(event_tensor_ref event) {
@@ -132,6 +141,10 @@ MEGACU_RUNTIME_HOST_DEVICE inline attr tile_grid(std::int64_t m_tiles,
   return {.kind = attr_kind::dispatch_tile_grid,
           .first = m_tiles,
           .second = n_tiles};
+}
+
+MEGACU_RUNTIME_HOST_DEVICE inline attr single_tile(std::int64_t tile_id) {
+  return {.kind = attr_kind::dispatch_single_tile, .first = tile_id};
 }
 
 } // namespace dispatcher

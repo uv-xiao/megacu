@@ -2,7 +2,7 @@
 set -euo pipefail
 
 image="${MEGACU_NVSHMEM_IMAGE:-megacu-nvshmem:cuda12.8}"
-gpus="${MEGACU_DOCKER_GPUS:-\"device=5,6\"}"
+gpus="${MEGACU_DOCKER_GPUS:-\"device=0,1\"}"
 build_dir="${MEGACU_NVSHMEM_BUILD_DIR:-build-nvshmem}"
 
 docker build \

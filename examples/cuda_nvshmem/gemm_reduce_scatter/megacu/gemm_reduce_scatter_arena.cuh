@@ -3,6 +3,7 @@
 #include "examples/cuda_nvshmem/gemm_reduce_scatter/common/gemm_reduce_scatter_runtime_recipe.cuh"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 #include <megacu/runtime/execution/host_orch.h>
@@ -10,13 +11,19 @@
 
 namespace gemm_rs {
 
+inline constexpr std::size_t kTaskCapacity = 64;
+inline constexpr std::size_t kEventCapacity = 2;
+inline constexpr std::size_t kDepCapacity = 128;
+inline constexpr std::size_t kRegionCapacity = 1;
+
 struct host_arena_storage {
-  std::array<megacu::runtime::device_task_record, 4> tasks{};
-  std::array<megacu::runtime::device_event_tensor_record, 2> events{};
-  std::array<megacu::runtime::task_ref, 4> deps{};
-  std::array<megacu::runtime::arena_region, 1> regions{};
-  std::array<std::uint32_t, 4> completed{};
-  std::array<std::uint32_t, 4> remaining{};
+  std::array<megacu::runtime::device_task_record, kTaskCapacity> tasks{};
+  std::array<megacu::runtime::device_event_tensor_record, kEventCapacity>
+      events{};
+  std::array<megacu::runtime::task_ref, kDepCapacity> deps{};
+  std::array<megacu::runtime::arena_region, kRegionCapacity> regions{};
+  std::array<std::uint32_t, kTaskCapacity> completed{};
+  std::array<std::uint32_t, kTaskCapacity> remaining{};
   std::uint32_t task_count = 0;
   std::uint32_t event_count = 0;
   std::uint32_t dep_count = 0;
@@ -29,6 +36,9 @@ inline std::uint32_t initial_remaining_work(
     return 1;
   }
   for (auto attr : task.attributes.entries()) {
+    if (attr.kind == megacu::runtime::attr_kind::dispatch_single_tile) {
+      return 1;
+    }
     if (attr.kind == megacu::runtime::attr_kind::dispatch_tile_grid) {
       return static_cast<std::uint32_t>(attr.first * attr.second);
     }
@@ -38,7 +48,9 @@ inline std::uint32_t initial_remaining_work(
 
 inline megacu::status build_host_arena(host_arena_storage &storage,
                                        runtime_args args) {
-  megacu::runtime::execution::host_orch::frame<4, 2, 4> frame;
+  megacu::runtime::execution::host_orch::frame<kTaskCapacity, kEventCapacity,
+                                               kDepCapacity, kRegionCapacity>
+      frame;
   auto status = build_runtime_recipe(frame, args);
   if (status.code != megacu::status_code::ok) {
     return status;

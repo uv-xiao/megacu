@@ -192,7 +192,8 @@ megacu::status cuda_nvshmem_allgather_gemm_seeded_orch(
   }
 
   managed_arena arena;
-  status = arena.allocate(4, 2, 4, 1);
+  status = arena.allocate(ag_gemm::kTaskCapacity, ag_gemm::kEventCapacity,
+                          ag_gemm::kDepCapacity, ag_gemm::kRegionCapacity);
   if (status.code != megacu::status_code::ok) {
     arena.release();
     return status;

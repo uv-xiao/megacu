@@ -23,7 +23,10 @@ status map_explicit_attrs(dispatch_state &out,
     }
 
     for (auto attr : task.attributes.entries()) {
-      if (attr.kind == attr_kind::dispatch_tile_grid) {
+      if (attr.kind == attr_kind::dispatch_single_tile) {
+        ++out.tile_grid_attrs;
+        ++out.total_tile_count;
+      } else if (attr.kind == attr_kind::dispatch_tile_grid) {
         ++out.tile_grid_attrs;
         out.total_tile_count += attr.first * attr.second;
       } else if (attr.kind == attr_kind::event_notify) {

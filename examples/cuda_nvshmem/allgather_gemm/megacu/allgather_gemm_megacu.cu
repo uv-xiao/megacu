@@ -8,6 +8,7 @@
 #include <megacu/dispatcher/tile_grid_device.cuh>
 #include <megacu/platform/cuda/megakernel.cuh>
 #include <megacu/runtime/device_persistent.cuh>
+#include <megacu/runtime/execution/host_orch.h>
 #include <megacu/runtime/execution/seeded_orch.cuh>
 #include <megacu/runtime/loop/block_tile.cuh>
 #include <megacu/scheduler/explicit_asap_device.cuh>
@@ -152,21 +153,6 @@ struct allgather_gemm_operators {
   }
 };
 
-struct host_orch_execution {
-  megacu::runtime::task_arena_view arena;
-
-  template <class Context>
-  __device__ megacu::runtime::task_arena_view bind(Context) const {
-    return arena;
-  }
-
-  template <class Context>
-  __device__ bool construct(Context,
-                            megacu::runtime::task_arena_view &) const {
-    return true;
-  }
-};
-
 struct seeded_ag_gemm_recipe {
   ag_gemm::runtime_args args;
 
@@ -257,7 +243,9 @@ extern "C" megacu::status megacu_cuda_allgather_gemm_host_orch_f32(
                                     .out = out,
                                     .events = events,
                                     .problem = problem};
-  return launch_runtime(driver, args, arena, host_orch_execution{.arena = arena});
+  return launch_runtime(
+      driver, args, arena,
+      megacu::runtime::execution::host_orch::model{.arena = arena});
 }
 
 extern "C" megacu::status megacu_cuda_allgather_gemm_seeded_orch_f32(
