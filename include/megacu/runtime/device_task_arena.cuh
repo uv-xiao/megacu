@@ -11,6 +11,68 @@ class device_orch {
 public:
   __device__ explicit device_orch(task_arena_view &arena) : arena_(arena) {}
 
+  static constexpr auto max_record_dep_index =
+      static_cast<std::uint32_t>(~std::uint16_t{0});
+
+  class dependency_group_builder {
+  public:
+    __device__ bool push(task_ref task) {
+      if (error_ != nullptr && error_->code != status_code::ok) {
+        return false;
+      }
+      if (sealed_ != nullptr && *sealed_) {
+        if (error_ != nullptr) {
+          *error_ = {status_code::invalid_argument, 10,
+                     "megacu device orch arena is sealed"};
+        }
+        return false;
+      }
+      if (arena_ == nullptr ||
+          arena_->dep_count !=
+              static_cast<std::uint32_t>(ref_.first + ref_.count)) {
+        if (error_ != nullptr) {
+          *error_ = {status_code::invalid_argument, 17,
+                     "megacu device orch dependency group is not contiguous"};
+        }
+        return false;
+      }
+      if (arena_->dep_count > max_record_dep_index ||
+          ref_.count >= max_record_dep_index) {
+        if (error_ != nullptr) {
+          *error_ = {status_code::invalid_argument, 18,
+                     "megacu device orch dependency range exceeds record "
+                     "capacity"};
+        }
+        return false;
+      }
+      if (arena_ == nullptr || arena_->dep_count >= arena_->dep_capacity) {
+        if (error_ != nullptr) {
+          *error_ = {status_code::invalid_argument, 14,
+                     "megacu device orch arena capacity exceeded"};
+        }
+        return false;
+      }
+      arena_->deps[arena_->dep_count++] = task;
+      ++ref_.count;
+      return true;
+    }
+
+    __device__ dependency_group_ref ref() const { return ref_; }
+
+  private:
+    friend class device_orch;
+
+    __device__ dependency_group_builder(task_arena_view *arena, status *error,
+                                        bool const *sealed)
+        : arena_(arena), error_(error), sealed_(sealed),
+          ref_{.first = arena == nullptr ? 0 : arena->dep_count, .count = 0} {}
+
+    task_arena_view *arena_ = nullptr;
+    status *error_ = nullptr;
+    bool const *sealed_ = nullptr;
+    dependency_group_ref ref_;
+  };
+
   __device__ event_tensor_ref event_tensor(attr_set attributes = {}) {
     if (error_.code != status_code::ok) {
       return invalid_event_ref();
@@ -36,6 +98,10 @@ public:
 
   __device__ task_ref sync(attr_set attributes = {}) {
     return publish_task(task_kind::sync_only, invalid_op_slot(), attributes);
+  }
+
+  __device__ dependency_group_builder dependency_group() {
+    return dependency_group_builder{&arena_, &error_, &sealed_};
   }
 
   __device__ status seal(std::uint32_t epoch = 0) {
@@ -81,32 +147,64 @@ private:
     }
 
     std::uint16_t task_dep_count = 0;
+    std::uint16_t inline_dep_count = 0;
+    std::uint16_t dependency_group_count = 0;
+    std::uint32_t first_dep = arena_.dep_count;
     auto entries = attributes.entries();
     for (std::size_t index = 0; index < entries.size(); ++index) {
       auto item = entries[index];
+      if (item.kind == attr_kind::dependency_group) {
+        ++dependency_group_count;
+        first_dep = static_cast<std::uint32_t>(item.first);
+        task_dep_count = static_cast<std::uint16_t>(item.second);
+        if (item.first < 0 || item.second < 0 ||
+            item.first > max_record_dep_index ||
+            item.second > max_record_dep_index) {
+          set_error(18);
+          return invalid_task();
+        }
+        continue;
+      }
       if (item.kind != attr_kind::dependency) {
         continue;
       }
-      ++task_dep_count;
+      ++inline_dep_count;
     }
 
-    auto first_dep = arena_.dep_count;
+    if (dependency_group_count > 1) {
+      set_error(15);
+      return invalid_task();
+    }
+    if (dependency_group_count == 1 && inline_dep_count > 0) {
+      set_error(16);
+      return invalid_task();
+    }
+
     if (arena_.dep_count > arena_.dep_capacity) {
       set_error(14);
       return invalid_task();
     }
     auto remaining_dep_capacity = arena_.dep_capacity - arena_.dep_count;
-    if (task_dep_count > remaining_dep_capacity) {
+    if (dependency_group_count == 0 &&
+        inline_dep_count > remaining_dep_capacity) {
       set_error(14);
       return invalid_task();
     }
 
     auto ref = task_ref{arena_.task_count};
-    auto next_dep = first_dep;
-    for (std::size_t index = 0; index < entries.size(); ++index) {
-      auto item = entries[index];
-      if (item.kind == attr_kind::dependency) {
-        arena_.deps[next_dep++] = item.task;
+    auto next_dep = arena_.dep_count;
+    if (dependency_group_count == 0) {
+      for (std::size_t index = 0; index < entries.size(); ++index) {
+        auto item = entries[index];
+        if (item.kind == attr_kind::dependency) {
+          if (next_dep > max_record_dep_index ||
+              task_dep_count >= max_record_dep_index) {
+            set_error(18);
+            return invalid_task();
+          }
+          arena_.deps[next_dep++] = item.task;
+          ++task_dep_count;
+        }
       }
     }
 

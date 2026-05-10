@@ -33,6 +33,22 @@ template <std::size_t MaxTasks = 64, std::size_t MaxEvents = 16,
           std::size_t MaxDeps = 128, std::size_t MaxRegions = 1>
 class frame {
 public:
+  class dependency_group_builder {
+  public:
+    bool push(task_ref task) { return owner_->append_dependency(ref_, task); }
+
+    dependency_group_ref ref() const { return ref_; }
+
+  private:
+    friend class frame;
+
+    dependency_group_builder(frame *owner, dependency_group_ref ref)
+        : owner_(owner), ref_(ref) {}
+
+    frame *owner_ = nullptr;
+    dependency_group_ref ref_;
+  };
+
   event_tensor_ref event_tensor(attr_set attributes = {}) {
     if (error_.code != status_code::ok) {
       return invalid_event_tensor_ref();
@@ -61,6 +77,11 @@ public:
   task_ref sync(attr_set attributes = {}) {
     return publish_task(task_kind::sync_only, invalid_operator_slot(),
                         attributes);
+  }
+
+  dependency_group_builder dependency_group() {
+    return dependency_group_builder{
+        this, {.first = static_cast<std::uint32_t>(dep_count_), .count = 0}};
   }
 
   status seal(std::uint32_t epoch = 0) {
@@ -121,6 +142,39 @@ public:
   }
 
 private:
+  static constexpr auto max_record_dep_index =
+      static_cast<std::uint32_t>(~std::uint16_t{0});
+
+  bool append_dependency(dependency_group_ref &group, task_ref task) {
+    if (error_.code != status_code::ok) {
+      return false;
+    }
+    if (sealed_) {
+      error_ = {status_code::invalid_argument, 10,
+                "megacu host-orch frame is sealed"};
+      return false;
+    }
+    if (dep_count_ != static_cast<std::size_t>(group.first + group.count)) {
+      error_ = {status_code::invalid_argument, 17,
+                "megacu host-orch dependency group is not contiguous"};
+      return false;
+    }
+    if (dep_count_ > max_record_dep_index ||
+        group.count >= max_record_dep_index) {
+      error_ = {status_code::invalid_argument, 18,
+                "megacu host-orch dependency range exceeds record capacity"};
+      return false;
+    }
+    if (dep_count_ >= MaxDeps) {
+      error_ = {status_code::invalid_argument, 14,
+                "megacu host-orch dependency capacity exceeded"};
+      return false;
+    }
+    deps_[dep_count_++] = task;
+    ++group.count;
+    return true;
+  }
+
   task_ref publish_task(task_kind kind, operator_slot slot,
                         attr_set attributes) {
     if (error_.code != status_code::ok) {
@@ -137,19 +191,63 @@ private:
       return invalid_task_ref();
     }
 
-    auto first_dep = dep_count_;
+    auto first_dep = static_cast<std::uint32_t>(dep_count_);
+    std::uint16_t dependency_group_count = 0;
     std::uint16_t task_dep_count = 0;
+    std::uint16_t inline_dep_count = 0;
     for (auto item : attributes.entries()) {
+      if (item.kind == attr_kind::dependency_group) {
+        ++dependency_group_count;
+        first_dep = static_cast<std::uint32_t>(item.first);
+        task_dep_count = static_cast<std::uint16_t>(item.second);
+        if (item.first < 0 || item.second < 0 ||
+            item.first > max_record_dep_index ||
+            item.second > max_record_dep_index) {
+          error_ = {status_code::invalid_argument, 18,
+                    "megacu host-orch dependency range exceeds record "
+                    "capacity"};
+          return invalid_task_ref();
+        }
+        continue;
+      }
       if (item.kind != attr_kind::dependency) {
         continue;
       }
-      if (dep_count_ >= MaxDeps) {
-        error_ = {status_code::invalid_argument, 14,
-                  "megacu host-orch dependency capacity exceeded"};
-        return invalid_task_ref();
+      ++inline_dep_count;
+    }
+
+    if (dependency_group_count > 1) {
+      error_ = {status_code::invalid_argument, 15,
+                "megacu host-orch task has multiple dependency groups"};
+      return invalid_task_ref();
+    }
+    if (dependency_group_count == 1 && inline_dep_count > 0) {
+      error_ = {status_code::invalid_argument, 16,
+                "megacu host-orch task mixes dependency group and inline "
+                "dependencies"};
+      return invalid_task_ref();
+    }
+
+    if (dependency_group_count == 0) {
+      for (auto item : attributes.entries()) {
+        if (item.kind != attr_kind::dependency) {
+          continue;
+        }
+        if (dep_count_ > max_record_dep_index ||
+            task_dep_count >= max_record_dep_index) {
+          error_ = {status_code::invalid_argument, 18,
+                    "megacu host-orch dependency range exceeds record "
+                    "capacity"};
+          return invalid_task_ref();
+        }
+        if (dep_count_ >= MaxDeps) {
+          error_ = {status_code::invalid_argument, 14,
+                    "megacu host-orch dependency capacity exceeded"};
+          return invalid_task_ref();
+        }
+        deps_[dep_count_++] = item.task;
+        ++task_dep_count;
       }
-      deps_[dep_count_++] = item.task;
-      ++task_dep_count;
     }
 
     auto ref = task_ref{static_cast<std::uint32_t>(task_count_)};

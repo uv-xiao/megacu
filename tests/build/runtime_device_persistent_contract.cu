@@ -119,6 +119,47 @@ struct task_overflow_seeded_recipe {
   }
 };
 
+struct mixed_dependency_recipe {
+  template <class Orch> __device__ megacu::status operator()(Orch &orch) const {
+    auto first = orch.submit(megacu::runtime::operator_slot{1});
+    auto second = orch.submit(megacu::runtime::operator_slot{2});
+    auto group = orch.dependency_group();
+    group.push(first);
+    auto bad = orch.sync(megacu::runtime::attrs(
+        megacu::runtime::scheduler::depends_on_many(group.ref()),
+        megacu::runtime::scheduler::depends_on(second)));
+    if (!(bad == megacu::runtime::invalid_task_ref())) {
+      return {megacu::status_code::invalid_argument, 99,
+              "mixed dependency group was accepted"};
+    }
+    return orch.current_status();
+  }
+};
+
+struct interleaved_dependency_group_recipe {
+  template <class Orch> __device__ megacu::status operator()(Orch &orch) const {
+    auto first = orch.submit(megacu::runtime::operator_slot{1});
+    auto second = orch.submit(megacu::runtime::operator_slot{2});
+    auto third = orch.submit(megacu::runtime::operator_slot{3});
+    auto group = orch.dependency_group();
+    if (!group.push(first)) {
+      return orch.current_status();
+    }
+    auto inline_task = orch.submit(
+        megacu::runtime::operator_slot{4},
+        megacu::runtime::attrs(megacu::runtime::scheduler::depends_on(second)));
+    if (!(inline_task == megacu::runtime::task_ref{3})) {
+      return {megacu::status_code::invalid_argument, 97,
+              "inline dependency task was not accepted"};
+    }
+    if (group.push(third)) {
+      return {megacu::status_code::invalid_argument, 98,
+              "interleaved dependency group accepted a task"};
+    }
+    return orch.current_status();
+  }
+};
+
 __global__ void construct_seeded_orch(megacu::runtime::task_arena_view arena,
                                       megacu::status *device_status,
                                       std::uint32_t *construction_status) {
@@ -186,6 +227,25 @@ __global__ void publish_region_overflow(
                     .region_count = static_cast<int>(arena.region_count)};
 }
 
+__global__ void push_dependency_after_seal(
+    megacu::runtime::task_arena_view arena, megacu::status *device_status,
+    seeded_runtime_observation *observation) {
+  megacu::runtime::device_orch orch{arena};
+  auto first = orch.submit(megacu::runtime::operator_slot{1});
+  auto group = orch.dependency_group();
+  *device_status = orch.seal();
+  if (device_status->code == megacu::status_code::ok && group.push(first)) {
+    *device_status = {megacu::status_code::invalid_argument, 98,
+                      "sealed dependency group accepted a task"};
+  } else if (device_status->code == megacu::status_code::ok) {
+    *device_status = orch.current_status();
+  }
+  observation[0] = {.task_count = static_cast<int>(arena.task_count),
+                    .event_count = static_cast<int>(arena.event_count),
+                    .dep_count = static_cast<int>(arena.dep_count),
+                    .region_count = static_cast<int>(arena.region_count)};
+}
+
 __global__ void instantiate_persistent_runtime(int *marker) {
   auto runtime = megacu::runtime::device_persistent<
       fake_execution, fake_loop, fake_scheduler, fake_dispatcher,
@@ -232,6 +292,49 @@ __global__ void instantiate_seeded_task_overflow_persistent_runtime(
       fake_operators>{
       .execution = {.arena = arena,
                     .recipe = task_overflow_seeded_recipe{},
+                    .device_status = device_status,
+                    .construction_status = construction_status},
+      .loop = recording_loop{.observations = observations},
+      .scheduler = fake_scheduler{},
+      .dispatcher = fake_dispatcher{},
+      .event_tensor = fake_event_tensor{},
+      .operators = fake_operators{}};
+
+  runtime(seeded_context{});
+}
+
+__global__ void instantiate_seeded_mixed_dependency_persistent_runtime(
+    megacu::runtime::task_arena_view arena, megacu::status *device_status,
+    std::uint32_t *construction_status,
+    seeded_runtime_observation *observations) {
+  auto runtime = megacu::runtime::device_persistent<
+      megacu::runtime::execution::seeded_orch::model<mixed_dependency_recipe>,
+      recording_loop, fake_scheduler, fake_dispatcher, fake_event_tensor,
+      fake_operators>{
+      .execution = {.arena = arena,
+                    .recipe = mixed_dependency_recipe{},
+                    .device_status = device_status,
+                    .construction_status = construction_status},
+      .loop = recording_loop{.observations = observations},
+      .scheduler = fake_scheduler{},
+      .dispatcher = fake_dispatcher{},
+      .event_tensor = fake_event_tensor{},
+      .operators = fake_operators{}};
+
+  runtime(seeded_context{});
+}
+
+__global__ void instantiate_seeded_interleaved_dependency_persistent_runtime(
+    megacu::runtime::task_arena_view arena, megacu::status *device_status,
+    std::uint32_t *construction_status,
+    seeded_runtime_observation *observations) {
+  auto runtime = megacu::runtime::device_persistent<
+      megacu::runtime::execution::seeded_orch::model<
+          interleaved_dependency_group_recipe>,
+      recording_loop, fake_scheduler, fake_dispatcher, fake_event_tensor,
+      fake_operators>{
+      .execution = {.arena = arena,
+                    .recipe = interleaved_dependency_group_recipe{},
                     .device_status = device_status,
                     .construction_status = construction_status},
       .loop = recording_loop{.observations = observations},
@@ -428,6 +531,56 @@ int main() {
     assert(observations[index].region_count == 0);
   }
 
+  auto mixed_dependency_arena = arena;
+  mixed_dependency_arena.task_count = 0;
+  mixed_dependency_arena.event_count = 0;
+  mixed_dependency_arena.dep_count = 0;
+  mixed_dependency_arena.region_count = 0;
+  mixed_dependency_arena.task_capacity = 3;
+  mixed_dependency_arena.event_capacity = 0;
+  mixed_dependency_arena.dep_capacity = 2;
+  for (int index = 0; index < 4; ++index) {
+    observations[index] = {};
+  }
+  regions[0] = {.sealed = 1};
+  *device_status = {};
+  *construction_status =
+      megacu::runtime::execution::seeded_orch::construction_pending;
+  instantiate_seeded_mixed_dependency_persistent_runtime<<<2, 2>>>(
+      mixed_dependency_arena, device_status, construction_status,
+      observations);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(device_status->code == megacu::status_code::invalid_argument);
+  assert(device_status->detail == 16);
+  assert(*construction_status ==
+         megacu::runtime::execution::seeded_orch::construction_failed);
+  assert(regions[0].sealed == 0);
+
+  auto interleaved_dependency_arena = arena;
+  interleaved_dependency_arena.task_count = 0;
+  interleaved_dependency_arena.event_count = 0;
+  interleaved_dependency_arena.dep_count = 0;
+  interleaved_dependency_arena.region_count = 0;
+  interleaved_dependency_arena.task_capacity = 4;
+  interleaved_dependency_arena.event_capacity = 0;
+  interleaved_dependency_arena.dep_capacity = 2;
+  for (int index = 0; index < 4; ++index) {
+    observations[index] = {};
+  }
+  regions[0] = {.sealed = 1};
+  *device_status = {};
+  *construction_status =
+      megacu::runtime::execution::seeded_orch::construction_pending;
+  instantiate_seeded_interleaved_dependency_persistent_runtime<<<2, 2>>>(
+      interleaved_dependency_arena, device_status, construction_status,
+      observations);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(device_status->code == megacu::status_code::invalid_argument);
+  assert(device_status->detail == 17);
+  assert(*construction_status ==
+         megacu::runtime::execution::seeded_orch::construction_failed);
+  assert(regions[0].sealed == 0);
+
   *marker = 0;
   regions[0] = {.sealed = 1};
   *device_status = {};
@@ -495,6 +648,26 @@ int main() {
   assert(observations[0].event_count == 1);
   assert(observations[0].dep_count == 0);
   assert(observations[0].region_count == 0);
+
+  auto sealed_dependency_arena = arena;
+  sealed_dependency_arena.task_count = 0;
+  sealed_dependency_arena.event_count = 0;
+  sealed_dependency_arena.dep_count = 0;
+  sealed_dependency_arena.region_count = 0;
+  sealed_dependency_arena.task_capacity = 1;
+  sealed_dependency_arena.event_capacity = 0;
+  sealed_dependency_arena.dep_capacity = 1;
+  sealed_dependency_arena.region_capacity = 1;
+  *device_status = {};
+  observations[0] = {};
+  push_dependency_after_seal<<<1, 1>>>(sealed_dependency_arena, device_status,
+                                       observations);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(device_status->code == megacu::status_code::invalid_argument);
+  assert(device_status->detail == 10);
+  assert(observations[0].task_count == 1);
+  assert(observations[0].dep_count == 0);
+  assert(observations[0].region_count == 1);
 
   assert(cudaFree(observations) == cudaSuccess);
   assert(cudaFree(construction_status) == cudaSuccess);

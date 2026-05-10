@@ -1,9 +1,7 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 #include <megacu/backends/nvshmem.h>
 #include <megacu/platform/cuda.h>
@@ -27,6 +25,11 @@ struct event_tensor_ref {
   std::uint32_t value = 0;
 };
 
+struct dependency_group_ref {
+  std::uint32_t first = 0;
+  std::uint32_t count = 0;
+};
+
 constexpr task_ref invalid_task_ref() {
   return {static_cast<std::uint32_t>(~std::uint32_t{0})};
 }
@@ -45,6 +48,7 @@ constexpr bool operator==(event_tensor_ref lhs, event_tensor_ref rhs) {
 
 enum class attr_kind : std::uint8_t {
   dependency,
+  dependency_group,
   dispatch_tile_grid,
   dispatch_single_tile,
   event_tensor_shape,
@@ -63,6 +67,32 @@ struct attr {
   void *pointer = nullptr;
   std::int64_t first = 0;
   std::int64_t second = 0;
+  std::int64_t third = 0;
+};
+
+class attr_view {
+public:
+  MEGACU_RUNTIME_HOST_DEVICE attr_view(attr const *items,
+                                       std::size_t count)
+      : items_(items), count_(count) {}
+
+  MEGACU_RUNTIME_HOST_DEVICE attr const *begin() const { return items_; }
+
+  MEGACU_RUNTIME_HOST_DEVICE attr const *end() const {
+    return items_ + count_;
+  }
+
+  MEGACU_RUNTIME_HOST_DEVICE attr const &operator[](std::size_t index) const {
+    return items_[index];
+  }
+
+  MEGACU_RUNTIME_HOST_DEVICE std::size_t size() const { return count_; }
+
+  MEGACU_RUNTIME_HOST_DEVICE bool empty() const { return count_ == 0; }
+
+private:
+  attr const *items_ = nullptr;
+  std::size_t count_ = 0;
 };
 
 class attr_set {
@@ -70,21 +100,21 @@ public:
   static constexpr std::size_t max_attrs = 8;
 
   MEGACU_RUNTIME_HOST_DEVICE bool push(attr item) {
-    if (size_ >= entries_.size()) {
+    if (size_ >= max_attrs) {
       return false;
     }
     entries_[size_++] = item;
     return true;
   }
 
-  MEGACU_RUNTIME_HOST_DEVICE std::span<attr const> entries() const {
-    return {entries_.data(), size_};
+  MEGACU_RUNTIME_HOST_DEVICE attr_view entries() const {
+    return {entries_, size_};
   }
 
   MEGACU_RUNTIME_HOST_DEVICE std::size_t size() const { return size_; }
 
 private:
-  std::array<attr, max_attrs> entries_{};
+  attr entries_[max_attrs]{};
   std::size_t size_ = 0;
 };
 
@@ -92,6 +122,13 @@ namespace scheduler {
 
 MEGACU_RUNTIME_HOST_DEVICE inline attr depends_on(task_ref task) {
   return {.kind = attr_kind::dependency, .task = task};
+}
+
+MEGACU_RUNTIME_HOST_DEVICE inline attr depends_on_many(
+    dependency_group_ref group) {
+  return {.kind = attr_kind::dependency_group,
+          .first = static_cast<std::int64_t>(group.first),
+          .second = static_cast<std::int64_t>(group.count)};
 }
 
 } // namespace scheduler
@@ -121,7 +158,19 @@ MEGACU_RUNTIME_HOST_DEVICE inline attr wait(event_tensor_ref event,
   return {.kind = attr_kind::event_wait,
           .event = event,
           .first = tile_id,
-          .second = 1};
+          .second = 1,
+          .third = 1};
+}
+
+MEGACU_RUNTIME_HOST_DEVICE inline attr wait_strided(event_tensor_ref event,
+                                                    std::int64_t first_tile,
+                                                    std::int64_t count,
+                                                    std::int64_t stride) {
+  return {.kind = attr_kind::event_wait,
+          .event = event,
+          .first = first_tile,
+          .second = count,
+          .third = stride};
 }
 
 MEGACU_RUNTIME_HOST_DEVICE inline attr trigger(event_tensor_ref event) {
