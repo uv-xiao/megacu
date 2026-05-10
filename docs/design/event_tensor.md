@@ -10,10 +10,12 @@ one submitted task into hidden subtasks.
 `depends_on` and EventTensor waits coexist because they answer different
 questions:
 
-- `scheduler::depends_on(task)` says when a task is schedulable according to
-  explicit task dependencies.
-- `event_tensor::wait(event, tile)` says when a sync-only task has completed
-  its event condition after the scheduler has allowed that sync task to run.
+- `scheduler::depends_on(task)` and `scheduler::depends_on_many(group)` say
+  when a task is schedulable according to explicit task dependencies.
+- `event_tensor::wait(event, tile)` and
+  `event_tensor::wait_strided(event, first_tile, count, stride)` say when a
+  sync-only task has completed its event condition after the scheduler has
+  allowed that sync task to run.
 
 A common producer/sync/consumer pattern is:
 
@@ -39,12 +41,33 @@ for (int64_t tile = 0; tile < tile_count; ++tile) {
 The operator bodies only compute tile work. The runtime loop invokes the
 EventTensor component after producer work and while completing sync-only tasks.
 
+For fan-in patterns such as AG-GEMM over many K tiles, dependency groups and
+strided EventTensor waits are separate attrs:
+
+```cpp
+auto deps = orch.dependency_group();
+for (int64_t k_tile = 0; k_tile < k_tiles; ++k_tile) {
+  auto tile = k_tile * n_tiles + n_tile;
+  auto produced = orch.submit(op_slot::gather_tile,
+      attrs(dispatcher::single_tile(tile), event_tensor::notify(gathered)));
+  deps.push(produced);
+}
+
+auto ready = orch.sync(attrs(
+    scheduler::depends_on_many(deps.ref()),
+    event_tensor::wait_strided(gathered, n_tile, k_tiles, n_tiles)));
+```
+
+The dependency group is scheduler-owned readiness state. The strided wait is
+EventTensor-owned sync completion state. They are not substitutes for each
+other.
+
 ## Implemented Lowering
 
 The common attrs are platform neutral:
 
 - EventTensor object attrs: `shape`, `wait_count`, storage, and scope.
-- Task attrs: `notify`, `wait`, and `trigger`.
+- Task attrs: `notify`, single-tile `wait`, strided `wait`, and `trigger`.
 
 CUDA local EventTensor lowering lives under `include/megacu/platform/cuda/`.
 CUDA+NVSHMEM team EventTensor lowering lives under

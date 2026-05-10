@@ -1,8 +1,11 @@
 # CUDA + NVSHMEM Tiny Decode Pipeline
 
-This example will demonstrate a small decode-style pipeline with multiple
-operator stages, explicit readiness, and a Megacu runtime path that is not a
-single GEMM-shaped example.
+This example demonstrates a small decode-style pipeline with multiple operator
+stages, explicit readiness, and a Megacu runtime path that is not a single
+GEMM-shaped example.
+
+For a beginner-friendly walkthrough with 1-host-1-GPU, 1-host-2-GPU, and Docker
+commands, see [TUTORIAL.md](TUTORIAL.md).
 
 ## Layout
 
@@ -60,19 +63,20 @@ ctest --test-dir build -R tiny_decode_correctness --output-on-failure
 ```
 
 The first correctness path is local and launches CUDA megakernels for both
-Megacu runtime execution models. It does not launch distributed tiny decode
-work yet.
+Megacu runtime execution models. The two-rank MPI smoke launches the same
+runtime paths on two local GPUs and compares each rank against golden output.
 
 ## Assumptions
 
 - CUDA language support is available for the object target.
-- The current tiny decode runner is expected to use a single-host CUDA runtime
-  path; distributed tiny decode behavior remains part of the larger PR scope.
+- The tiny decode two-rank path is a distributed launch smoke, not a remote
+  communication algorithm.
 - Numeric validation will require NVIDIA GPUs and a CUDA toolkit. NVSHMEM may
-  be needed only if a later distributed tiny decode runner is added.
+  be needed only by the shared Docker image and other CUDA+NVSHMEM examples.
 
 ## Known Limitations
 
-- The current correctness test does not run distributed tiny decode work.
+- The two-rank tiny decode path validates distributed launch and per-rank
+  correctness, but it does not perform remote reads or writes.
 - Full model loading, large decode dimensions, and distributed tiny decode runs
   remain future work.

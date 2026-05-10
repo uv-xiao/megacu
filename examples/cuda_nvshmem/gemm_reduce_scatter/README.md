@@ -3,6 +3,9 @@
 This example demonstrates GEMM producer tiles feeding reduce-scatter consumer
 work through the CUDA+NVSHMEM backend.
 
+For a beginner-friendly walkthrough with 1-host-1-GPU, 1-host-2-GPU, MPI,
+Torch, and Docker commands, see [TUTORIAL.md](TUTORIAL.md).
+
 ## Layout
 
 - `common/`: shared problem definitions and orchestration declarations.
@@ -54,8 +57,7 @@ ctest --test-dir build -R '^cuda_gemm_reduce_scatter_correctness$' --output-on-f
 
 ## Known Limitations
 
-- The current correctness path proves one host and one GPU only.
-- The layout CTest does not run CUDA kernels or NVSHMEM communication.
-- Direct, MPI, and Torch launch adapters are required by the current PR and are
-  exercised through the shared CUDA+NVSHMEM helper scripts; the distributed
-  numeric GEMM-RS run remains pending.
+- The layout CTest only checks repository shape.
+- Numeric correctness is covered by the CUDA one-GPU test and the two-rank
+  CUDA+NVSHMEM/MPI/Torch smoke paths when the matching runtime dependencies are
+  enabled.

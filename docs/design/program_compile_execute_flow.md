@@ -25,12 +25,16 @@ for each GEMM output tile:
 For AG-GEMM, the recipe is:
 
 ```text
-for each all-gather B tile:
-  submit all-gather producer task for that tile
-
-for each output GEMM tile:
-  submit sync-only task that waits for the needed gathered B tiles
-  submit GEMM consumer task for that output tile
+for each output N tile:
+  create scheduler dependency group
+  for each K tile needed by this N tile:
+    submit all-gather producer task for that gathered B tile
+    add returned producer task ref to the dependency group
+  submit one sync-only task with:
+    depends_on_many(dependency group)
+    wait_strided(gathered EventTensor, N tile, K tile count, N tile stride)
+  for each output M tile:
+    submit GEMM consumer task for that output tile
 ```
 
 The submitted tasks, not hidden subtasks inside a task, are the synchronization

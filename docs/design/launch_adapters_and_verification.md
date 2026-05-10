@@ -39,6 +39,11 @@ tools/cuda_nvshmem/run_two_card_docker.sh
 
 The Docker runner defaults to GPUs `0,1`. Override with
 `MEGACU_DOCKER_GPUS` when the machine uses different device ordinals.
+Real-device Docker evidence is recorded in
+[`docs/notes/cuda_nvshmem_real_device_verification.md`](../notes/cuda_nvshmem_real_device_verification.md).
+The note captures the exact Docker command, observed A100 hardware, covered
+direct/MPI/Torch/CTest cases, and the golden/baseline correctness audit used to
+interpret the run as numeric verification rather than exit-code-only coverage.
 
 Focused adapter runners inside the Docker build:
 

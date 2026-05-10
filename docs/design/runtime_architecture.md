@@ -18,6 +18,7 @@ orchestration frame
   task records
   EventTensor records
   explicit attrs
+  scheduler dependency groups
   linked runtime/component config
 ```
 
@@ -62,7 +63,7 @@ user-programmed `run()` call.
 
 | Component | Owns | Does not own |
 | --- | --- | --- |
-| Orchestrate function | Raw target args, task submissions, EventTensor declarations, attrs. | Scheduler loop, backend communication internals, fallback inference. |
+| Orchestrate function | Raw target args, task submissions, EventTensor declarations, attrs, scheduler dependency groups. | Scheduler loop, backend communication internals, fallback inference. |
 | Runtime execution model | Where and when task/EventTensor records are built, published, and sealed. | Dependency semantics, spatial mapping, event semantics. |
 | Runtime loop | Mega-kernel internal issue policy. | Dependency inference, dispatcher placement rules, backend primitive meaning. |
 | Scheduler | Readiness from explicit `depends_on` attrs. | CUDA streams, EventTensor wait conditions, spatial resources. |
@@ -74,7 +75,12 @@ user-programmed `run()` call.
 
 ## Hard Rules
 
-- Dependencies are explicit attrs only.
+- Dependencies are explicit attrs only. Large fan-in uses orch-owned dependency
+  groups referenced by `scheduler::depends_on_many(...)`; it is still explicit
+  scheduler state, not tensor-operation inference.
+- EventTensor aggregate waits use EventTensor attrs such as
+  `event_tensor::wait_strided(...)`; they define sync-task completion, not
+  scheduler readiness.
 - Missing dependency or EventTensor attrs are user responsibility.
 - Megacu does not repair missing attrs, infer dependencies from raw pointers, or
   fall back to a safer host path.

@@ -4,6 +4,9 @@ This example family validates the CUDA+NVSHMEM runtime path with a tiny
 GEMM-AllReduce target. The Megacu variant is composed from operator tasks and
 sync-only tasks. The handwritten mega-kernel is a baseline only.
 
+For a beginner-friendly walkthrough with 1-host-1-GPU, 1-host-2-GPU, and Docker
+commands, see [TUTORIAL.md](TUTORIAL.md).
+
 ## Layout
 
 ```text

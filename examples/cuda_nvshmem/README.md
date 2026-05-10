@@ -15,6 +15,10 @@ communication backend is NVSHMEM.
 - `tiny_decode_pipeline/`: small decode-style pipeline composed from multiple
   tile/range operator stages.
 
+Each example folder has a `TUTORIAL.md` with the beginner path, detailed
+Megacu feature explanation, 1-host-1-GPU and 1-host-2-GPU execution flow, and
+Docker reproduction commands.
+
 Matching assets:
 
 - `docker/cuda_nvshmem/`
