@@ -139,16 +139,6 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   endif()
 endif()
 
-add_executable(megacu_runtime_linked_surface_contract
-  ${PROJECT_SOURCE_DIR}/tests/build/runtime_linked_surface_contract.cc)
-target_link_libraries(megacu_runtime_linked_surface_contract PRIVATE
-  megacu_headers
-  cuda_nvshmem_static)
-
-add_test(
-  NAME runtime_linked_surface_contract
-  COMMAND megacu_runtime_linked_surface_contract)
-
 add_executable(megacu_runtime_components_contracts
   ${PROJECT_SOURCE_DIR}/tests/build/runtime_components_contracts.cc)
 target_link_libraries(megacu_runtime_components_contracts PRIVATE

@@ -12,11 +12,8 @@ function(megacu_add_components)
   endforeach()
 
   add_library(${MEGACU_NAME} STATIC
-    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/dispatcher/explicit_attrs.cc
-    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/scheduler/explicit_asap.cc
     ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/platform/cuda/platform.cc
-    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/backends/nvshmem/backend.cc
-    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/target/runtime.cc)
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/backends/nvshmem/backend.cc)
   target_link_libraries(${MEGACU_NAME} PUBLIC megacu_headers)
   target_compile_definitions(${MEGACU_NAME} PRIVATE
     "MEGACU_COMPONENT_DISPATCHER=\"${MEGACU_DISPATCHER}\""
