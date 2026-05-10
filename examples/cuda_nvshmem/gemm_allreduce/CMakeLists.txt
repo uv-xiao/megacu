@@ -1,7 +1,5 @@
 megacu_add_components(
   NAME cuda_nvshmem_static
-  DISPATCHER explicit_attrs
-  SCHEDULER explicit_asap
   PLATFORM cuda
   BACKEND nvshmem)
 
