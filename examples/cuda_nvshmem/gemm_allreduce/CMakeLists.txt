@@ -288,7 +288,7 @@ add_test(
 add_test(
   NAME gemm_allreduce_megacu_has_no_manual_event_protocol
   COMMAND bash -lc
-          "! grep -R \"task_event_tensor_i32\\|notify_task\\|wait_task\\|event_tensor.before\\|event_tensor.after(ctx, task\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
+          "pattern=$(printf 'task_event_tensor_%s|notify_%s|wait_%s|event_tensor[.]before|event_tensor[.]after[(]ctx, task' i32 task task); ! grep -R -E \"$pattern\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME gemm_allreduce_megacu_dispatches_by_operator_slot

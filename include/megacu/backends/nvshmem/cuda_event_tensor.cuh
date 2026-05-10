@@ -48,29 +48,6 @@ struct event_tensor_i32 {
   }
 };
 
-struct task_event_tensor_i32 {
-  event_tensor_i32 event_tensor;
-  megacu::runtime::event_tensor_ref event{};
-  int notify_task = -1;
-  int wait_task = -1;
-
-  template <class Context, class Task, class Work>
-  __device__ void before(Context, Task task, Work work) const {
-    if (task.value == wait_task && threadIdx.x == 0) {
-      event_tensor.wait(event, work.tile_id,
-                        static_cast<int>(work.tile_id + 1));
-    }
-  }
-
-  template <class Context, class Task, class Work>
-  __device__ void after(Context, Task task, Work work) const {
-    if (task.value == notify_task && threadIdx.x == 0) {
-      event_tensor.notify(event, work.tile_id,
-                          static_cast<int>(work.tile_id + 1));
-    }
-  }
-};
-
 struct attr_event_tensor_i32 {
   event_tensor_i32 event_tensor;
 

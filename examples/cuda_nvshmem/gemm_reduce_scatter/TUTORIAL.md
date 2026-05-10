@@ -127,7 +127,7 @@ runtime::device_persistent
 ```
 
 The runtime chooses ready tasks as soon as explicit dependencies and EventTensor
-conditions allow them. Users do not program `scheduler.run`.
+conditions allow them. Users do not program the scheduler loop.
 
 ## 1 Host, 1 GPU Run
 
