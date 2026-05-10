@@ -1,11 +1,50 @@
 #include <cassert>
+#include <cstdint>
 
 #include <megacu/runtime/execution/host_orch.h>
 
 #include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce_runtime_recipe.cuh"
 
+namespace {
+
+bool has_single_tile(megacu::runtime::attr_set const &attrs,
+                     std::int64_t tile_id) {
+  for (auto attr : attrs.entries()) {
+    if (attr.kind == megacu::runtime::attr_kind::dispatch_single_tile &&
+        attr.first == tile_id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool has_wait_tile(megacu::runtime::attr_set const &attrs,
+                   megacu::runtime::event_tensor_ref event,
+                   std::int64_t tile_id) {
+  for (auto attr : attrs.entries()) {
+    if (attr.kind == megacu::runtime::attr_kind::event_wait &&
+        attr.event == event && attr.first == tile_id && attr.second == 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool has_notify(megacu::runtime::attr_set const &attrs,
+                megacu::runtime::event_tensor_ref event) {
+  for (auto attr : attrs.entries()) {
+    if (attr.kind == megacu::runtime::attr_kind::event_notify &&
+        attr.event == event) {
+      return true;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 int main() {
-  megacu::runtime::execution::host_orch::frame<4, 2, 4> frame;
+  megacu::runtime::execution::host_orch::frame<16, 2, 16> frame;
   int event_storage = 0;
   auto args = gemm_ar::runtime_args{
       .driver = {},
@@ -14,7 +53,7 @@ int main() {
       .partial = nullptr,
       .out = nullptr,
       .events = &event_storage,
-      .problem = {.m = 2, .n = 3, .k = 4, .tile_m = 1, .tile_n = 2}};
+      .problem = {.m = 2, .n = 2, .k = 2, .tile_m = 1, .tile_n = 1}};
   args.driver.team.team_n_pes = 2;
 
   auto result = gemm_ar::build_runtime_recipe(frame, args);
@@ -27,24 +66,10 @@ int main() {
   auto regions = frame.regions();
 
   assert(events.size() == 1);
-  assert(tasks.size() == 3);
-  assert(deps.size() == 2);
+  assert(tasks.size() == 12);
+  assert(deps.size() == 8);
   assert(regions.size() == 1);
   assert(regions[0].sealed == 1);
-
-  assert(tasks[0].kind == megacu::runtime::task_kind::operator_body);
-  assert(tasks[0].op_slot == gemm_ar::runtime_slots::gemm_tile_produce);
-  assert(tasks[0].dep_count == 0);
-
-  assert(tasks[1].kind == megacu::runtime::task_kind::sync_only);
-  assert(tasks[1].op_slot == megacu::runtime::invalid_operator_slot());
-  assert(tasks[1].dep_count == 1);
-  assert(deps[tasks[1].first_dep].value == 0);
-
-  assert(tasks[2].kind == megacu::runtime::task_kind::operator_body);
-  assert(tasks[2].op_slot == gemm_ar::runtime_slots::allreduce_tile_consume);
-  assert(tasks[2].dep_count == 1);
-  assert(deps[tasks[2].first_dep].value == 1);
 
   bool event_has_shape = false;
   bool event_has_wait_count = false;
@@ -63,32 +88,37 @@ int main() {
     event_has_scope |=
         attr.kind == megacu::runtime::attr_kind::event_tensor_scope;
   }
-
-  bool task0_has_dispatch = false;
-  bool task0_has_notify = false;
-  bool task1_has_wait = false;
-  bool task2_has_dispatch = false;
-  for (auto attr : tasks[0].attributes.entries()) {
-    task0_has_dispatch |=
-        attr.kind == megacu::runtime::attr_kind::dispatch_tile_grid &&
-        attr.first == 2 && attr.second == 2;
-    task0_has_notify |=
-        attr.kind == megacu::runtime::attr_kind::event_notify &&
-        attr.event.value == 0;
-  }
-  for (auto attr : tasks[1].attributes.entries()) {
-    task1_has_wait |= attr.kind == megacu::runtime::attr_kind::event_wait &&
-                      attr.event.value == 0;
-  }
-  for (auto attr : tasks[2].attributes.entries()) {
-    task2_has_dispatch |=
-        attr.kind == megacu::runtime::attr_kind::dispatch_tile_grid &&
-        attr.first == 2 && attr.second == 2;
-  }
   assert(event_has_shape && event_has_wait_count && event_has_storage &&
          event_has_scope);
-  assert(task0_has_dispatch && task0_has_notify);
-  assert(task1_has_wait);
-  assert(task2_has_dispatch);
+
+  for (std::int64_t tile = 0; tile < 4; ++tile) {
+    auto const producer_index = static_cast<std::size_t>(tile * 3);
+    auto const sync_index = producer_index + 1;
+    auto const consumer_index = producer_index + 2;
+    auto const &producer = tasks[producer_index];
+    auto const &sync = tasks[sync_index];
+    auto const &consumer = tasks[consumer_index];
+
+    assert(producer.kind == megacu::runtime::task_kind::operator_body);
+    assert(producer.op_slot == gemm_ar::runtime_slots::gemm_tile_produce);
+    assert(producer.dep_count == 0);
+    assert(has_single_tile(producer.attributes, tile));
+    assert(has_notify(producer.attributes, events[0].ref));
+
+    assert(sync.kind == megacu::runtime::task_kind::sync_only);
+    assert(sync.op_slot == megacu::runtime::invalid_operator_slot());
+    assert(sync.dep_count == 1);
+    assert(deps[sync.first_dep].value ==
+           static_cast<std::uint32_t>(producer_index));
+    assert(has_wait_tile(sync.attributes, events[0].ref, tile));
+
+    assert(consumer.kind == megacu::runtime::task_kind::operator_body);
+    assert(consumer.op_slot ==
+           gemm_ar::runtime_slots::allreduce_tile_consume);
+    assert(consumer.dep_count == 1);
+    assert(deps[consumer.first_dep].value ==
+           static_cast<std::uint32_t>(sync_index));
+    assert(has_single_tile(consumer.attributes, tile));
+  }
   return 0;
 }

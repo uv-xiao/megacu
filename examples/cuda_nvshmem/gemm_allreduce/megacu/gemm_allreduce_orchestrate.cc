@@ -216,7 +216,10 @@ megacu::status cuda_nvshmem_gemm_allreduce_seeded_orch(
   }
 
   managed_arena arena;
-  status = arena.allocate(4, 2, 4, 1);
+  status = arena.allocate(static_cast<std::uint32_t>(gemm_ar::kTaskCapacity),
+                          static_cast<std::uint32_t>(gemm_ar::kEventCapacity),
+                          static_cast<std::uint32_t>(gemm_ar::kDepCapacity),
+                          static_cast<std::uint32_t>(gemm_ar::kRegionCapacity));
   if (status.code != megacu::status_code::ok) {
     arena.release();
     return status;

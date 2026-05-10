@@ -36,8 +36,8 @@ gemm_ar_problem correctness_problem() {
       .m = kM,
       .n = kN,
       .k = kK,
-      .tile_m = kM,
-      .tile_n = kN};
+      .tile_m = 1,
+      .tile_n = 2};
 }
 
 void reset_outputs(void *c, void *partial, void *events, cudaStream_t stream) {

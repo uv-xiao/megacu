@@ -23,6 +23,7 @@ namespace {
 
 constexpr int kThreads = 128;
 constexpr int kBlocks = 2;
+constexpr std::int64_t kRecipeEventStorageCount = 1;
 
 megacu::status cuda_status(cudaError_t error, std::uint16_t detail) {
   if (error == cudaSuccess) {
@@ -40,10 +41,7 @@ std::int64_t runtime_event_count(megacu::runtime::task_arena_view arena) {
   if (arena.event_count != 0) {
     return static_cast<std::int64_t>(arena.event_count);
   }
-  if (arena.event_capacity != 0) {
-    return static_cast<std::int64_t>(arena.event_capacity);
-  }
-  return 1;
+  return kRecipeEventStorageCount;
 }
 
 struct gemm_tile_produce_task {
