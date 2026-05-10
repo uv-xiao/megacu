@@ -12,7 +12,7 @@ commands, see [TUTORIAL.md](TUTORIAL.md).
 ```text
 common/             shared target ABI and Megacu recipe
 golden/             Megacu-free golden entrypoints
-phased/baseline/    handwritten CUDA/NVSHMEM manual mega-kernel baseline
+baseline/    handwritten CUDA/NVSHMEM manual mega-kernel baseline
 megacu/             host-orch and seeded-orch Megacu runtime variant
 ```
 

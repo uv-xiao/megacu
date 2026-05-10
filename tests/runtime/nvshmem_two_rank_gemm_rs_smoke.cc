@@ -202,40 +202,73 @@ void reset_outputs(void *out, void *partial, void *events,
   nvshmem_barrier_all();
 }
 
-void check_expected(char const *label, int pe, void *out,
-                    cudaStream_t stream) {
-  std::vector<float> host_out(kM * kN, 0.0F);
-  require_cuda(cudaMemcpyAsync(host_out.data(), out, kCBytes,
+void reset_local_outputs(void *out, void *partial, cudaStream_t stream) {
+  require_cuda(cudaMemsetAsync(out, 0, kCBytes, stream));
+  require_cuda(cudaMemsetAsync(partial, 0, kCBytes, stream));
+}
+
+void check_against_references(char const *label, int pe, void *candidate,
+                              void *golden, void *baseline,
+                              cudaStream_t stream) {
+  std::vector<float> host_candidate(kM * kN, 0.0F);
+  std::vector<float> host_golden(kM * kN, 0.0F);
+  std::vector<float> host_baseline(kM * kN, 0.0F);
+  require_cuda(cudaMemcpyAsync(host_candidate.data(), candidate, kCBytes,
+                               cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaMemcpyAsync(host_golden.data(), golden, kCBytes,
+                               cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaMemcpyAsync(host_baseline.data(), baseline, kCBytes,
                                cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
 
   for (int row = 0; row < kM; ++row) {
     for (int col = 0; col < kN; ++col) {
-      auto want = row % 2 == pe ? 12.0F : 0.0F;
-      auto got = host_out[row * kN + col];
-      if (std::fabs(got - want) >= 1.0e-4F) {
+      auto const index = row * kN + col;
+      auto got = host_candidate[index];
+      auto golden_want = host_golden[index];
+      auto baseline_want = host_baseline[index];
+      if (std::fabs(got - golden_want) >= 1.0e-4F ||
+          std::fabs(got - baseline_want) >= 1.0e-4F) {
         std::fprintf(stderr,
-                     "%s pe=%d mismatch row=%d col=%d got=%.6f want=%.6f\n",
-                     label, pe, row, col, got, want);
+                     "%s pe=%d mismatch row=%d col=%d got=%.6f golden=%.6f "
+                     "baseline=%.6f\n",
+                     label, pe, row, col, got, golden_want, baseline_want);
       }
-      assert(std::fabs(got - want) < 1.0e-4F);
+      assert(std::fabs(got - golden_want) < 1.0e-4F);
+      assert(std::fabs(got - baseline_want) < 1.0e-4F);
     }
   }
 }
 
 void run_case(char const *label,
               megacu::status (*fn)(gemm_rs_driver, float const *,
-                                   float const *, float *, float *, void *,
-                                   gemm_rs_problem),
+                                    float const *, float *, float *, void *,
+                                    gemm_rs_problem),
               gemm_rs_driver driver, void const *a, void const *b,
-              void *partial, void *out, void *events, cudaStream_t stream,
-              int pe) {
+              void const *reference_a, void *partial, void *out,
+              void *events, void *golden_partial, void *golden_out,
+              void *baseline_partial, void *baseline_out,
+              cudaStream_t stream, int pe) {
+  reset_local_outputs(golden_out, golden_partial, stream);
+  auto golden_status = golden_cuda_nvshmem_gemm_reduce_scatter(
+      driver, static_cast<float const *>(reference_a),
+      static_cast<float const *>(b), static_cast<float *>(golden_partial),
+      static_cast<float *>(golden_out), correctness_problem());
+  assert(golden_status.code == megacu::status_code::ok);
+
+  reset_local_outputs(baseline_out, baseline_partial, stream);
+  auto baseline_status = baseline_cuda_nvshmem_gemm_reduce_scatter(
+      driver, static_cast<float const *>(reference_a),
+      static_cast<float const *>(b), static_cast<float *>(baseline_partial),
+      static_cast<float *>(baseline_out), correctness_problem());
+  assert(baseline_status.code == megacu::status_code::ok);
+
   reset_outputs(out, partial, events, stream);
   auto status = fn(driver, static_cast<float const *>(a),
                    static_cast<float const *>(b), static_cast<float *>(partial),
                    static_cast<float *>(out), events, correctness_problem());
   assert(status.code == megacu::status_code::ok);
-  check_expected(label, pe, out, stream);
+  check_against_references(label, pe, out, golden_out, baseline_out, stream);
 }
 
 } // namespace
@@ -281,19 +314,32 @@ int main(int argc, char **argv) {
 
   void *a = nullptr;
   void *b = nullptr;
+  void *reference_a = nullptr;
   void *out = nullptr;
+  void *golden_out = nullptr;
+  void *baseline_out = nullptr;
   require_cuda(cudaMalloc(&a, kABytes));
   require_cuda(cudaMalloc(&b, kBBytes));
+  require_cuda(cudaMalloc(&reference_a, kABytes));
   require_cuda(cudaMalloc(&out, kCBytes));
+  require_cuda(cudaMalloc(&golden_out, kCBytes));
+  require_cuda(cudaMalloc(&baseline_out, kCBytes));
 
   void *partial = nvshmem_malloc(kCBytes);
   void *events = nvshmem_malloc(128);
+  void *golden_partial = nullptr;
+  void *baseline_partial = nullptr;
+  require_cuda(cudaMalloc(&golden_partial, kCBytes));
+  require_cuda(cudaMalloc(&baseline_partial, kCBytes));
   assert(partial != nullptr);
   assert(events != nullptr);
 
   std::vector<float> host_a(kM * kK, static_cast<float>(pe + 1));
+  std::vector<float> reference_host_a(kM * kK, 3.0F);
   std::vector<float> host_b(kK * kN, 1.0F);
   require_cuda(cudaMemcpyAsync(a, host_a.data(), kABytes,
+                               cudaMemcpyHostToDevice, stream));
+  require_cuda(cudaMemcpyAsync(reference_a, reference_host_a.data(), kABytes,
                                cudaMemcpyHostToDevice, stream));
   require_cuda(cudaMemcpyAsync(b, host_b.data(), kBBytes,
                                cudaMemcpyHostToDevice, stream));
@@ -309,11 +355,13 @@ int main(int argc, char **argv) {
 
   if (std::strcmp(mode, "megacu_host_orch") == 0) {
     run_case("gemm-rs host-orch", cuda_nvshmem_gemm_reduce_scatter_host_orch,
-             driver, a, b, partial, out, events, stream, pe);
+             driver, a, b, reference_a, partial, out, events, golden_partial,
+             golden_out, baseline_partial, baseline_out, stream, pe);
   } else if (std::strcmp(mode, "megacu_seeded_orch") == 0) {
     run_case("gemm-rs seeded-orch",
              cuda_nvshmem_gemm_reduce_scatter_seeded_orch, driver, a, b,
-             partial, out, events, stream, pe);
+             reference_a, partial, out, events, golden_partial, golden_out,
+             baseline_partial, baseline_out, stream, pe);
   } else {
     assert(false && "unknown GEMM-RS two-rank mode");
   }
@@ -322,7 +370,12 @@ int main(int argc, char **argv) {
   nvshmem_free(events);
   nvshmem_free(partial);
 
+  require_cuda(cudaFree(baseline_partial));
+  require_cuda(cudaFree(golden_partial));
+  require_cuda(cudaFree(baseline_out));
+  require_cuda(cudaFree(golden_out));
   require_cuda(cudaFree(out));
+  require_cuda(cudaFree(reference_a));
   require_cuda(cudaFree(b));
   require_cuda(cudaFree(a));
   require_cuda(cudaStreamDestroy(stream));

@@ -113,7 +113,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     cuda_nvshmem_gemm_reduce_scatter_megacu
     CUDA::cudart)
   set_target_properties(megacu_cuda_gemm_reduce_scatter_correctness PROPERTIES
-    LINKER_LANGUAGE CUDA)
+    LINKER_LANGUAGE CUDA
+    CUDA_ARCHITECTURES 80)
 
   add_test(
     NAME cuda_gemm_reduce_scatter_correctness
@@ -124,6 +125,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       ${PROJECT_SOURCE_DIR}/tests/runtime/nvshmem_two_rank_gemm_rs_smoke.cc)
     target_link_libraries(megacu_nvshmem_two_rank_gemm_rs_smoke PRIVATE
       megacu_headers
+      golden_cuda_nvshmem_gemm_reduce_scatter
+      baseline_cuda_nvshmem_gemm_reduce_scatter
       cuda_nvshmem_gemm_reduce_scatter_megacu
       CUDA::cudart
       CUDA::cuda_driver
@@ -132,7 +135,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     target_include_directories(megacu_nvshmem_two_rank_gemm_rs_smoke PRIVATE
       ${NVSHMEM_INCLUDE_DIR})
     set_target_properties(megacu_nvshmem_two_rank_gemm_rs_smoke PROPERTIES
-      LINKER_LANGUAGE CUDA)
+      LINKER_LANGUAGE CUDA
+      CUDA_ARCHITECTURES 80)
 
     foreach(mode
         megacu_host_orch
@@ -156,6 +160,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       MEGACU_GEMM_RS_SMOKE_USE_MPI_BOOTSTRAP=1)
     target_link_libraries(megacu_mpi_two_rank_gemm_rs_smoke PRIVATE
       megacu_headers
+      golden_cuda_nvshmem_gemm_reduce_scatter
+      baseline_cuda_nvshmem_gemm_reduce_scatter
       cuda_nvshmem_gemm_reduce_scatter_megacu
       CUDA::cudart
       CUDA::cuda_driver
@@ -165,7 +171,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     target_include_directories(megacu_mpi_two_rank_gemm_rs_smoke PRIVATE
       ${NVSHMEM_INCLUDE_DIR})
     set_target_properties(megacu_mpi_two_rank_gemm_rs_smoke PROPERTIES
-      LINKER_LANGUAGE CUDA)
+      LINKER_LANGUAGE CUDA
+      CUDA_ARCHITECTURES 80)
 
     foreach(mode
         megacu_host_orch
@@ -189,6 +196,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
       MEGACU_GEMM_RS_SMOKE_USE_UID_BOOTSTRAP=1)
     target_link_libraries(megacu_torch_uid_two_rank_gemm_rs_smoke PRIVATE
       megacu_headers
+      golden_cuda_nvshmem_gemm_reduce_scatter
+      baseline_cuda_nvshmem_gemm_reduce_scatter
       cuda_nvshmem_gemm_reduce_scatter_megacu
       CUDA::cudart
       CUDA::cuda_driver
@@ -197,6 +206,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     target_include_directories(megacu_torch_uid_two_rank_gemm_rs_smoke PRIVATE
       ${NVSHMEM_INCLUDE_DIR})
     set_target_properties(megacu_torch_uid_two_rank_gemm_rs_smoke PROPERTIES
-      LINKER_LANGUAGE CUDA)
+      LINKER_LANGUAGE CUDA
+      CUDA_ARCHITECTURES 80)
   endif()
 endif()

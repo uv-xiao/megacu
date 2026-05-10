@@ -12,7 +12,7 @@
 #include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h"
 
 extern "C" megacu::status
-manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32(
+manual_megakernel_cuda_nvshmem_gemm_allreduce_f32(
     gemm_ar_driver driver, float const *a, float const *b, float *partial,
     float *out, void *events, gemm_ar_problem problem);
 
@@ -173,13 +173,13 @@ int main() {
       .compute_ctas = 2,
       .comm_ctas = 1};
 
-  auto golden_status = golden_phased_single_card_gemm_allreduce_f32(
+  auto golden_status = golden_single_card_gemm_allreduce_f32(
       golden_workspace, golden_launch, golden_problem);
   assert(golden_status.code == golden_status_code::ok);
   require_cuda(cudaMemcpyAsync(
       host_c.data(), c, kCBytes, cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
-  check_expected(host_a, host_b, host_c, 1.0f, "golden_phased_single");
+  check_expected(host_a, host_b, host_c, 1.0f, "golden_single");
 
   reset_outputs(c, partial, events, stream);
 
@@ -194,7 +194,7 @@ int main() {
           .cuda_device_ordinal = device}};
 
   run_megacu_case("baseline_manual_single",
-                  manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32,
+                  manual_megakernel_cuda_nvshmem_gemm_allreduce_f32,
                   driver, a, b, partial, c, events, stream, host_a, host_b,
                   host_c);
   run_megacu_case("megacu_host_orch_single",

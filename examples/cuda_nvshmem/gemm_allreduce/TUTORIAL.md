@@ -55,7 +55,7 @@ megacu/gemm_allreduce_arena.cuh
 golden/
   Reference implementation used by correctness tests.
 
-phased/baseline/
+baseline/
   Handwritten manual mega-kernel baseline. This is not the Megacu path.
 ```
 

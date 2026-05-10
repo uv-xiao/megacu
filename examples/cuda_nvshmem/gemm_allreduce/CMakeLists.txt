@@ -65,7 +65,7 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
   endif()
 
   add_library(manual_megakernel_cuda_nvshmem_gemm_allreduce OBJECT
-    phased/baseline/manual_megakernel_gemm_allreduce.cu)
+    baseline/manual_megakernel_gemm_allreduce.cu)
   target_link_libraries(manual_megakernel_cuda_nvshmem_gemm_allreduce PUBLIC
     megacu_headers
     CUDA::cudart)
@@ -245,6 +245,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA::cudart)
   target_compile_options(megacu_runtime_device_persistent_contract PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  set_target_properties(megacu_runtime_device_persistent_contract PROPERTIES
+    CUDA_ARCHITECTURES 80)
 
   add_test(
     NAME runtime_device_persistent_contract
@@ -257,6 +259,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA::cudart)
   target_compile_options(megacu_runtime_arena_execution_contract PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  set_target_properties(megacu_runtime_arena_execution_contract PROPERTIES
+    CUDA_ARCHITECTURES 80)
 
   add_test(
     NAME runtime_arena_execution_contract
@@ -269,6 +273,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     CUDA::cudart)
   target_compile_options(megacu_runtime_gemm_allreduce_recipe_device_contract PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  set_target_properties(megacu_runtime_gemm_allreduce_recipe_device_contract PROPERTIES
+    CUDA_ARCHITECTURES 80)
 
   add_test(
     NAME runtime_gemm_allreduce_recipe_device_contract
@@ -298,7 +304,7 @@ add_test(
 add_test(
   NAME manual_megakernel_lives_in_baseline
   COMMAND bash -lc
-          "grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/phased/baseline && ! grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
+          "grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/baseline && ! grep -R \"manual_gemm_allreduce_megakernel\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
   NAME cuda_megakernel_shell_is_general_platform_code
@@ -316,9 +322,9 @@ add_test(
           "grep -R \"event_tensor_i32\" ${PROJECT_SOURCE_DIR}/include/megacu/backends/nvshmem && ! grep -R \"struct event_tensor_i32\" ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce/megacu")
 
 add_test(
-  NAME megacu_asap_scheduler_has_no_phase_attrs
+  NAME megacu_asap_scheduler_has_no_legacy_order_attrs
   COMMAND bash -lc
-          "! grep -R --include='*.h' --include='*.cc' --include='*.cu' \"scheduler::phase\\|scheduler_phase\\|attr_kind::scheduler_phase\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce ${PROJECT_SOURCE_DIR}/tests/build")
+          "legacy=$(printf '%s%s' pha se); ! grep -R --include='*.h' --include='*.cc' --include='*.cu' \"scheduler::\${legacy}\\|scheduler_\${legacy}\\|attr_kind::scheduler_\${legacy}\" ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/cuda_nvshmem/gemm_allreduce ${PROJECT_SOURCE_DIR}/tests/build")
 
 add_test(
   NAME megacu_event_tensor_is_not_scheduler_attr
@@ -342,7 +348,8 @@ target_link_libraries(megacu_direct_orchestrate_smoke PRIVATE
   cuda_nvshmem_gemm_allreduce_megacu)
 if(MEGACU_HAS_CUDA_LANGUAGE)
   set_target_properties(megacu_direct_orchestrate_smoke PROPERTIES
-    LINKER_LANGUAGE CUDA)
+    LINKER_LANGUAGE CUDA
+    CUDA_ARCHITECTURES 80)
 endif()
 
 add_test(
@@ -357,7 +364,8 @@ if(CUDAToolkit_FOUND)
     cuda_nvshmem_gemm_allreduce_megacu
     CUDA::cudart)
   set_target_properties(megacu_cuda_orchestrate_smoke PROPERTIES
-    LINKER_LANGUAGE CUDA)
+    LINKER_LANGUAGE CUDA
+    CUDA_ARCHITECTURES 80)
 
   add_test(
     NAME cuda_orchestrate_smoke
@@ -370,7 +378,8 @@ if(CUDAToolkit_FOUND)
     cuda_nvshmem_gemm_allreduce_megacu
     CUDA::cudart)
   set_target_properties(megacu_cuda_multicard_smoke PROPERTIES
-    LINKER_LANGUAGE CUDA)
+    LINKER_LANGUAGE CUDA
+    CUDA_ARCHITECTURES 80)
 
   add_test(
     NAME cuda_multicard_smoke
@@ -388,7 +397,8 @@ if(CUDAToolkit_FOUND)
       cuda_nvshmem_gemm_allreduce_megacu
       CUDA::cudart)
     set_target_properties(megacu_cuda_gemm_allreduce_correctness PROPERTIES
-      LINKER_LANGUAGE CUDA)
+      LINKER_LANGUAGE CUDA
+      CUDA_ARCHITECTURES 80)
 
     add_test(
       NAME cuda_gemm_allreduce_correctness
@@ -409,14 +419,15 @@ if(MEGACU_ENABLE_NVSHMEM_TESTS)
     ${NVSHMEM_DEVICE_LIBRARY}
     ${NVSHMEM_HOST_LIBRARY})
   set_target_properties(megacu_nvshmem_two_rank_smoke PROPERTIES
-    LINKER_LANGUAGE CUDA)
+    LINKER_LANGUAGE CUDA
+    CUDA_ARCHITECTURES 80)
 
   foreach(mode
-      golden_phased
+      golden
       manual_baseline
       megacu_host_orch
       megacu_seeded_orch)
-    if(mode STREQUAL "golden_phased")
+    if(mode STREQUAL "golden")
       set(test_name nvshmem_two_rank_gemm_ar_correctness_golden)
     elseif(mode STREQUAL "manual_baseline")
       set(test_name nvshmem_two_rank_gemm_ar_correctness_manual_baseline)

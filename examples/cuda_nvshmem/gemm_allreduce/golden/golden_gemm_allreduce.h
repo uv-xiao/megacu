@@ -54,12 +54,12 @@ struct golden_gemm_ar_team {
   int cuda_device_ordinal = 0;
 };
 
-golden_status golden_phased_single_card_gemm_allreduce_f32(
+golden_status golden_single_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_problem problem);
 
-golden_status golden_phased_multi_card_gemm_allreduce_f32(
+golden_status golden_multi_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_team team,

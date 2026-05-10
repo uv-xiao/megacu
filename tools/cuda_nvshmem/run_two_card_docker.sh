@@ -27,6 +27,7 @@ docker run --rm \
       MEGACU_BUILD_DIR='${build_dir}' MEGACU_MPI_NP=2 \
       tools/cuda_nvshmem/run_mpi.sh && \
     MEGACU_BUILD_DIR='${build_dir}' MEGACU_SKIP_BUILD=1 \
+      OMP_NUM_THREADS=\"\${OMP_NUM_THREADS:-1}\" \
       torchrun --standalone --nproc_per_node=2 \
       tools/cuda_nvshmem/run_torch.py && \
     ctest --test-dir '${build_dir}' \

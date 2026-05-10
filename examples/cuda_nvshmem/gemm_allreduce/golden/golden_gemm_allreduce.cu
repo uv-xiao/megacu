@@ -239,7 +239,7 @@ __device__ void allreduce_tile_from_symmetric_partials(
   }
 }
 
-__global__ void phased_nvshmem_allreduce_kernel(
+__global__ void nvshmem_allreduce_kernel(
     float volatile const *partial,
     float *out,
     int const *barriers,
@@ -271,7 +271,7 @@ __global__ void phased_nvshmem_allreduce_kernel(
 
 #endif
 
-golden_status launch_phased_local(
+golden_status launch_local_golden(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_problem problem) {
@@ -360,7 +360,7 @@ golden_status enter_collective_after_local_reset(
   return {};
 }
 
-golden_status launch_phased_multi_card_device(
+golden_status launch_multi_card_golden_device(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_team team,
@@ -422,7 +422,7 @@ golden_status launch_phased_multi_card_device(
       ready_base);
   status = cuda_status(cudaGetLastError(), 36);
   if (status.code == golden_status_code::ok) {
-    phased_nvshmem_allreduce_kernel<<<problem.comm_ctas, kThreads, 0, comm_stream>>>(
+    nvshmem_allreduce_kernel<<<problem.comm_ctas, kThreads, 0, comm_stream>>>(
         static_cast<float const *>(workspace.partial.data),
         static_cast<float *>(workspace.c.data),
         barriers,
@@ -454,20 +454,20 @@ golden_status launch_phased_multi_card_device(
 
 }  // namespace
 
-golden_status golden_phased_single_card_gemm_allreduce_f32(
+golden_status golden_single_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_problem problem) {
-  return launch_phased_local(workspace, launch, problem);
+  return launch_local_golden(workspace, launch, problem);
 }
 
-golden_status golden_phased_multi_card_gemm_allreduce_f32(
+golden_status golden_multi_card_gemm_allreduce_f32(
     golden_gemm_ar_workspace workspace,
     golden_gemm_ar_launch launch,
     golden_gemm_ar_team team,
     golden_gemm_ar_problem problem) {
 #ifdef MEGACU_GEMM_AR_HAS_DEVICE_NVSHMEM
-  return launch_phased_multi_card_device(workspace, launch, team, problem);
+  return launch_multi_card_golden_device(workspace, launch, team, problem);
 #else
   (void)workspace;
   (void)launch;

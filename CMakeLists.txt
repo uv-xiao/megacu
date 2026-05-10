@@ -2,9 +2,19 @@ cmake_minimum_required(VERSION 3.20)
 
 project(megacu LANGUAGES CXX)
 
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-std=c++20>)
+
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.25)
+  set(CMAKE_CUDA_STANDARD 20)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  set(CMAKE_CUDA_EXTENSIONS OFF)
+else()
+  add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
+endif()
+
 add_compile_options(
-  $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>
-  $<$<COMPILE_LANGUAGE:CUDA>:--std=c++20>)
+  $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=3012>
+  $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=3013>)
 
 option(MEGACU_ENABLE_NVSHMEM_TESTS
   "Build CUDA+NVSHMEM two-rank runtime validation tests" OFF)
@@ -25,6 +35,10 @@ if(CUDAToolkit_FOUND)
   endif()
   check_language(CUDA)
   if(CMAKE_CUDA_COMPILER)
+    if(NOT CMAKE_CUDA_ARCHITECTURES)
+      set(CMAKE_CUDA_ARCHITECTURES 80 CACHE STRING
+        "CUDA architectures built by Megacu examples and tests")
+    endif()
     enable_language(CUDA)
     set(MEGACU_HAS_CUDA_LANGUAGE ON)
   endif()

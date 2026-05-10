@@ -1,6 +1,6 @@
-# Phased Baseline
+# Manual Baseline
 
-This directory is the ownership point for the phased pure CUDA/NVSHMEM
+This directory is the ownership point for the pure CUDA/NVSHMEM
 baseline.
 
 `manual_megakernel_gemm_allreduce.cu` contains the handwritten fused
@@ -18,8 +18,8 @@ the Megacu CUDA+NVSHMEM lowering path.
 The current Megacu-free golden entrypoints are implemented in
 `../../golden/golden_gemm_allreduce.cu`:
 
-- `golden_phased_single_card_gemm_allreduce_f32`
-- `golden_phased_multi_card_gemm_allreduce_f32`
+- `golden_single_card_gemm_allreduce_f32`
+- `golden_multi_card_gemm_allreduce_f32`
 
 The baselines exist to check semantics independently from the Megacu
 runtime-linked dispatcher, scheduler, event tensor, and driver path.

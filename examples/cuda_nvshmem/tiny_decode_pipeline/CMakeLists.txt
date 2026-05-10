@@ -62,7 +62,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     cuda_nvshmem_tiny_decode_megacu
     CUDA::cudart)
   set_target_properties(cuda_nvshmem_tiny_decode_correctness PROPERTIES
-    LINKER_LANGUAGE CUDA)
+    LINKER_LANGUAGE CUDA
+    CUDA_ARCHITECTURES 80)
 
   set_target_properties(cuda_nvshmem_tiny_decode_baseline PROPERTIES
     CUDA_ARCHITECTURES 80)
@@ -85,7 +86,8 @@ if(MEGACU_HAS_CUDA_LANGUAGE)
     target_include_directories(mpi_two_rank_tiny_decode_smoke PRIVATE
       ${NVSHMEM_INCLUDE_DIR})
     set_target_properties(mpi_two_rank_tiny_decode_smoke PROPERTIES
-      LINKER_LANGUAGE CUDA)
+      LINKER_LANGUAGE CUDA
+      CUDA_ARCHITECTURES 80)
 
     foreach(mode
         megacu_host_orch

@@ -13,7 +13,7 @@
 #include "examples/cuda_nvshmem/gemm_allreduce/common/gemm_allreduce.h"
 
 extern "C" megacu::status
-manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32(
+manual_megakernel_cuda_nvshmem_gemm_allreduce_f32(
     gemm_ar_driver driver, float const *a, float const *b, float *partial,
     float *out, void *events, gemm_ar_problem problem);
 
@@ -168,22 +168,22 @@ int main(int argc, char **argv) {
           .world_n_pes = npes,
           .cuda_device_ordinal = device}};
 
-  if (std::strcmp(mode, "golden_phased") == 0) {
-    auto golden_status = golden_phased_multi_card_gemm_allreduce_f32(
+  if (std::strcmp(mode, "golden") == 0) {
+    auto golden_status = golden_multi_card_gemm_allreduce_f32(
         golden_workspace, golden_launch, golden_team, golden_problem);
     if (golden_status.code != golden_status_code::ok) {
       std::fprintf(
           stderr,
-          "golden phased failed: code=%d detail=%u message=%s\n",
+          "golden failed: code=%d detail=%u message=%s\n",
           static_cast<int>(golden_status.code),
           golden_status.detail,
           golden_status.message);
     }
     assert(golden_status.code == golden_status_code::ok);
-    check_expected("golden phased", pe, c, stream);
+    check_expected("golden", pe, c, stream);
   } else if (std::strcmp(mode, "manual_baseline") == 0) {
     run_megacu_case("manual baseline",
-                    manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32,
+                    manual_megakernel_cuda_nvshmem_gemm_allreduce_f32,
                     driver, a, b, partial, c, events, stream, pe);
   } else if (std::strcmp(mode, "megacu_host_orch") == 0) {
     run_megacu_case("megacu host-orch", cuda_nvshmem_gemm_allreduce_host_orch,

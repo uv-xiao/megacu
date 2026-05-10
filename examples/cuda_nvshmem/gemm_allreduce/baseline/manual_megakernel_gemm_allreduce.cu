@@ -170,7 +170,7 @@ std::int64_t tile_count(gemm_ar_problem problem) {
 } // namespace
 
 extern "C" megacu::status
-manual_megakernel_cuda_nvshmem_gemm_allreduce_phased_f32(
+manual_megakernel_cuda_nvshmem_gemm_allreduce_f32(
     gemm_ar_driver driver, float const *a, float const *b, float *partial,
     float *out, void *events, gemm_ar_problem problem) {
   auto validation =
