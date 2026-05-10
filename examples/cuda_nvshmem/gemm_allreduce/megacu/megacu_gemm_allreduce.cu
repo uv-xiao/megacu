@@ -36,6 +36,16 @@ __device__ std::int64_t device_ceil_div(std::int64_t value,
   return (value + divisor - 1) / divisor;
 }
 
+std::int64_t runtime_event_count(megacu::runtime::task_arena_view arena) {
+  if (arena.event_count != 0) {
+    return static_cast<std::int64_t>(arena.event_count);
+  }
+  if (arena.event_capacity != 0) {
+    return static_cast<std::int64_t>(arena.event_capacity);
+  }
+  return 1;
+}
+
 struct gemm_tile_produce_task {
   gemm_ar::runtime_args args;
 
@@ -161,10 +171,13 @@ megacu::status launch_runtime(gemm_ar_driver driver,
   auto stream = static_cast<cudaStream_t>(driver.launch.stream);
   auto tiles = gemm_ar::tile_rows(args.problem) * gemm_ar::tile_cols(args.problem);
   auto n_pes = megacu::nvshmem::team_size(driver.team);
+  auto event_count = runtime_event_count(arena);
   auto *barriers = static_cast<int *>(args.events);
 
-  status = cuda_status(
-      cudaMemsetAsync(barriers, 0, tiles * n_pes * sizeof(int), stream), 11);
+  status = cuda_status(cudaMemsetAsync(
+                           barriers, 0,
+                           event_count * tiles * n_pes * sizeof(int), stream),
+                       11);
   if (status.code != megacu::status_code::ok) {
     return status;
   }
@@ -190,6 +203,7 @@ megacu::status launch_runtime(gemm_ar_driver driver,
       .scheduler = {},
       .dispatcher = {},
       .event_tensor = {.event_tensor = {.events = barriers,
+                                        .event_count = event_count,
                                         .tiles = tiles,
                                         .my_pe = driver.team.team_my_pe,
                                         .n_pes = n_pes}},

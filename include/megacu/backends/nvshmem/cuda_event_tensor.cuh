@@ -13,48 +13,60 @@ namespace megacu::backend::nvshmem::cuda {
 
 struct event_tensor_i32 {
   int *events = nullptr;
+  std::int64_t event_count = 1;
   std::int64_t tiles = 0;
   int my_pe = 0;
   int n_pes = 1;
 
-  __device__ void notify(std::int64_t tile_id, int ready_value) const {
+  __device__ std::int64_t slot(megacu::runtime::event_tensor_ref event, int pe,
+                               std::int64_t tile_id) const {
+    return (static_cast<std::int64_t>(event.value) * n_pes + pe) * tiles +
+           tile_id;
+  }
+
+  __device__ void notify(megacu::runtime::event_tensor_ref event,
+                         std::int64_t tile_id, int ready_value) const {
     megacu::cuda::device::fence_system();
-    auto slot = static_cast<std::int64_t>(my_pe) * tiles + tile_id;
+    auto const event_slot = slot(event, my_pe, tile_id);
     for (int pe = 0; pe < n_pes; ++pe) {
       if (pe == my_pe) {
-        megacu::cuda::device::signal_ready(events, slot, ready_value);
+        megacu::cuda::device::signal_ready(events, event_slot, ready_value);
       } else {
 #if defined(MEGACU_HAS_DEVICE_NVSHMEM)
-        nvshmem_int_p(events + slot, ready_value, pe);
+        nvshmem_int_p(events + event_slot, ready_value, pe);
 #endif
       }
     }
   }
 
-  __device__ void wait(std::int64_t tile_id, int ready_value) const {
+  __device__ void wait(megacu::runtime::event_tensor_ref event,
+                       std::int64_t tile_id, int ready_value) const {
     for (int pe = 0; pe < n_pes; ++pe) {
-      auto slot = static_cast<std::int64_t>(pe) * tiles + tile_id;
-      megacu::cuda::device::wait_ready(events, slot, ready_value);
+      auto const event_slot = slot(event, pe, tile_id);
+      megacu::cuda::device::wait_ready(events, event_slot, ready_value);
     }
   }
 };
 
 struct task_event_tensor_i32 {
   event_tensor_i32 event_tensor;
+  megacu::runtime::event_tensor_ref event{};
   int notify_task = -1;
   int wait_task = -1;
 
   template <class Context, class Task, class Work>
   __device__ void before(Context, Task task, Work work) const {
     if (task.value == wait_task && threadIdx.x == 0) {
-      event_tensor.wait(work.tile_id, static_cast<int>(work.tile_id + 1));
+      event_tensor.wait(event, work.tile_id,
+                        static_cast<int>(work.tile_id + 1));
     }
   }
 
   template <class Context, class Task, class Work>
   __device__ void after(Context, Task task, Work work) const {
     if (task.value == notify_task && threadIdx.x == 0) {
-      event_tensor.notify(work.tile_id, static_cast<int>(work.tile_id + 1));
+      event_tensor.notify(event, work.tile_id,
+                          static_cast<int>(work.tile_id + 1));
     }
   }
 };
@@ -96,7 +108,8 @@ struct attr_event_tensor_i32 {
     if (is_cta_leader(ctx)) {
       for (auto const &attr : attrs) {
         if (attr.kind == megacu::runtime::attr_kind::event_notify) {
-          event_tensor.notify(work.tile_id, ready_value(work.tile_id));
+          event_tensor.notify(attr.event, work.tile_id,
+                              ready_value(work.tile_id));
         }
       }
     }
@@ -116,7 +129,7 @@ private:
                              megacu::runtime::event_tensor_ref event) const {
     auto const tiles = event_tile_count(arena, event);
     for (std::int64_t tile_id = 0; tile_id < tiles; ++tile_id) {
-      event_tensor.wait(tile_id, ready_value(tile_id));
+      event_tensor.wait(event, tile_id, ready_value(tile_id));
     }
   }
 
@@ -125,7 +138,7 @@ private:
     auto const stride = attr.third == 0 ? 1 : attr.third;
     for (std::int64_t offset = 0; offset < count; ++offset) {
       auto const tile_id = attr.first + offset * stride;
-      event_tensor.wait(tile_id, ready_value(tile_id));
+      event_tensor.wait(attr.event, tile_id, ready_value(tile_id));
     }
   }
 

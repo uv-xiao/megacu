@@ -5,6 +5,7 @@
 
 #include <megacu/backends/nvshmem/cuda_event_tensor.cuh>
 #include <megacu/dispatcher/tile_grid_device.cuh>
+#include <megacu/platform/cuda/local_event_tensor.cuh>
 #include <megacu/runtime/device_persistent.cuh>
 #include <megacu/runtime/execution/seeded_orch.cuh>
 #include <megacu/runtime/loop/block_tile.cuh>
@@ -253,9 +254,72 @@ observe_attr_event_wait(megacu::runtime::task_arena_view arena,
                                             0) == 0);
     megacu::cuda::device::signal_ready(&observation->release_seen, 0, 1);
     megacu::backend::nvshmem::cuda::event_tensor_i32{
-        .events = event_storage, .tiles = 1, .my_pe = 0, .n_pes = 1}
-        .notify(0, 1);
+        .events = event_storage,
+        .event_count = 1,
+        .tiles = 1,
+        .my_pe = 0,
+        .n_pes = 1}
+        .notify(megacu::runtime::event_tensor_ref{0}, 0, 1);
   }
+}
+
+__global__ void observe_local_multi_event_slots(
+    megacu::runtime::task_arena_view arena, int *event_storage) {
+  auto ctx = arena_runtime_context{};
+  auto event_tensor =
+      megacu::platform::cuda::local_event_tensor_i32{
+          .events = event_storage,
+          .max_tiles = 2};
+  auto work = megacu::runtime::device::work_item{.active = true, .tile_id = 0};
+  auto producer_task = megacu::runtime::device::task_ref{.value = 0};
+  auto sync_task = megacu::runtime::device::task_ref{.value = 1};
+
+  event_tensor.after(ctx, arena, producer_task, work);
+  auto const complete = event_tensor.complete(ctx, arena, sync_task, work);
+
+  if (ctx.thread_id() == 0) {
+    assert(complete);
+    assert(event_storage[0] == 0);
+    assert(event_storage[2] == 1);
+  }
+}
+
+__global__ void observe_nvshmem_attr_multi_event_slots(
+    megacu::runtime::task_arena_view arena, int *event_storage) {
+  auto ctx = arena_runtime_context{};
+  auto event_tensor =
+      megacu::backend::nvshmem::cuda::attr_event_tensor_i32{
+          .event_tensor = {.events = event_storage,
+                           .event_count = 2,
+                           .tiles = 2,
+                           .my_pe = 0,
+                           .n_pes = 1}};
+  auto work = megacu::runtime::device::work_item{.active = true, .tile_id = 0};
+  auto producer_task = megacu::runtime::device::task_ref{.value = 0};
+  auto sync_task = megacu::runtime::device::task_ref{.value = 1};
+
+  event_tensor.after(ctx, arena, producer_task, work);
+  auto const complete = event_tensor.complete(ctx, arena, sync_task, work);
+
+  if (ctx.thread_id() == 0) {
+    assert(complete);
+    assert(event_storage[0] == 0);
+    assert(event_storage[2] == 1);
+  }
+}
+
+__global__ void observe_nvshmem_event_slot_arithmetic() {
+  auto const event_tensor = megacu::backend::nvshmem::cuda::event_tensor_i32{
+      .events = nullptr,
+      .event_count = 2,
+      .tiles = 3,
+      .my_pe = 0,
+      .n_pes = 2};
+
+  assert(event_tensor.slot(megacu::runtime::event_tensor_ref{0}, 0, 0) == 0);
+  assert(event_tensor.slot(megacu::runtime::event_tensor_ref{0}, 1, 2) == 5);
+  assert(event_tensor.slot(megacu::runtime::event_tensor_ref{1}, 0, 0) == 6);
+  assert(event_tensor.slot(megacu::runtime::event_tensor_ref{1}, 1, 2) == 11);
 }
 
 } // namespace
@@ -275,7 +339,7 @@ int main() {
   std::uint32_t *construction_status = nullptr;
 
   assert(cudaMallocManaged(&tasks, sizeof(*tasks) * 3) == cudaSuccess);
-  assert(cudaMallocManaged(&events, sizeof(*events) * 1) == cudaSuccess);
+  assert(cudaMallocManaged(&events, sizeof(*events) * 2) == cudaSuccess);
   assert(cudaMallocManaged(&deps, sizeof(*deps) * 2) == cudaSuccess);
   assert(cudaMallocManaged(&regions, sizeof(*regions) * 1) == cudaSuccess);
   assert(cudaMallocManaged(&completed, sizeof(*completed) * 3) == cudaSuccess);
@@ -355,7 +419,7 @@ int main() {
                                        .dep_count = 2,
                                        .region_count = 1,
                                        .task_capacity = 3,
-                                       .event_capacity = 1,
+                                       .event_capacity = 2,
                                        .dep_capacity = 2,
                                        .region_capacity = 1};
 
@@ -408,6 +472,82 @@ int main() {
   assert(event_wait_observations->complete_result == 1);
   assert(event_storage[0] == 1);
 
+  events[0] = {.ref = megacu::runtime::event_tensor_ref{0},
+               .attributes = megacu::runtime::attrs(
+                   megacu::runtime::event_tensor::shape(2, 1),
+                   megacu::runtime::event_tensor::wait_count(1))};
+  events[1] = {.ref = megacu::runtime::event_tensor_ref{1},
+               .attributes = megacu::runtime::attrs(
+                   megacu::runtime::event_tensor::shape(2, 1),
+                   megacu::runtime::event_tensor::wait_count(1))};
+  tasks[0] = {.kind = megacu::runtime::task_kind::operator_body,
+              .op_slot = megacu::runtime::operator_slot{3},
+              .dep_count = 0,
+              .first_dep = 0,
+              .attributes = megacu::runtime::attrs(
+                  megacu::runtime::event_tensor::notify(
+                      megacu::runtime::event_tensor_ref{1}))};
+  tasks[1] = {
+      .kind = megacu::runtime::task_kind::sync_only,
+      .op_slot = megacu::runtime::invalid_operator_slot(),
+      .dep_count = 0,
+      .first_dep = 0,
+      .attributes = megacu::runtime::attrs(
+          megacu::runtime::event_tensor::wait(
+              megacu::runtime::event_tensor_ref{1}, 0))};
+  arena.event_count = 2;
+  event_storage[0] = 0;
+  event_storage[1] = 0;
+  event_storage[2] = 0;
+  event_storage[3] = 0;
+  observe_local_multi_event_slots<<<1, 32>>>(arena, event_storage);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(event_storage[0] == 0);
+  assert(event_storage[2] == 1);
+
+  event_storage[0] = 0;
+  event_storage[1] = 0;
+  event_storage[2] = 0;
+  event_storage[3] = 0;
+  observe_nvshmem_attr_multi_event_slots<<<1, 32>>>(arena, event_storage);
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+  assert(event_storage[0] == 0);
+  assert(event_storage[2] == 1);
+
+  observe_nvshmem_event_slot_arithmetic<<<1, 1>>>();
+  assert(cudaDeviceSynchronize() == cudaSuccess);
+
+  events[0] = {.ref = megacu::runtime::event_tensor_ref{0},
+               .attributes = megacu::runtime::attrs(
+                   megacu::runtime::event_tensor::shape(1, 1),
+                   megacu::runtime::event_tensor::wait_count(1))};
+  tasks[0] = {.kind = megacu::runtime::task_kind::operator_body,
+              .op_slot = megacu::runtime::operator_slot{3},
+              .dep_count = 0,
+              .first_dep = 0,
+              .attributes = megacu::runtime::attrs(
+                  megacu::runtime::dispatcher::tile_grid(2, 2),
+                  megacu::runtime::event_tensor::notify(
+                      megacu::runtime::event_tensor_ref{0}))};
+  tasks[1] = {
+      .kind = megacu::runtime::task_kind::sync_only,
+      .op_slot = megacu::runtime::invalid_operator_slot(),
+      .dep_count = 1,
+      .first_dep = 0,
+      .attributes = megacu::runtime::attrs(
+          megacu::runtime::scheduler::depends_on(megacu::runtime::task_ref{0}),
+          megacu::runtime::event_tensor::wait(
+              megacu::runtime::event_tensor_ref{0}))};
+  tasks[2] = {
+      .kind = megacu::runtime::task_kind::operator_body,
+      .op_slot = megacu::runtime::operator_slot{4},
+      .dep_count = 1,
+      .first_dep = 1,
+      .attributes = megacu::runtime::attrs(
+          megacu::runtime::scheduler::depends_on(megacu::runtime::task_ref{1}),
+          megacu::runtime::dispatcher::tile_grid(1, 1))};
+  arena.event_count = 1;
+
   completed[0] = 0;
   completed[1] = 0;
   completed[2] = 0;
@@ -415,6 +555,9 @@ int main() {
   remaining[1] = 1;
   remaining[2] = 1;
   event_storage[0] = 0;
+  event_storage[1] = 0;
+  event_storage[2] = 0;
+  event_storage[3] = 0;
   *op_observations = {};
 
   execute_arena_runtime<<<2, 4>>>(arena, event_storage, op_observations);
