@@ -3,6 +3,9 @@
 This example demonstrates all-gather producer work making input regions
 available to GEMM tile consumer work through the CUDA+NVSHMEM backend.
 
+For a beginner-friendly walkthrough with 1-host-1-GPU, 1-host-2-GPU, MPI,
+Torch, and Docker commands, see [TUTORIAL.md](TUTORIAL.md).
+
 ## Layout
 
 - `common/`: shared problem definitions and orchestration declarations.
@@ -15,9 +18,11 @@ available to GEMM tile consumer work through the CUDA+NVSHMEM backend.
 ```text
 orchestrate(driver, args)
   declare EventTensor readiness for gathered peer regions
-  submit all-gather segment or tile producer tasks
-  submit sync-only readiness task that waits on EventTensor state
-  submit GEMM tile consumer tasks
+  for each output N tile:
+    submit all-gather tile producer tasks across arbitrary K tiles
+    collect returned producer refs in a scheduler dependency group
+    submit one sync-only readiness task with depends_on_many + wait_strided
+    submit GEMM tile consumer tasks for output M tiles
   launch one runtime-owned CUDA megakernel
 ```
 
@@ -37,6 +42,10 @@ ctest --test-dir build -R 'ag_gemm_example_layout|cuda_allgather_gemm_correctnes
 The correctness CTest compares golden, handwritten CUDA baseline, Megacu
 host-orch, and Megacu seeded-orch paths for one host and one GPU.
 
+When the distributed NVSHMEM targets are enabled, the two-rank AG-GEMM smokes
+cover direct NVSHMEM, MPI, and Torch UID bootstrap launch paths with odd K:
+rank 0 owns three K rows and rank 1 owns two K rows.
+
 ## Run
 
 ```bash
@@ -54,8 +63,7 @@ ctest --test-dir build -R '^cuda_allgather_gemm_correctness$' --output-on-failur
 
 ## Known Limitations
 
-- The current correctness path proves one host and one GPU only.
+- The default correctness path proves one host and one GPU.
 - The layout CTest does not run CUDA kernels or NVSHMEM communication.
-- Direct, MPI, and Torch launch adapters are required by the current PR and are
-  exercised through the shared CUDA+NVSHMEM helper scripts; the distributed
-  numeric AG-GEMM run remains pending.
+- Direct, MPI, and Torch launch adapters are exercised through the shared
+  CUDA+NVSHMEM helper scripts when the matching distributed runtime is enabled.

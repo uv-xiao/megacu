@@ -22,16 +22,17 @@ Validated paths:
 
 Path: `examples/cuda_nvshmem/allgather_gemm/`
 
-The Megacu path uses all-gather tile producer tasks, sync-only tasks that wait
-for gathered B tiles needed by an output tile, and GEMM consumer tasks. The
-same recipe is used for `host-orch` and `seeded-orch`.
+The Megacu path uses all-gather tile producer tasks, one sync-only task per
+output N tile that waits for the arbitrary-K gathered B tile slice with
+`depends_on_many` plus `wait_strided`, and GEMM consumer tasks for the output
+M/N tiles. The same recipe is used for `host-orch` and `seeded-orch`.
 
 Validated paths:
 
 - single host, one GPU correctness against golden and baseline;
-- single host, two GPU NVSHMEM correctness;
-- MPI-launched two-rank smoke;
-- Torch `torchrun` UID-bootstrap two-rank smoke.
+- single host, two GPU NVSHMEM correctness with uneven K ownership;
+- MPI-launched two-rank smoke with uneven K ownership;
+- Torch `torchrun` UID-bootstrap two-rank smoke with uneven K ownership.
 
 ## Tiny Decode Pipeline
 

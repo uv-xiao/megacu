@@ -25,10 +25,10 @@ namespace {
 constexpr int kSkipTest = 77;
 constexpr int kM = 3;
 constexpr int kN = 4;
-constexpr int kK = 4;
-constexpr int kLocalK = kK / 2;
+constexpr int kK = 5;
+constexpr int kMaxLocalK = 3;
 constexpr std::size_t kABytes = kM * kK * sizeof(float);
-constexpr std::size_t kBLocalBytes = kLocalK * kN * sizeof(float);
+constexpr std::size_t kBLocalBytes = kMaxLocalK * kN * sizeof(float);
 constexpr std::size_t kGatheredBBytes = kK * kN * sizeof(float);
 constexpr std::size_t kCBytes = kM * kN * sizeof(float);
 
@@ -49,6 +49,29 @@ char const *first_env(std::initializer_list<char const *> names) {
 int optional_env(std::initializer_list<char const *> names, int fallback) {
   auto *value = first_env(names);
   return value == nullptr ? fallback : std::atoi(value);
+}
+
+int k_slice_begin(int global_k, int n_pes, int pe) {
+  auto base = global_k / n_pes;
+  auto extra = global_k % n_pes;
+  return pe * base + (pe < extra ? pe : extra);
+}
+
+int k_slice_count(int global_k, int n_pes, int pe) {
+  auto base = global_k / n_pes;
+  auto extra = global_k % n_pes;
+  return base + (pe < extra ? 1 : 0);
+}
+
+int owner_for_k(int global_k, int n_pes, int kk) {
+  for (int owner = 0; owner < n_pes; ++owner) {
+    auto begin = k_slice_begin(global_k, n_pes, owner);
+    auto count = k_slice_count(global_k, n_pes, owner);
+    if (kk >= begin && kk < begin + count) {
+      return owner;
+    }
+  }
+  return n_pes - 1;
 }
 
 int required_env(std::initializer_list<char const *> names) {
@@ -203,41 +226,111 @@ void reset_outputs(void *out, void *gathered_b, void *events,
   nvshmem_barrier_all();
 }
 
-void check_expected(char const *label, int pe, void *out,
-                    cudaStream_t stream) {
-  std::vector<float> host_out(kM * kN, 0.0F);
-  require_cuda(cudaMemcpyAsync(host_out.data(), out, kCBytes,
+void reset_local_outputs(void *out, void *gathered_b, cudaStream_t stream) {
+  require_cuda(cudaMemsetAsync(out, 0, kCBytes, stream));
+  require_cuda(cudaMemsetAsync(gathered_b, 0, kGatheredBBytes, stream));
+}
+
+void check_against_references(char const *label, int pe, void *candidate_out,
+                              void *golden_out, void *baseline_out,
+                              void *candidate_gathered_b,
+                              void *golden_gathered_b,
+                              void *baseline_gathered_b,
+                              cudaStream_t stream) {
+  std::vector<float> host_candidate(kM * kN, 0.0F);
+  std::vector<float> host_golden(kM * kN, 0.0F);
+  std::vector<float> host_baseline(kM * kN, 0.0F);
+  require_cuda(cudaMemcpyAsync(host_candidate.data(), candidate_out, kCBytes,
+                               cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaMemcpyAsync(host_golden.data(), golden_out, kCBytes,
+                               cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaMemcpyAsync(host_baseline.data(), baseline_out, kCBytes,
+                               cudaMemcpyDeviceToHost, stream));
+
+  std::vector<float> host_gathered_candidate(kK * kN, 0.0F);
+  std::vector<float> host_gathered_golden(kK * kN, 0.0F);
+  std::vector<float> host_gathered_baseline(kK * kN, 0.0F);
+  require_cuda(cudaMemcpyAsync(host_gathered_candidate.data(),
+                               candidate_gathered_b, kGatheredBBytes,
+                               cudaMemcpyDeviceToHost, stream));
+  require_cuda(cudaMemcpyAsync(host_gathered_golden.data(), golden_gathered_b,
+                               kGatheredBBytes, cudaMemcpyDeviceToHost,
+                               stream));
+  require_cuda(cudaMemcpyAsync(host_gathered_baseline.data(),
+                               baseline_gathered_b, kGatheredBBytes,
                                cudaMemcpyDeviceToHost, stream));
   require_cuda(cudaStreamSynchronize(stream));
 
   for (int row = 0; row < kM; ++row) {
     for (int col = 0; col < kN; ++col) {
-      auto got = host_out[row * kN + col];
-      auto want = 6.0F;
-      if (std::fabs(got - want) >= 1.0e-4F) {
+      auto const index = row * kN + col;
+      auto got = host_candidate[index];
+      auto golden_want = host_golden[index];
+      auto baseline_want = host_baseline[index];
+      if (std::fabs(got - golden_want) >= 1.0e-4F ||
+          std::fabs(got - baseline_want) >= 1.0e-4F) {
         std::fprintf(stderr,
-                     "%s pe=%d mismatch row=%d col=%d got=%.6f want=%.6f\n",
-                     label, pe, row, col, got, want);
+                     "%s pe=%d output mismatch row=%d col=%d got=%.6f "
+                     "golden=%.6f baseline=%.6f\n",
+                     label, pe, row, col, got, golden_want, baseline_want);
       }
-      assert(std::fabs(got - want) < 1.0e-4F);
+      assert(std::fabs(got - golden_want) < 1.0e-4F);
+      assert(std::fabs(got - baseline_want) < 1.0e-4F);
+    }
+  }
+
+  for (int kk = 0; kk < kK; ++kk) {
+    for (int col = 0; col < kN; ++col) {
+      auto const index = kk * kN + col;
+      auto got = host_gathered_candidate[index];
+      auto golden_want = host_gathered_golden[index];
+      auto baseline_want = host_gathered_baseline[index];
+      if (std::fabs(got - golden_want) >= 1.0e-4F ||
+          std::fabs(got - baseline_want) >= 1.0e-4F) {
+        std::fprintf(stderr,
+                     "%s pe=%d gathered_b mismatch kk=%d col=%d got=%.6f "
+                     "golden=%.6f baseline=%.6f\n",
+                     label, pe, kk, col, got, golden_want, baseline_want);
+      }
+      assert(std::fabs(got - golden_want) < 1.0e-4F);
+      assert(std::fabs(got - baseline_want) < 1.0e-4F);
     }
   }
 }
 
 void run_case(char const *label,
               megacu::status (*fn)(ag_gemm_driver, float const *,
-                                   float const *, float *, float *, void *,
-                                   ag_gemm_problem),
+                                    float const *, float *, float *, void *,
+                                    ag_gemm_problem),
               ag_gemm_driver driver, void const *a, void const *b,
-              void *gathered_b, void *out, void *events, cudaStream_t stream,
-              int pe) {
+              void const *reference_b, void *gathered_b, void *out,
+              void *events, void *golden_gathered_b, void *golden_out,
+              void *baseline_gathered_b, void *baseline_out,
+              cudaStream_t stream, int pe) {
+  reset_local_outputs(golden_out, golden_gathered_b, stream);
+  auto golden_status = golden_cuda_nvshmem_allgather_gemm(
+      driver, static_cast<float const *>(a),
+      static_cast<float const *>(reference_b),
+      static_cast<float *>(golden_gathered_b), static_cast<float *>(golden_out),
+      correctness_problem());
+  assert(golden_status.code == megacu::status_code::ok);
+
+  reset_local_outputs(baseline_out, baseline_gathered_b, stream);
+  auto baseline_status = baseline_cuda_nvshmem_allgather_gemm(
+      driver, static_cast<float const *>(a),
+      static_cast<float const *>(reference_b),
+      static_cast<float *>(baseline_gathered_b),
+      static_cast<float *>(baseline_out), correctness_problem());
+  assert(baseline_status.code == megacu::status_code::ok);
+
   reset_outputs(out, gathered_b, events, stream);
   auto status = fn(driver, static_cast<float const *>(a),
                    static_cast<float const *>(b),
                    static_cast<float *>(gathered_b), static_cast<float *>(out),
                    events, correctness_problem());
   assert(status.code == megacu::status_code::ok);
-  check_expected(label, pe, out, stream);
+  check_against_references(label, pe, out, golden_out, baseline_out, gathered_b,
+                           golden_gathered_b, baseline_gathered_b, stream);
 }
 
 } // namespace
@@ -283,21 +376,47 @@ int main(int argc, char **argv) {
   require_cuda(cudaStreamCreate(&stream));
 
   void *a = nullptr;
+  void *reference_b = nullptr;
   void *gathered_b = nullptr;
   void *out = nullptr;
+  void *golden_gathered_b = nullptr;
+  void *golden_out = nullptr;
+  void *baseline_gathered_b = nullptr;
+  void *baseline_out = nullptr;
   require_cuda(cudaMalloc(&a, kABytes));
+  require_cuda(cudaMalloc(&reference_b, kGatheredBBytes));
   require_cuda(cudaMalloc(&gathered_b, kGatheredBBytes));
   require_cuda(cudaMalloc(&out, kCBytes));
+  require_cuda(cudaMalloc(&golden_gathered_b, kGatheredBBytes));
+  require_cuda(cudaMalloc(&golden_out, kCBytes));
+  require_cuda(cudaMalloc(&baseline_gathered_b, kGatheredBBytes));
+  require_cuda(cudaMalloc(&baseline_out, kCBytes));
 
   void *b = nvshmem_malloc(kBLocalBytes);
   void *events = nvshmem_malloc(128);
   assert(b != nullptr);
   assert(events != nullptr);
 
+  auto local_k_count = k_slice_count(kK, npes, pe);
   std::vector<float> host_a(kM * kK, 1.0F);
-  std::vector<float> host_b(kLocalK * kN, static_cast<float>(pe + 1));
+  std::vector<float> host_b(kMaxLocalK * kN, 0.0F);
+  for (int local_k = 0; local_k < local_k_count; ++local_k) {
+    for (int col = 0; col < kN; ++col) {
+      host_b[local_k * kN + col] = static_cast<float>(pe + 1);
+    }
+  }
+  std::vector<float> reference_host_b(kK * kN, 0.0F);
+  for (int kk = 0; kk < kK; ++kk) {
+    auto owner_value = static_cast<float>(owner_for_k(kK, npes, kk) + 1);
+    for (int col = 0; col < kN; ++col) {
+      reference_host_b[kk * kN + col] = owner_value;
+    }
+  }
   require_cuda(cudaMemcpyAsync(a, host_a.data(), kABytes,
                                cudaMemcpyHostToDevice, stream));
+  require_cuda(cudaMemcpyAsync(reference_b, reference_host_b.data(),
+                               kGatheredBBytes, cudaMemcpyHostToDevice,
+                               stream));
   require_cuda(cudaMemcpyAsync(b, host_b.data(), kBLocalBytes,
                                cudaMemcpyHostToDevice, stream));
   require_cuda(cudaStreamSynchronize(stream));
@@ -314,10 +433,14 @@ int main(int argc, char **argv) {
 
   if (std::strcmp(mode, "megacu_host_orch") == 0) {
     run_case("ag-gemm host-orch", cuda_nvshmem_allgather_gemm_host_orch,
-             driver, a, b, gathered_b, out, events, stream, pe);
+             driver, a, b, reference_b, gathered_b, out, events,
+             golden_gathered_b, golden_out, baseline_gathered_b, baseline_out,
+             stream, pe);
   } else if (std::strcmp(mode, "megacu_seeded_orch") == 0) {
     run_case("ag-gemm seeded-orch", cuda_nvshmem_allgather_gemm_seeded_orch,
-             driver, a, b, gathered_b, out, events, stream, pe);
+             driver, a, b, reference_b, gathered_b, out, events,
+             golden_gathered_b, golden_out, baseline_gathered_b, baseline_out,
+             stream, pe);
   } else {
     assert(false && "unknown AG-GEMM two-rank mode");
   }
@@ -326,8 +449,13 @@ int main(int argc, char **argv) {
   nvshmem_free(events);
   nvshmem_free(b);
 
+  require_cuda(cudaFree(baseline_out));
+  require_cuda(cudaFree(baseline_gathered_b));
+  require_cuda(cudaFree(golden_out));
+  require_cuda(cudaFree(golden_gathered_b));
   require_cuda(cudaFree(out));
   require_cuda(cudaFree(gathered_b));
+  require_cuda(cudaFree(reference_b));
   require_cuda(cudaFree(a));
   require_cuda(cudaStreamDestroy(stream));
 
