@@ -1336,3 +1336,49 @@ were later promoted into `docs/design/`.
     `runtime_arena_execution_contracts` proves the shared recipe, arena,
     scheduler, dispatcher, EventTensor, operator table, and runtime loop shape
     with both host-only and CUDA smoke coverage.
+
+- 2026-05-09 Asia/Shanghai - AG-GEMM needs arbitrary K and separate scheduler dependency/EventTensor wait storage
+  > 1. arbitrary K; 2. why dependency-list side storage and EventTensor wait-many primitive are alternatives? They are very different (one for scheduler, one for eventtensor) in my mind.
+  >
+  > Agree.
+  - Context: User corrected the review follow-up after AG-GEMM was found to
+    hardcode task refs and to encode one scheduler dependency plus one
+    EventTensor wait per K tile in the fixed inline attr set.
+  - Related:
+    `examples/cuda_nvshmem/allgather_gemm/common/allgather_gemm_runtime_recipe.cuh`,
+    `include/megacu/runtime.h`,
+    `include/megacu/runtime/task_arena.h`,
+    `docs/design/event_tensor.md`.
+  - Agent interpretation: AG-GEMM must support arbitrary K tile counts within
+    arena capacity. Scheduler dependency lists and EventTensor wait-many/range
+    payloads are not alternatives: scheduler deps define task readiness, while
+    EventTensor waits define sync-task completion conditions. Both should be
+    expressible as builtin attrs backed by runtime/orchestrator-owned storage
+    rather than consuming one inline attr slot per K tile.
+
+- 2026-05-09 Asia/Shanghai - Run strict real-device Docker validation with reproducible instructions
+  > \You need to run real-device testing (with instructions recorded for me to reproduce) with Docker to see if things truly work. This process must be very careful and strict.
+  - Context: User requested hardware-backed CUDA+NVSHMEM Docker validation
+    after host-side and local CUDA checks passed for the arbitrary-K AG-GEMM
+    runtime changes.
+  - Related:
+    `tools/cuda_nvshmem/run_two_card_docker.sh`,
+    `docker/cuda_nvshmem/Dockerfile`,
+    `docs/in_progress/cuda_nvshmem_real_device_verification.md`.
+  - Agent interpretation: The PR should not rely on host-only checks for merge
+    readiness. Run the shared Docker gate on real GPUs, record exact commands,
+    host assumptions, result, and any residual risks in an in-progress
+    verification note.
+
+- 2026-05-10 Asia/Shanghai - Real-device verification must prove numeric correctness, not only exit status
+  > You must make sure the megacu design works (create correct answers compared to baseline/golden), not only by checking return value 0.
+  - Context: User corrected the real-device Docker verification standard after
+    a Docker gate passed by exit status and CTest counts.
+  - Related:
+    `docs/in_progress/cuda_nvshmem_real_device_verification.md`,
+    `tests/runtime/`,
+    `examples/cuda_nvshmem/`.
+  - Agent interpretation: The verification record must map each real-device
+    test to its numerical oracle and identify whether it compares Megacu
+    against golden/baseline implementations or only an analytic expected value.
+    Tests that merely launch and return 0 are not enough for merge readiness.

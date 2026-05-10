@@ -74,7 +74,9 @@ docker run --rm --gpus "${MEGACU_DOCKER_GPUS}" --ipc=host \
 ## Result
 
 Status: passed after tightening two-rank GEMM-RS and AG-GEMM checks to compare
-Megacu outputs against golden and baseline reference outputs.
+Megacu outputs against golden and baseline reference outputs, removing legacy
+ordered-stage naming from active code/docs, and rerunning the full two-GPU
+Docker gate.
 
 Evidence command run:
 
@@ -87,7 +89,8 @@ tools/cuda_nvshmem/run_two_card_docker.sh 2>&1 | tee /tmp/megacu-cuda-nvshmem-do
 ```
 
 The command exited with status 0. It was rerun after strengthening the
-distributed GEMM-RS and AG-GEMM smokes.
+distributed GEMM-RS and AG-GEMM smokes and after the final active-code
+legacy-order cleanup.
 
 Evidence log: `/tmp/megacu-cuda-nvshmem-docker-gate.log`
 
@@ -137,7 +140,7 @@ Observed build:
   - AG-GEMM Megacu direct/MPI/Torch/NVSHMEM smoke binaries;
   - tiny decode correctness and MPI smoke binaries.
 
-Observed script phases:
+Observed script stages:
 
 - `tools/cuda_nvshmem/run_direct.sh`: passed 5 CTest cases:
   - `cuda_gemm_reduce_scatter_correctness`
@@ -176,6 +179,27 @@ rg -n "warning|Warning|WARNING|UserWarning|deprecated|SM Arch|NumPy|OMP_NUM_THRE
 ```
 
 The scan returned no matches on the final run.
+
+Final local pre-Docker checks:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+git diff --check
+legacy=$(printf '%s%s' pha se)
+rg -n "make_${legacy}|run_${legacy}|validate_${legacy}|linked_task|linked_event_tensor|std::function" include src tests examples || true
+rg -n "${legacy}|${legacy}d" include src tests examples/cuda_nvshmem docs/design docs/in_progress/design docs/todo README.md || true
+old_term=$(printf '%s%s' over lap)
+rg -n "${old_term}" docs/design docs/in_progress/design docs/todo README.md examples/cuda_nvshmem include src tests || true
+rg -n "scheduler\\.run|task_event_tensor_i32|notify_task|wait_task" examples/cuda_nvshmem include tests || true
+```
+
+Local result:
+
+- `ctest --test-dir build --output-on-failure`: 42/42 passed.
+- `git diff --check`: no whitespace/path errors.
+- The active-code/document scans above returned no matches.
 
 ## Correctness Contract Audit
 
