@@ -21,7 +21,7 @@ struct local_event_tensor_i32 {
       for (auto attr : arena.tasks[task.value].attributes.entries()) {
         if (attr.kind == megacu::runtime::attr_kind::event_wait) {
           if (attr.first >= 0) {
-            wait_tile(attr.event, attr.first);
+            wait_tiles(attr);
           } else {
             wait_event(arena, attr.event);
           }
@@ -68,6 +68,15 @@ private:
                             std::int64_t tile_id) const {
     megacu::cuda::device::wait_ready(events, slot(event, tile_id),
                                      ready_value(tile_id));
+  }
+
+  __device__ void wait_tiles(megacu::runtime::attr attr) const {
+    auto const count = attr.second <= 0 ? 1 : attr.second;
+    auto const stride = attr.third == 0 ? 1 : attr.third;
+    for (std::int64_t offset = 0; offset < count; ++offset) {
+      auto const tile_id = attr.first + offset * stride;
+      wait_tile(attr.event, tile_id);
+    }
   }
 
   __device__ void notify(megacu::runtime::event_tensor_ref event,

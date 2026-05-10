@@ -59,39 +59,33 @@ AG_GEMM_HOST_DEVICE megacu::status build_runtime_recipe(Orch &orch,
       megacu::runtime::event_tensor::wait_count(args.driver.team.team_n_pes),
       megacu::cuda_nvshmem::event_tensor::symmetric_storage(args.events),
       megacu::cuda_nvshmem::event_tensor::scope::team{}));
-  auto const gathered_tiles = k_tiles * n_tiles;
-  auto const output_tiles = m_tiles * n_tiles;
-
-  for (std::int64_t tile = 0; tile < gathered_tiles; ++tile) {
-    (void)orch.submit(
-        runtime_slots::allgather_tile_produce,
-        megacu::runtime::attrs(
-            megacu::runtime::dispatcher::single_tile(tile),
-            megacu::runtime::event_tensor::notify(gathered)));
-  }
-
-  for (std::int64_t output_tile = 0; output_tile < output_tiles;
-       ++output_tile) {
-    auto const n_tile = output_tile % n_tiles;
-    auto sync_attrs = megacu::runtime::attr_set{};
+  for (std::int64_t n_tile = 0; n_tile < n_tiles; ++n_tile) {
+    auto gathered_deps = orch.dependency_group();
     for (std::int64_t k_tile = 0; k_tile < k_tiles; ++k_tile) {
       auto const gathered_tile = k_tile * n_tiles + n_tile;
-      if (!sync_attrs.push(megacu::runtime::scheduler::depends_on(
-              megacu::runtime::task_ref{
-                  static_cast<std::uint32_t>(gathered_tile)})) ||
-          !sync_attrs.push(
-              megacu::runtime::event_tensor::wait(gathered, gathered_tile))) {
+      auto producer = orch.submit(
+          runtime_slots::allgather_tile_produce,
+          megacu::runtime::attrs(
+              megacu::runtime::dispatcher::single_tile(gathered_tile),
+              megacu::runtime::event_tensor::notify(gathered)));
+      if (!gathered_deps.push(producer)) {
         return {megacu::status_code::invalid_argument, 1,
-                "AG-GEMM sync task attr capacity exceeded"};
+                "AG-GEMM dependency capacity exceeded"};
       }
     }
 
-    auto gathered_ready = orch.sync(sync_attrs);
-    (void)orch.submit(
-        runtime_slots::gemm_tile_consume,
-        megacu::runtime::attrs(
-            megacu::runtime::scheduler::depends_on(gathered_ready),
-            megacu::runtime::dispatcher::single_tile(output_tile)));
+    auto gathered_ready = orch.sync(megacu::runtime::attrs(
+        megacu::runtime::scheduler::depends_on_many(gathered_deps.ref()),
+        megacu::runtime::event_tensor::wait_strided(gathered, n_tile, k_tiles,
+                                                    n_tiles)));
+    for (std::int64_t m_tile = 0; m_tile < m_tiles; ++m_tile) {
+      auto const output_tile = m_tile * n_tiles + n_tile;
+      (void)orch.submit(
+          runtime_slots::gemm_tile_consume,
+          megacu::runtime::attrs(
+              megacu::runtime::scheduler::depends_on(gathered_ready),
+              megacu::runtime::dispatcher::single_tile(output_tile)));
+    }
   }
 
   return orch.current_status();
