@@ -13,5 +13,5 @@ Rules:
 
 ## Active Tasks
 
-No active implementation task is recorded here after the general
-runtime-linked component design was promoted into `docs/design/`.
+- [Example Ergonomics](example_ergonomics.md): reduce repeated example
+  boilerplate and make Megacu operator-task authoring more direct.

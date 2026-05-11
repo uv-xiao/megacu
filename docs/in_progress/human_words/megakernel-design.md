@@ -1382,3 +1382,16 @@ were later promoted into `docs/design/`.
     test to its numerical oracle and identify whether it compares Megacu
     against golden/baseline implementations or only an analytic expected value.
     Tests that merely launch and return 0 are not enough for merge readiness.
+
+- 2026-05-11 Asia/Shanghai - New PR should make examples easier and smaller
+  > open a new PR. The PR's purpose is too make the examples better: currently, each examples include every heavy _arena.cuh, megacu.cu, and orchestrate.cc, why they are so large? Why megacu makes the kernel programming so hard? The PR needs to solve this problem.
+  - Context: User asked for a new PR after the runtime-linked implementation
+    branch became merge-ready.
+  - Related:
+    `docs/in_progress/example_ergonomics.md`,
+    `docs/in_progress/design/example_ergonomics.md`,
+    `examples/cuda_nvshmem/`.
+  - Agent interpretation: The next PR should focus on example authoring
+    ergonomics, reducing repeated runtime scaffolding in each example while
+    preserving explicit operator-task recipes and the frozen runtime
+    architecture.
